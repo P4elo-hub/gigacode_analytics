@@ -30,7 +30,7 @@ Python-скрипты в `scripts/` не менялись.
 стоит `respectGitIgnore: false`, иначе CLI не увидит эти папки. Игнор для поиска —
 `.qwenignore` (node_modules, кэш).
 
-**Настройки CLI:** не правьте `settings.json` вручную. Permissions — в
+**Настройки CLI:** не правьте `settings.json` вручную. Permissions и model — в
 `settings.base.json`, hooks — в `settings.hooks.json`. Сборка:
 
 ```bash

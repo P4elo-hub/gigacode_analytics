@@ -23,8 +23,8 @@
 
 ## Связь GAP ↔ Q ↔ §
 
-1. Собери все `GAP-*` regex: `\[?GAP-[A-Z0-9-]+\]?`
-2. Для каждого GAP найди § (заголовок `###` / `####` выше строки).
+1. Собери все `GAP-*` одним `grep` по `SPEC`: `\[?GAP-[A-Z0-9-]+\]?` (не читай файл целиком).
+2. Для каждого уникального id — строка таблицы гэпов или ~30–40 строк вокруг маркера (§).
 3. В строке gap или inline ищи `(Q-\d+)`.
 4. Открой Q в `Feature-context/<slug>.md` → таблица «Открытые вопросы».
 5. Сформируй prompt: **вопрос Q** + перечень GAP кластера + текущее допущение в spec.
@@ -49,8 +49,15 @@
 
 После apply одного Decision — правятся **все** §, где встречаются GAP кластера.
 
-**Фаза needs-answer:** только `CONTEXT_DOC`, sibling-spec, `analytics/`.
-`repositories/` — только на apply, если Decision требует code anchor.
+**Фаза needs-answer:** `CONTEXT_DOC`, один `grep` по `analytics/` (если контекст
+ещё не снял тему), sibling **CONTEXT_DOC** или якорь § — не sibling-спека целиком.
+После сжатия контекста повтори `grep` по GAP, не cover-to-cover `SPEC`.
+
+**Фаза apply:** карта = `pending-apply` + `grep` Relates → список §. Единица =
+кластерный § (use case / алгоритм / контракт — целиком). Один `edit` на
+непрерывный кусок §. После сжатия — `grep` оставшихся `pending-apply`, не
+SPEC с строки 1. Housekeeping (`applied`, `GAPS_MAP`, «Закрытые вопросы») —
+один раз в конце. `repositories/` — только если Decision требует code anchor.
 
 ---
 

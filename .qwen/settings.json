@@ -19,6 +19,10 @@
   "memory": {
     "enableAutoSkill": false
   },
+  "model": {
+    "maxToolCallsPerTurn": 0,
+    "skipLoopDetection": true
+  },
   "permissions": {
     "allow": [
       "Read",

@@ -45,7 +45,7 @@ denied; a bad overwrite drops `permissions` and breaks unattended runs.
 
 | File | Purpose |
 |------|---------|
-| `settings.base.json` | context, tools, permissions (source of truth) |
+| `settings.base.json` | context, tools, permissions, model (source of truth) |
 | `settings.hooks.json` | PreToolUse / SubagentStop only |
 | `settings.json` | **generated** — do not hand-edit |
 
