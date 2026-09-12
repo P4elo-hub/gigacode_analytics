@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Golden tests: build_dispatch() on isolated artifact fixtures (phase 0 contract)."""
+"""Golden tests: build_dispatch() on isolated artifact fixtures (compiled router contract)."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class Report:
 
     def print_report(self) -> None:
         print("=" * 60)
-        print("Pipeline dispatch golden tests (phase 0)")
+        print("Pipeline dispatch golden tests (compiled router)")
         print("=" * 60)
         for c in self.checks:
             mark = "PASS" if c.ok else "FAIL"

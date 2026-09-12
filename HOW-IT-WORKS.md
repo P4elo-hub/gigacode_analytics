@@ -344,6 +344,28 @@ Spec должен оставаться **чистым**: журналы реше
 Закрытые `Q-XX` дописываются в контекст, current-state там не переписывается
 (`refresh_context.py` трогает только «Что учесть»).
 
+### 8.1. Dispatch: как выбирается следующий шаг
+
+После cutover (phase 2) routing — **только** через compiled router:
+
+```
+pipeline.yaml (dispatch.spec) → pipeline_router.py → feature_status.choose_next_step()
+```
+
+Три слоя инфраструктуры:
+
+| Слой | Скрипты | Роль |
+|------|---------|------|
+| **Routing** | `feature_status.py`, `pipeline_dispatch.py` | next step для оркестратора |
+| **Enforcement** | `pipeline_delegate.py`, `pipeline_before_subagent.py`, `pipeline_divergence.py` | illegal transition, graph gate |
+| **Topology** | `pipeline.yaml` → `pipeline_compile.py` → `generated/pipeline_registry.json` | граф шагов и рёбер |
+
+Подробнее: [scripts/PIPELINE-ROUTER.md](scripts/PIPELINE-ROUTER.md),
+[scripts/PIPELINE-COMPILE.md](scripts/PIPELINE-COMPILE.md).
+Golden contract (24 кейса): [scripts/fixtures/dispatch_golden/COVERAGE.md](scripts/fixtures/dispatch_golden/COVERAGE.md).
+
+Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.
+
 ---
 
 ## 9. Файлы одной фичи
@@ -398,7 +420,13 @@ python3 scripts/write_feature.py "<бриф>" --mode assemble --name <slug> \
   --part-dir Feature-writing/<slug> --out Feature-writing/<slug>/<slug>.md
 
 python3 scripts/feature_status.py <slug>
+python3 scripts/pipeline_dispatch.py <slug> --json   # next step для оркестратора
 python3 scripts/quality_gates.py <slug>
+
+# pipeline infra (после правок pipeline.yaml)
+python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```
 
 Код проверки маркеров UML: `scripts/part_checks.py`.

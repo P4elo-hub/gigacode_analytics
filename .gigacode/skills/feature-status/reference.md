@@ -48,29 +48,47 @@
 
 ---
 
-Канон подсчёта и next step — `scripts/feature_status.py`. Этот файл — человекочитаемая копия.
+Канон подсчёта — `scripts/feature_status.py` (`build_status_fields`).
+Канон routing — `scripts/pipeline.yaml` → `dispatch.spec` → `pipeline_router.py`.
+
+Полная таблица правил, приоритетов и golden-fixtures:
+[scripts/fixtures/dispatch_golden/COVERAGE.md](../../../scripts/fixtures/dispatch_golden/COVERAGE.md).
 
 ## Матрица next step
 
-Проверять **по порядку**, вернуть первое совпадение. Скрипт делает то же самое.
+**Не пересчитывай вручную.** Бери **Next** из вывода `python3 scripts/feature_status.py <slug>`.
 
-| № | Условие | Next | Причина |
-|---|---------|------|---------|
-| 1 | нет `CONTEXT_DOC` | `/find-context <бриф>` | нет проверенного контекста |
-| 2 | нет `SPEC` | `/write-feature <бриф>` | спецификация не написана |
-| 3 | нужна перепроверка spec (нет check после правки SPEC, SPEC новее map) | `/check-feature <slug>` | check-feature до gaps/challenge |
-| 4 | `ALIGNMENT` c Critical/Major MISMATCH, итераций < 3 | `/resolve-code-alignment <slug>` | spec противоречит коду |
-| 5 | открытых `[GAP-...]` > 0 | `/resolve-gaps <slug>` | незакрытые факты |
-| 6 | `CHALLENGES` есть, `open` > 0 | `/resolve-challenges <slug>` | незакрытые corner cases |
-| 7 | нет `CHALLENGES` | `/challenge-feature <slug>` | критический разбор (один автоматический прогон) |
-| 8 | нет `ALIGNMENT` **или** он старше `SPEC` | `/check-feature-code <slug>` | сверка с кодом отсутствует / устарела |
-| 9 | всё закрыто, verdict PASS / PASS WITH GAPS | — | **spec готов** |
+Порядок оценки (compiled router, первое совпадение):
+
+| P | Условие (кратко) | Next step | mode |
+|---|------------------|-----------|------|
+| 10 | лимит alignment (3× FAIL) | — | stopped |
+| 20 | нет `CONTEXT_DOC` | find-context | delegate |
+| 30 | нет `SPEC` | write-feature | write_feature_cycle |
+| inv | SPEC требует перепроверки (`needs-check-feature`) | check-feature | delegate |
+| 40 | `needs-answer` в DECISIONS + open GAP | resolve-gaps | ask_user |
+| 45 | `needs-answer` только по ALIGNMENT (F-/I-/…) | resolve-code-alignment | ask_user |
+| 50 | `needs-answer` только CH | resolve-challenges | ask_user |
+| 60 | `pending-apply` + open GAP | resolve-gaps | delegate |
+| 65 | `pending-apply` ALIGNMENT (+ mismatch, не stale) | resolve-code-alignment | delegate |
+| 70 | `pending-apply` только CH | resolve-challenges | delegate |
+| 80 | Critical/Major MISMATCH, итерация < 3, не stale | resolve-code-alignment | delegate |
+| 90 | open `[GAP-...]` в SPEC | resolve-gaps | delegate |
+| 100 | CH `open` > 0 | resolve-challenges | delegate |
+| 110 | нет `CHALLENGES` | challenge-feature | delegate |
+| 120 | нет `ALIGNMENT` или stale | check-feature-code | delegate |
+| 130 | verdict PASS / PASS WITH GAPS | — | ready |
+| 140 | прочий FAIL alignment | check-feature-code | delegate |
 
 Оркестратор: `python3 scripts/pipeline_dispatch.py <slug> --json` (поля
 `next_subagent`, `must_continue`, `orchestrator_mode`).
 
-Особый случай: `alignment_iteration` ≥ 3 и verdict FAIL → не предлагать прогон,
-сообщить «лимит цикла исчерпан, нужен ручной разбор `ALIGNMENT`».
+Особые случаи:
+
+- **`alignment_stale`** (SPEC новее ALIGNMENT): P80 не шлёт в resolve-code-alignment по
+  устаревшему отчёту → срабатывает P120 → `check-feature-code`.
+- **Смешанные DECISIONS** (alignment + CH): сначала alignment (P45/P65), потом CH (P50/P70).
+- **`alignment_iteration` ≥ 3 и FAIL** → stopped, ручной разбор ALIGNMENT.
 
 ---
 

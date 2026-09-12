@@ -241,8 +241,8 @@ pipelines:
         to: cal-done
         kind: main
 
-# Declarative dispatch router (phase 2). Evaluated by pipeline_router.py;
-# legacy choose_next_step() remains default until PIPELINE_COMPILED_ROUTER=1.
+# Declarative dispatch router (phase 2). Evaluated by pipeline_router.py via
+# feature_status.choose_next_step() (cutover complete — single routing path).
 dispatch:
   spec:
     invariants:

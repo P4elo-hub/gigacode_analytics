@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -26,8 +25,6 @@ from artifact_paths import (
     spec_path,
     workspace_root,
 )
-from pipeline_common import step_to_command, subagent_for_step
-
 INLINE_GAP_RE = re.compile(r"\[GAP-[A-Z0-9-]+\]")
 TABLE_GAP_RE = re.compile(r"^\|\s*(GAP-[A-Z0-9-]+)\s*\|", re.MULTILINE)
 DECISION_ROW_RE = re.compile(
@@ -236,13 +233,6 @@ def detect_stale(root: Path, slug: str) -> list[str]:
     return stale
 
 
-def _set_next(status: FeatureStatus, step: str, reason: str) -> None:
-    status.next_step = step
-    status.next_command = step_to_command(step, status.slug)
-    status.next_subagent = subagent_for_step(step)
-    status.next_reason = reason
-
-
 def _finalize_orchestrator_mode(status: FeatureStatus) -> None:
     if status.ready:
         status.orchestrator_mode = "ready"
@@ -265,170 +255,11 @@ def _finalize_orchestrator_mode(status: FeatureStatus) -> None:
 
 
 def choose_next_step(status: FeatureStatus, *, root: Path | None = None) -> None:
-    if os.environ.get("PIPELINE_COMPILED_ROUTER") == "1":
-        if root is None:
-            root = workspace_root(Path("."))
-        from pipeline_router import apply_router_decision
+    if root is None:
+        root = workspace_root(Path("."))
+    from pipeline_router import apply_router_decision
 
-        apply_router_decision(status, root, status.slug)
-        return
-    _choose_next_step_legacy(status, root=root)
-
-
-def _choose_next_step_legacy(status: FeatureStatus, *, root: Path | None = None) -> None:
-    if (
-        status.has_alignment
-        and status.alignment_iteration >= ALIGNMENT_MAX_ITERATIONS
-        and status.verdict == VERDICT_FAIL
-    ):
-        status.next_command = ""
-        status.next_step = ""
-        status.next_subagent = ""
-        status.next_reason = (
-            f"лимит цикла alignment исчерпан ({ALIGNMENT_MAX_ITERATIONS}), "
-            "нужен ручной разбор ALIGNMENT"
-        )
-        _finalize_orchestrator_mode(status)
-        return
-    if not status.has_context:
-        _set_next(status, "find-context", "нет проверенного контекста")
-        _finalize_orchestrator_mode(status)
-        return
-    if not status.has_spec:
-        _set_next(status, "write-feature", "спецификация не написана")
-        _finalize_orchestrator_mode(status)
-        return
-
-    # Graph gate: главная колонка write → check-feature до любых веток (gaps/CH/code).
-    if root is not None:
-        check_needed, check_reason = needs_check_feature(root, slug=status.slug, status=status)
-        if check_needed:
-            _set_next(status, "check-feature", check_reason)
-            _finalize_orchestrator_mode(status)
-            return
-
-    if status.decisions_needs_answer:
-        if status.open_gaps:
-            _set_next(
-                status,
-                "resolve-gaps",
-                (
-                    f"{status.decisions_needs_answer} строк needs-answer в DECISIONS — "
-                    "оркестратор опрашивает пользователя"
-                ),
-            )
-        elif status.decisions_needs_answer_alignment > 0:
-            _set_next(
-                status,
-                "resolve-code-alignment",
-                (
-                    f"{status.decisions_needs_answer_alignment} строк needs-answer в DECISIONS "
-                    "(ALIGNMENT) — оркестратор опрашивает пользователя"
-                ),
-            )
-        else:
-            ch_only = status.decisions_needs_answer - status.decisions_needs_answer_alignment
-            _set_next(
-                status,
-                "resolve-challenges",
-                (
-                    f"{ch_only} строк needs-answer в DECISIONS (CH) — "
-                    "оркестратор опрашивает пользователя"
-                ),
-            )
-        _finalize_orchestrator_mode(status)
-        return
-    if status.decisions_pending_apply:
-        pending_routed = False
-        if status.open_gaps:
-            _set_next(
-                status,
-                "resolve-gaps",
-                (
-                    f"применить pending-apply из DECISIONS "
-                    f"({status.decisions_pending_apply} строк)"
-                ),
-            )
-            pending_routed = True
-        elif (
-            status.decisions_pending_apply_alignment > 0
-            and status.critical_major_mismatch > 0
-            and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
-            and not status.alignment_stale
-        ):
-            _set_next(
-                status,
-                "resolve-code-alignment",
-                (
-                    f"применить pending-apply из DECISIONS "
-                    f"({status.decisions_pending_apply_alignment} строк, ALIGNMENT)"
-                ),
-            )
-            pending_routed = True
-        elif status.decisions_pending_apply > status.decisions_pending_apply_alignment:
-            ch_only = status.decisions_pending_apply - status.decisions_pending_apply_alignment
-            _set_next(
-                status,
-                "resolve-challenges",
-                (
-                    f"применить pending-apply из DECISIONS ({ch_only} строк, CH)"
-                ),
-            )
-            pending_routed = True
-        if pending_routed:
-            _finalize_orchestrator_mode(status)
-            return
-    if (
-        status.critical_major_mismatch > 0
-        and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
-        and not status.alignment_stale
-    ):
-        _set_next(status, "resolve-code-alignment", "spec противоречит коду")
-        _finalize_orchestrator_mode(status)
-        return
-    if status.open_gaps:
-        if status.decisions_needs_answer:
-            reason = (
-                f"незакрытые факты ({len(status.open_gaps)}); "
-                "оркестратор спрашивает needs-answer в DECISIONS"
-            )
-        elif status.decisions_pending_apply:
-            reason = (
-                f"незакрытые факты ({len(status.open_gaps)}); "
-                "применить pending-apply из DECISIONS"
-            )
-        else:
-            reason = f"незакрытые факты ({len(status.open_gaps)})"
-        _set_next(status, "resolve-gaps", reason)
-        _finalize_orchestrator_mode(status)
-        return
-    if status.has_challenges and status.challenges.open > 0:
-        _set_next(
-            status,
-            "resolve-challenges",
-            f"незакрытые corner cases ({status.challenges.open})",
-        )
-        _finalize_orchestrator_mode(status)
-        return
-    if not status.has_challenges:
-        _set_next(status, "challenge-feature", "критический разбор не проводился")
-        _finalize_orchestrator_mode(status)
-        return
-    # CHALLENGES уже есть — один автоматический проход на slug; stale после apply не re-challenge
-    if not status.has_alignment or "alignment" in status.stale:
-        _set_next(status, "check-feature-code", "сверка с кодом отсутствует или устарела")
-        _finalize_orchestrator_mode(status)
-        return
-    if status.verdict in {VERDICT_PASS, VERDICT_PASS_WITH_GAPS}:
-        status.ready = True
-        status.next_command = ""
-        status.next_step = ""
-        status.next_subagent = ""
-        status.next_reason = "spec готов"
-        _finalize_orchestrator_mode(status)
-        return
-    _set_next(status, "check-feature-code", "alignment без PASS / PASS WITH GAPS")
-    _finalize_orchestrator_mode(status)
+    apply_router_decision(status, root, status.slug)
 
 
 def build_status_fields(root: Path, slug: str) -> FeatureStatus:

@@ -101,21 +101,21 @@ JSON для оркестратора: `python3 scripts/feature_status.py <slug> 
 
 ## Шаг 4. Определить next step
 
-Бери **Next** из вывода скрипта. Не пересчитывай матрицу в голове.
-Канон матрицы — `scripts/feature_status.py` (`choose_next_step`);
-человекочитаемая копия — [reference.md](reference.md):
+Бери **Next** из вывода `python3 scripts/feature_status.py <slug>`.
+**Не пересчитывай матрицу в голове.**
 
-1. Нет `CONTEXT_DOC` → `/find-context`
-2. Нет `SPEC` → `/write-feature`
-3. `ALIGNMENT` есть и содержит Critical/Major MISMATCH → `/resolve-code-alignment`
-4. Открытые `[GAP-...]` > 0 → `/resolve-gaps`
-5. `CHALLENGES` есть и `open` > 0 → `/resolve-challenges`
-6. Нет `CHALLENGES` → `/challenge-feature`
-7. `ALIGNMENT` нет или устарел → `/check-feature-code`
-8. Всё закрыто, verdict PASS / PASS WITH GAPS → **spec готов**
+Канон routing: `scripts/pipeline.yaml` → `dispatch.spec` → `pipeline_router.py`
+→ `feature_status.choose_next_step()`.
 
-Если `alignment_iteration` ≥ 3 и verdict всё ещё FAIL — не предлагай очередной
-прогон: сообщи, что лимит цикла исчерпан, нужен ручной разбор `ALIGNMENT`.
+Таблица приоритетов P10–P140 — [reference.md](reference.md).
+Golden fixtures (24 кейса) —
+[COVERAGE.md](../../../scripts/fixtures/dispatch_golden/COVERAGE.md).
+
+Ключевые ветки (первое совпадение): context → spec → **`needs-check-feature`**
+→ DECISIONS (`needs-answer` / `pending-apply`) → alignment mismatch → gaps →
+challenges → challenge-feature → check-feature-code → ready / stopped.
+
+Если `alignment_iteration` ≥ 3 и verdict FAIL — stopped, ручной разбор `ALIGNMENT`.
 
 ---
 

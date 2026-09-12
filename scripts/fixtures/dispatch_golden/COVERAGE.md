@@ -2,8 +2,8 @@
 
 Maps `choose_next_step()` / `needs_check_feature()` branches to fixture ids.
 
-Phase 2: same branches are declared in `pipeline.yaml` → `dispatch.spec` and evaluated by
-`pipeline_router.py`. `pipeline_router_parity_test.py` asserts legacy ≡ router on every row below.
+Phase 2 (cutover complete): branches are declared in `pipeline.yaml` → `dispatch.spec` and
+evaluated by `pipeline_router.py` via `build_dispatch()`. Golden fixtures are the routing contract.
 
 ## Invariant (after P10–P30, before P40+)
 
@@ -12,7 +12,7 @@ Phase 2: same branches are declared in `pipeline.yaml` → `dispatch.spec` and e
 | `needs-check-feature` | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` | `check-feature` |
 | (bypass when run-log ok) | `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
 
-Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — same order as legacy `choose_next_step()`.
+Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — before P40+ branch rules.
 
 ## `dispatch.spec.rules` (priority / when / next / fixture)
 
@@ -49,7 +49,6 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Calibration pipeline graph | `graph:*:calibration` |
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
-Phase 1+ (registry compile) must keep **dispatch-golden** green; phase 2 adds **router-parity**
-(legacy vs compiled router on the same fixtures, currently 24 cases).
+Phase 1+ (registry compile) must keep **dispatch-golden** green (currently 24 cases, compiled router only).
 
 Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`.

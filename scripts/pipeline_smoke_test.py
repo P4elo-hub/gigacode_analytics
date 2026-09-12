@@ -437,31 +437,6 @@ def check_dispatch_golden(report: Report) -> None:
     )
 
 
-def check_router_parity(report: Report) -> None:
-    """Phase 2: compiled router matches legacy choose_next_step on golden fixtures."""
-    import pipeline_router_parity_test as parity
-
-    cases = parity.golden._load_cases()
-    if not cases:
-        report.add("router-parity", False, "no golden fixtures")
-        return
-    failed: list[str] = []
-    for case in cases:
-        case_id = case.get("id") or "?"
-        try:
-            ok, detail = parity.run_case(case)
-        except Exception as exc:
-            ok, detail = False, str(exc)
-        if not ok:
-            failed.append(f"{case_id}: {detail}")
-    report.add(
-        "router-parity",
-        not failed,
-        f"{len(cases) - len(failed)}/{len(cases)} cases"
-        + (f"; {failed[0]}" if failed else ""),
-    )
-
-
 def check_run_until_done_policy(report: Report, slug: str) -> None:
     d = build_dispatch(ROOT, slug)
     policy = d.get("exit_policy") or {}
@@ -490,7 +465,6 @@ def main() -> int:
     ensure_smoke_fixtures()
 
     check_dispatch_golden(report)
-    check_router_parity(report)
     check_pipeline_compile(report)
     check_viewer_health(report)
     check_cli_settings(report)

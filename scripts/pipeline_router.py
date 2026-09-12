@@ -49,7 +49,7 @@ VALID_STEPS = frozenset(
     }
 )
 VALID_OUTCOMES = frozenset({"ready", "stopped"})
-# Legacy runs alignment/context/spec checks before needs_check_feature (graph gate).
+# Alignment/context/spec rules (P10–P30) run before needs_check_feature invariant.
 INVARIANT_AFTER_PRIORITY = 30
 
 

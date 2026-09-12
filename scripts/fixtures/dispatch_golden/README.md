@@ -1,4 +1,4 @@
-# Dispatch golden fixtures (phase 0)
+# Dispatch golden fixtures (compiled router)
 
 Isolated artifact trees exercise `build_dispatch()` without touching live slugs.
 
@@ -14,7 +14,7 @@ Also invoked from `pipeline_smoke_test.py` as `dispatch-golden`.
 
 Pipeline topology compile (phase 1): see [PIPELINE-COMPILE.md](../../PIPELINE-COMPILE.md).
 
-Full branch matrix: [COVERAGE.md](./COVERAGE.md) (20 cases as of phase 0).
+Full branch matrix: [COVERAGE.md](./COVERAGE.md) (24 cases, compiled router).
 
 Each case in `cases.json`:
 

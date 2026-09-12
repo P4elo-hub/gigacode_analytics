@@ -22,20 +22,20 @@ PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
 After `--apply`, run the invariant suite:
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py   # 20/20 legacy
-PYTHONPATH=scripts python3 scripts/pipeline_router_parity_test.py     # 20/20 legacy ≡ router
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py             # includes both + compile
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py   # router via build_dispatch
+PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py             # golden + compile + hooks
+PYTHONPATH=scripts python3 scripts/feature_status_test.py
 ```
 
-Smoke includes `pipeline-compile` parity check and `router-parity`.
+Smoke includes `pipeline-compile` parity check and `dispatch-golden`.
 
 ## Edit workflow
 
 1. Change topology, mapping, or **dispatch rules** in `pipeline.yaml` only.
 2. `--check` → review diff report (includes dispatch schema validation).
 3. `--apply` → commit YAML + generated JSON together.
-4. Golden + router-parity + smoke must stay green before merge.
+4. Golden + smoke must stay green before merge.
 
-**Phase 2:** declarative routing in `dispatch.spec` — see `PIPELINE-ROUTER.md`. Production still uses legacy until `PIPELINE_COMPILED_ROUTER=1`.
+**Phase 2 (cutover complete):** declarative routing in `dispatch.spec` — see `PIPELINE-ROUTER.md`. Production uses `pipeline_router` only.
 
-**Not in scope:** viewer edit UI, calibration dispatch, hooks/delegate graph gate changes.
+**Not in scope:** viewer edit UI, calibration dispatch.
