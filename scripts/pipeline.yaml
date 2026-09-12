@@ -96,6 +96,16 @@ pipelines:
         to: resolve-gaps
         kind: branch
         label: gaps open
+      - id: e-cf-rc
+        from: check-feature
+        to: resolve-challenges
+        kind: branch
+        label: DECISIONS CH pending
+      - id: e-cf-ra
+        from: check-feature
+        to: resolve-code-alignment
+        kind: branch
+        label: alignment findings
       - id: e-cf-ch
         from: check-feature
         to: challenge-feature
@@ -106,6 +116,16 @@ pipelines:
         to: check-feature
         kind: loop
         label: re-check
+      - id: e-rg-rc
+        from: resolve-gaps
+        to: resolve-challenges
+        kind: branch
+        label: DECISIONS CH batch
+      - id: e-rg-ra
+        from: resolve-gaps
+        to: resolve-code-alignment
+        kind: branch
+        label: alignment after gaps
       - id: e-cf-cc
         from: check-feature
         to: check-feature-code
@@ -119,6 +139,16 @@ pipelines:
         from: resolve-challenges
         to: check-feature
         kind: loop
+      - id: e-cc-cf
+        from: check-feature-code
+        to: check-feature
+        kind: loop
+        label: spec edited after audit
+      - id: e-cc-rg
+        from: check-feature-code
+        to: resolve-gaps
+        kind: branch
+        label: new GAP after audit
       - id: e-cc-ra
         from: check-feature-code
         to: resolve-code-alignment
@@ -129,6 +159,11 @@ pipelines:
         to: check-feature-code
         kind: loop
         label: re-audit
+      - id: e-ra-cf
+        from: resolve-code-alignment
+        to: check-feature
+        kind: loop
+        label: SPEC edited per alignment
       - id: e-cc-done
         from: check-feature-code
         to: done
@@ -228,12 +263,18 @@ dispatch:
       - priority: 40
         when: needs_answer_with_gaps
         next: resolve-gaps
+      - priority: 45
+        when: needs_answer_alignment_only
+        next: resolve-code-alignment
       - priority: 50
         when: needs_answer_challenges_only
         next: resolve-challenges
       - priority: 60
         when: pending_apply_with_gaps
         next: resolve-gaps
+      - priority: 65
+        when: pending_apply_alignment_only
+        next: resolve-code-alignment
       - priority: 70
         when: pending_apply_challenges_only
         next: resolve-challenges

@@ -198,6 +198,11 @@
           "next": "resolve-gaps"
         },
         {
+          "priority": "45",
+          "when": "needs_answer_alignment_only",
+          "next": "resolve-code-alignment"
+        },
+        {
           "priority": "50",
           "when": "needs_answer_challenges_only",
           "next": "resolve-challenges"
@@ -206,6 +211,11 @@
           "priority": "60",
           "when": "pending_apply_with_gaps",
           "next": "resolve-gaps"
+        },
+        {
+          "priority": "65",
+          "when": "pending_apply_alignment_only",
+          "next": "resolve-code-alignment"
         },
         {
           "priority": "70",

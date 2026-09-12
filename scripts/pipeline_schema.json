@@ -96,6 +96,20 @@
           "label": "gaps open"
         },
         {
+          "id": "e-cf-rc",
+          "from": "check-feature",
+          "to": "resolve-challenges",
+          "kind": "branch",
+          "label": "DECISIONS CH pending"
+        },
+        {
+          "id": "e-cf-ra",
+          "from": "check-feature",
+          "to": "resolve-code-alignment",
+          "kind": "branch",
+          "label": "alignment findings"
+        },
+        {
           "id": "e-cf-ch",
           "from": "check-feature",
           "to": "challenge-feature",
@@ -108,6 +122,20 @@
           "to": "check-feature",
           "kind": "loop",
           "label": "re-check"
+        },
+        {
+          "id": "e-rg-rc",
+          "from": "resolve-gaps",
+          "to": "resolve-challenges",
+          "kind": "branch",
+          "label": "DECISIONS CH batch"
+        },
+        {
+          "id": "e-rg-ra",
+          "from": "resolve-gaps",
+          "to": "resolve-code-alignment",
+          "kind": "branch",
+          "label": "alignment after gaps"
         },
         {
           "id": "e-cf-cc",
@@ -129,6 +157,20 @@
           "kind": "loop"
         },
         {
+          "id": "e-cc-cf",
+          "from": "check-feature-code",
+          "to": "check-feature",
+          "kind": "loop",
+          "label": "spec edited after audit"
+        },
+        {
+          "id": "e-cc-rg",
+          "from": "check-feature-code",
+          "to": "resolve-gaps",
+          "kind": "branch",
+          "label": "new GAP after audit"
+        },
+        {
           "id": "e-cc-ra",
           "from": "check-feature-code",
           "to": "resolve-code-alignment",
@@ -141,6 +183,13 @@
           "to": "check-feature-code",
           "kind": "loop",
           "label": "re-audit"
+        },
+        {
+          "id": "e-ra-cf",
+          "from": "resolve-code-alignment",
+          "to": "check-feature",
+          "kind": "loop",
+          "label": "SPEC edited per alignment"
         },
         {
           "id": "e-cc-done",

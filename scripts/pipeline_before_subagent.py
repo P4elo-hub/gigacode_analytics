@@ -8,9 +8,9 @@ import json
 import sys
 from pathlib import Path
 
-from artifact_paths import workspace_root
+from artifact_paths import list_feature_slugs, workspace_root
 from build_pipeline_graph import load_schema, subagent_to_step
-from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_latest
+from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_for_slug, load_active_task_latest
 from pipeline_common import pipeline_gated_subagents
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
@@ -107,6 +107,18 @@ def validate_task(
     schema = load_schema()["pipelines"]["spec"]
     proposed_step = subagent_to_step(schema, proposed) or ""
     if proposed_step and slug:
+        # Unlike delegate, the hook has no slug argument: `slug` comes from the
+        # workspace-wide marker, which any concurrent session or test helper can
+        # overwrite with its own feature. Prefer the per-feature marker matching the
+        # step being requested — that is the calling session's own reservation.
+        active = load_active_task_for_slug(root, slug)
+        if not active or (active.get("step") or "") != proposed_step:
+            for candidate in list_feature_slugs(root):
+                task = load_active_task_for_slug(root, candidate)
+                if (task or {}).get("step") == proposed_step:
+                    active, slug = task, candidate
+                    break
+
         last = last_ok_pipeline_step(root, slug)
         from_step = (last.get("step") if last else None) or schema.get("orchestrator")
         if not is_allowed_transition(schema, from_step, proposed_step):

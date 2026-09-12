@@ -22,14 +22,16 @@ Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — sa
 | 20 | `not_has_context` | find-context | | `01-no-context` |
 | 30 | `not_has_spec` | write-feature | | `02-no-spec` |
 | 40 | `needs_answer_with_gaps` | resolve-gaps | | `06-needs-answer-gaps` |
+| 45 | `needs_answer_alignment_only` | resolve-code-alignment | | `22-needs-answer-alignment-only` |
 | 50 | `needs_answer_challenges_only` | resolve-challenges | | `08-needs-answer-challenges` |
 | 60 | `pending_apply_with_gaps` | resolve-gaps | | `07-pending-apply-gaps` |
+| 65 | `pending_apply_alignment_only` | resolve-code-alignment | | `23-pending-apply-alignment-only`, `24-mixed-pending-apply-align-ch` |
 | 70 | `pending_apply_challenges_only` | resolve-challenges | | `17-pending-apply-challenges` |
 | 80 | `critical_major_mismatch_resolvable` | resolve-code-alignment | | `14-alignment-fail-mismatch` |
 | 90 | `open_gaps` | resolve-gaps | | `05-open-gaps`, `16-graph-gate-run-log` |
 | 100 | `open_challenges` | resolve-challenges | | `09-open-challenges` |
 | 110 | `no_challenges_file` | challenge-feature | | `10-no-challenges-file` |
-| 120 | `alignment_missing_or_stale` | check-feature-code | | `11-no-alignment`, `12-stale-alignment` |
+| 120 | `alignment_missing_or_stale` | check-feature-code | | `11-no-alignment`, `12-stale-alignment`, `21-alignment-stale-mismatch` |
 | 130 | `alignment_pass` | — | ready | `13-alignment-pass`, `19-alignment-pass-with-gaps` |
 | 140 | `alignment_fail_reaudit` | check-feature-code | | `20-alignment-fail-no-critical-mismatch` |
 
@@ -48,4 +50,6 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
 Phase 1+ (registry compile) must keep **dispatch-golden** green; phase 2 adds **router-parity**
-(legacy vs compiled router on the same 20 fixtures).
+(legacy vs compiled router on the same fixtures, currently 24 cases).
+
+Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`.

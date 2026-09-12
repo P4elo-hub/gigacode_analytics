@@ -15,7 +15,7 @@ from pathlib import Path
 from artifact_paths import resolve_slug, workspace_root
 from build_pipeline_graph import load_schema
 from pipeline_active_task import save_active_task
-from pipeline_common import read_run_log, subagent_for_step
+from pipeline_common import subagent_for_step
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
 
@@ -129,11 +129,11 @@ def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
         "from_step": from_step,
         "to_step": next_step,
         "allowed_by_schema": True,
-        "warning": None,
     }
+    reason = dispatch.get("next_reason", "")
     payload["instruction"] = (
         f"Единственный разрешённый вызов: `task` → `{next_subagent}` "
-        f"(step `{next_step}`). Причина dispatch: {dispatch.get('next_reason', '')}"
+        f"(step `{next_step}`). Причина dispatch: {reason}"
     )
     return payload
 

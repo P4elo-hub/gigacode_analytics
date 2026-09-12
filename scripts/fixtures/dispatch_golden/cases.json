@@ -416,5 +416,100 @@
       "must_continue": true
     },
     "expect_reason_contains": "alignment без PASS"
+  },
+  {
+    "id": "21-alignment-stale-mismatch",
+    "files": {
+      "Feature-context/dispatch-golden.md": "# Context\n\nVerified.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nClean spec newer.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | resolved |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n"
+    },
+    "touch_after": [
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md", "Feature-writing/dispatch-golden/dispatch-golden.md"]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "check-feature-code",
+      "next_subagent": "code-auditor",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "устарела"
+  },
+  {
+    "id": "22-needs-answer-alignment-only",
+    "files": {
+      "Feature-context/dispatch-golden.md": "# Context\n\nVerified.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nClean spec.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | resolved |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | F-01 | alignment topic | A) one | pick A | needs-answer | 2026-09-12 |\n"
+    },
+    "touch_after": [
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "resolve-code-alignment",
+      "next_subagent": "alignment-resolver",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "ALIGNMENT"
+  },
+  {
+    "id": "23-pending-apply-alignment-only",
+    "files": {
+      "Feature-context/dispatch-golden.md": "# Context\n\nVerified.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nClean spec.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | resolved |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | F-01 | alignment fix | A) patch spec | pick A | pending-apply | 2026-09-12 |\n"
+    },
+    "touch_after": [
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "resolve-code-alignment",
+      "next_subagent": "alignment-resolver",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "ALIGNMENT"
+  },
+  {
+    "id": "24-mixed-pending-apply-align-ch",
+    "files": {
+      "Feature-context/dispatch-golden.md": "# Context\n\nVerified.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nClean spec.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | resolved |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | F-01 | alignment fix | A) patch | pick A | pending-apply | 2026-09-12 |\n| D-02 | CH-01 | ch fix | A) patch | pick A | pending-apply | 2026-09-12 |\n"
+    },
+    "touch_after": [
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "resolve-code-alignment",
+      "next_subagent": "alignment-resolver",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "ALIGNMENT"
   }
 ]

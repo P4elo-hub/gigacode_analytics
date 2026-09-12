@@ -22,8 +22,10 @@ KNOWN_PREDICATES = frozenset(
         "not_has_context",
         "not_has_spec",
         "needs_answer_with_gaps",
+        "needs_answer_alignment_only",
         "needs_answer_challenges_only",
         "pending_apply_with_gaps",
+        "pending_apply_alignment_only",
         "pending_apply_challenges_only",
         "critical_major_mismatch_resolvable",
         "open_gaps",
@@ -89,22 +91,42 @@ def _predicate_needs_answer_with_gaps(_root: Path, _slug: str, status: FeatureSt
     return status.decisions_needs_answer > 0 and bool(status.open_gaps)
 
 
+def _predicate_needs_answer_alignment_only(_root: Path, _slug: str, status: FeatureStatus) -> bool:
+    return status.decisions_needs_answer_alignment > 0 and not status.open_gaps
+
+
 def _predicate_needs_answer_challenges_only(_root: Path, _slug: str, status: FeatureStatus) -> bool:
-    return status.decisions_needs_answer > 0 and not status.open_gaps
+    return (
+        status.decisions_needs_answer > status.decisions_needs_answer_alignment
+        and not status.open_gaps
+    )
 
 
 def _predicate_pending_apply_with_gaps(_root: Path, _slug: str, status: FeatureStatus) -> bool:
     return status.decisions_pending_apply > 0 and bool(status.open_gaps)
 
 
+def _predicate_pending_apply_alignment_only(_root: Path, _slug: str, status: FeatureStatus) -> bool:
+    return (
+        status.decisions_pending_apply_alignment > 0
+        and status.critical_major_mismatch > 0
+        and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
+        and not status.alignment_stale
+    )
+
+
 def _predicate_pending_apply_challenges_only(_root: Path, _slug: str, status: FeatureStatus) -> bool:
-    return status.decisions_pending_apply > 0 and not status.open_gaps
+    return (
+        status.decisions_pending_apply > status.decisions_pending_apply_alignment
+        and not status.open_gaps
+    )
 
 
 def _predicate_critical_major_mismatch_resolvable(_root: Path, _slug: str, status: FeatureStatus) -> bool:
     return (
         status.critical_major_mismatch > 0
         and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
+        and not status.alignment_stale
     )
 
 
@@ -137,8 +159,10 @@ PREDICATES: dict[str, Callable[[Path, str, FeatureStatus], bool]] = {
     "not_has_context": _predicate_not_has_context,
     "not_has_spec": _predicate_not_has_spec,
     "needs_answer_with_gaps": _predicate_needs_answer_with_gaps,
+    "needs_answer_alignment_only": _predicate_needs_answer_alignment_only,
     "needs_answer_challenges_only": _predicate_needs_answer_challenges_only,
     "pending_apply_with_gaps": _predicate_pending_apply_with_gaps,
+    "pending_apply_alignment_only": _predicate_pending_apply_alignment_only,
     "pending_apply_challenges_only": _predicate_pending_apply_challenges_only,
     "critical_major_mismatch_resolvable": _predicate_critical_major_mismatch_resolvable,
     "open_gaps": _predicate_open_gaps,
@@ -165,19 +189,30 @@ def reason_for_predicate(when: str, status: FeatureStatus) -> str:
             f"{status.decisions_needs_answer} строк needs-answer в DECISIONS — "
             "оркестратор опрашивает пользователя"
         )
-    if when == "needs_answer_challenges_only":
+    if when == "needs_answer_alignment_only":
         return (
-            f"{status.decisions_needs_answer} строк needs-answer в DECISIONS (CH) — "
+            f"{status.decisions_needs_answer_alignment} строк needs-answer в DECISIONS "
+            "(ALIGNMENT) — оркестратор опрашивает пользователя"
+        )
+    if when == "needs_answer_challenges_only":
+        ch_only = status.decisions_needs_answer - status.decisions_needs_answer_alignment
+        return (
+            f"{ch_only} строк needs-answer в DECISIONS (CH) — "
             "оркестратор опрашивает пользователя"
         )
     if when == "pending_apply_with_gaps":
         return (
             f"применить pending-apply из DECISIONS ({status.decisions_pending_apply} строк)"
         )
-    if when == "pending_apply_challenges_only":
+    if when == "pending_apply_alignment_only":
         return (
             f"применить pending-apply из DECISIONS "
-            f"({status.decisions_pending_apply} строк, CH)"
+            f"({status.decisions_pending_apply_alignment} строк, ALIGNMENT)"
+        )
+    if when == "pending_apply_challenges_only":
+        ch_only = status.decisions_pending_apply - status.decisions_pending_apply_alignment
+        return (
+            f"применить pending-apply из DECISIONS ({ch_only} строк, CH)"
         )
     if when == "critical_major_mismatch_resolvable":
         return "spec противоречит коду"

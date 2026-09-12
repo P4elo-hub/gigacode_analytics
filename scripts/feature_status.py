@@ -31,9 +31,12 @@ from pipeline_common import step_to_command, subagent_for_step
 INLINE_GAP_RE = re.compile(r"\[GAP-[A-Z0-9-]+\]")
 TABLE_GAP_RE = re.compile(r"^\|\s*(GAP-[A-Z0-9-]+)\s*\|", re.MULTILINE)
 DECISION_ROW_RE = re.compile(
-    r"^\|\s*D-\d+\s*\|(?:[^|\n]*\|){4}\s*([^|]+)\|",
+    r"^\|\s*D-\d+\s*\|([^|\n]*)\|(?:[^|\n]*\|){3}\s*([^|]+)\|",
     re.MULTILINE,
 )
+# A decision row whose Relates are alignment finding ids belongs to the
+# code-alignment loop, whatever the gap/challenge counters say.
+ALIGNMENT_RELATES_RE = re.compile(r"\b[FICTKAM]-\d+\b")
 CLOSED_GAP_MARKERS = ("закрыт", "closed")
 QUESTION_ID_RE = re.compile(r"\bQ-\d+\b")
 CHALLENGE_ROW_RE = re.compile(
@@ -42,9 +45,10 @@ CHALLENGE_ROW_RE = re.compile(
 )
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)
 MISMATCH_ROW_RE = re.compile(
-    r"^\|(?:[^|\n]*\|){4}\s*MISMATCH\s*\|\s*([^|]+)\|",
+    r"^\|((?:[^|\n]*\|)+)\s*$",
     re.MULTILINE,
 )
+SUMMARY_ROW_RE = re.compile(r"\b(?:critical|major|minor|total)\s+mismatch\b", re.IGNORECASE)
 OPEN_QUESTIONS_HEADING = re.compile(r"^##\s+Открытые вопросы.*$", re.MULTILINE)
 CLOSED_QUESTIONS_HEADING = re.compile(r"^##\s+Закрытые вопросы.*$", re.MULTILINE)
 NEXT_HEADING = re.compile(r"^##\s+", re.MULTILINE)
@@ -77,6 +81,8 @@ class FeatureStatus:
     has_gaps_map: bool = False
     decisions_needs_answer: int = 0
     decisions_pending_apply: int = 0
+    decisions_needs_answer_alignment: int = 0
+    decisions_pending_apply_alignment: int = 0
     has_challenges: bool = False
     has_challenges_map: bool = False
     has_alignment: bool = False
@@ -88,6 +94,7 @@ class FeatureStatus:
     verdict: str = ""
     alignment_iteration: int = 0
     critical_major_mismatch: int = 0
+    alignment_stale: bool = False
     stale: list[str] = field(default_factory=list)
     next_command: str = ""
     next_step: str = ""
@@ -159,8 +166,19 @@ def parse_alignment(alignment_text: str) -> tuple[str, int, int]:
                 iteration = int(digits) if digits else 0
     mismatch = 0
     for row_match in MISMATCH_ROW_RE.finditer(alignment_text):
-        severity = row_match.group(1).strip().lower()
-        if any(level in severity for level in CRITICAL_MAJOR):
+        cells = [cell.strip() for cell in row_match.group(1).split("|")]
+        cells = [cell for cell in cells if cell]
+        # Finding rows carry a severity column plus a claim/evidence pair;
+        # two-cell rows are aggregate counters ("MISMATCH (Major) | 2") and
+        # aggregate labels ("Major MISMATCH | **2**") — not findings.
+        if len(cells) < 3:
+            continue
+        joined = " ".join(cell.lower() for cell in cells)
+        if SUMMARY_ROW_RE.search(joined):
+            continue
+        if not any("mismatch" in cell.lower() for cell in cells):
+            continue
+        if any(level in joined for level in CRITICAL_MAJOR):
             mismatch += 1
     return verdict, iteration, mismatch
 
@@ -299,18 +317,29 @@ def _choose_next_step_legacy(status: FeatureStatus, *, root: Path | None = None)
                     "оркестратор опрашивает пользователя"
                 ),
             )
+        elif status.decisions_needs_answer_alignment > 0:
+            _set_next(
+                status,
+                "resolve-code-alignment",
+                (
+                    f"{status.decisions_needs_answer_alignment} строк needs-answer в DECISIONS "
+                    "(ALIGNMENT) — оркестратор опрашивает пользователя"
+                ),
+            )
         else:
+            ch_only = status.decisions_needs_answer - status.decisions_needs_answer_alignment
             _set_next(
                 status,
                 "resolve-challenges",
                 (
-                    f"{status.decisions_needs_answer} строк needs-answer в DECISIONS (CH) — "
+                    f"{ch_only} строк needs-answer в DECISIONS (CH) — "
                     "оркестратор опрашивает пользователя"
                 ),
             )
         _finalize_orchestrator_mode(status)
         return
     if status.decisions_pending_apply:
+        pending_routed = False
         if status.open_gaps:
             _set_next(
                 status,
@@ -320,18 +349,40 @@ def _choose_next_step_legacy(status: FeatureStatus, *, root: Path | None = None)
                     f"({status.decisions_pending_apply} строк)"
                 ),
             )
-        else:
+            pending_routed = True
+        elif (
+            status.decisions_pending_apply_alignment > 0
+            and status.critical_major_mismatch > 0
+            and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
+            and not status.alignment_stale
+        ):
+            _set_next(
+                status,
+                "resolve-code-alignment",
+                (
+                    f"применить pending-apply из DECISIONS "
+                    f"({status.decisions_pending_apply_alignment} строк, ALIGNMENT)"
+                ),
+            )
+            pending_routed = True
+        elif status.decisions_pending_apply > status.decisions_pending_apply_alignment:
+            ch_only = status.decisions_pending_apply - status.decisions_pending_apply_alignment
             _set_next(
                 status,
                 "resolve-challenges",
                 (
-                    f"применить pending-apply из DECISIONS "
-                    f"({status.decisions_pending_apply} строк, CH)"
+                    f"применить pending-apply из DECISIONS ({ch_only} строк, CH)"
                 ),
             )
-        _finalize_orchestrator_mode(status)
-        return
-    if status.critical_major_mismatch > 0 and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS:
+            pending_routed = True
+        if pending_routed:
+            _finalize_orchestrator_mode(status)
+            return
+    if (
+        status.critical_major_mismatch > 0
+        and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
+        and not status.alignment_stale
+    ):
         _set_next(status, "resolve-code-alignment", "spec противоречит коду")
         _finalize_orchestrator_mode(status)
         return
@@ -391,11 +442,17 @@ def build_status_fields(root: Path, slug: str) -> FeatureStatus:
     status.has_decisions = decisions.is_file()
     if status.has_decisions:
         for match in DECISION_ROW_RE.finditer(decisions.read_text(encoding="utf-8")):
-            flag = match.group(1).strip().lower()
+            relates = match.group(1)
+            flag = match.group(2).strip().lower()
+            from_alignment = bool(ALIGNMENT_RELATES_RE.search(relates))
             if flag == "needs-answer":
                 status.decisions_needs_answer += 1
+                if from_alignment:
+                    status.decisions_needs_answer_alignment += 1
             elif flag == "pending-apply":
                 status.decisions_pending_apply += 1
+                if from_alignment:
+                    status.decisions_pending_apply_alignment += 1
     status.has_gaps_map = gaps_map_path(root, slug).is_file()
     status.has_challenges = challenges_path(root, slug).is_file()
     status.has_challenges_map = challenges_map_path(root, slug).is_file()
@@ -409,12 +466,17 @@ def build_status_fields(root: Path, slug: str) -> FeatureStatus:
     if status.has_challenges:
         status.challenges = collect_challenges(challenges_path(root, slug).read_text(encoding="utf-8"))
     if status.has_alignment:
-        verdict, iteration, mismatch = parse_alignment(
-            alignment_path(root, slug).read_text(encoding="utf-8")
-        )
+        alignment = alignment_path(root, slug)
+        verdict, iteration, mismatch = parse_alignment(alignment.read_text(encoding="utf-8"))
         status.verdict = verdict
         status.alignment_iteration = iteration
         status.critical_major_mismatch = mismatch
+        # An alignment report written before the latest SPEC edit describes
+        # superseded text: its unresolvable FAIL must not re-nominate the
+        # resolve step, which would spin the alignment loop forever.
+        status.alignment_stale = (
+            spec.is_file() and alignment.stat().st_mtime < spec.stat().st_mtime
+        )
     status.stale = detect_stale(root, slug)
     return status
 

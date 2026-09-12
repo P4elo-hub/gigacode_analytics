@@ -79,11 +79,32 @@ SOFT_ORDER_PAIRS: dict[tuple[str, str], str] = {
     ("resolve-gaps", "check-feature"): (
         "Петля resolve-gaps → check-feature — штатная (перепроверка после закрытия gaps)."
     ),
+    ("check-feature", "resolve-challenges"): (
+        "После check-feature могли открыться CH без нового challenge-feature — "
+        "применение pending-apply из DECISIONS разрешено, хотя ребра нет в графе viewer."
+    ),
     ("resolve-challenges", "check-feature"): (
         "Петля resolve-challenges → check-feature — штатная."
     ),
     ("resolve-code-alignment", "check-feature-code"): (
         "Петля alignment → повторный code-audit — штатная."
+    ),
+    ("resolve-code-alignment", "check-feature"): (
+        "Правка SPEC по alignment-находкам, затронувшая BR/CN/use case, требует "
+        "перепроверки документа — возврат к check-feature штатен, хотя ребра в графе нет."
+    ),
+    ("check-feature", "resolve-code-alignment"): (
+        "check-feature подтвердил, что SPEC отражает применённые решения; остаточные "
+        "alignment-находки закрываются в resolve-code-alignment — ребра в графе нет, "
+        "петля замыкается через последующий check-feature-code."
+    ),
+    ("resolve-gaps", "resolve-code-alignment"): (
+        "Alignment-находки, адресованные § с открытыми GAP, сначала закрываются "
+        "через resolve-gaps — шаг resolve-code-alignment после разрешения гэпов штатен."
+    ),
+    ("resolve-gaps", "resolve-challenges"): (
+        "GAP и CH-ответы живут в одном DECISIONS-файле: применение батча resolve-gaps "
+        "может закрыть и challenge-строки, поэтому переход в resolve-challenges допустим."
     ),
 }
 
@@ -320,21 +341,49 @@ def _is_allowed_transition(schema: dict, from_step: str, to_step: str) -> bool:
 
 
 def is_allowed_transition(schema: dict, from_step: str, to_step: str) -> bool:
-    """Public wrapper for pipeline_delegate preflight."""
+    """Public wrapper for pipeline_delegate / PreToolUse graph gate.
+
+    Only edges declared in ``pipeline_schema.json`` are allowed. Historical
+    transitions that were previously whitelisted via ``SOFT_ORDER_PAIRS`` are
+    now real graph edges in ``pipeline.yaml``.
+    """
     return _is_allowed_transition(schema, from_step, to_step)
 
 
-def last_ok_pipeline_step(root: Path, slug: str) -> dict | None:
-    """Last run-log row with result ok and a pipeline step."""
-    from pipeline_common import ORCHESTRATOR_OWNED_STEPS
+def run_log_has_ok(root: Path, slug: str, step: str) -> bool:
+    """True when the run-log has a closed ok pass of `step` (any run)."""
+    from pipeline_common import read_run_log
 
     for entry in reversed(read_run_log(root, slug)):
+        if entry.get("step") == step and entry.get("result") == "ok":
+            return True
+    return False
+
+
+def last_ok_pipeline_step(root: Path, slug: str) -> dict | None:
+    """Last run-log row with result ok and a pipeline step.
+
+    Orchestrator-owned steps (write-feature) are not subagent calls, so they have no
+    canonical run-log row to anchor a transition on. When such a step already has a
+    closed ok pass, it becomes the transition origin — otherwise the guard would
+    compare an older step (find-context) against the step that follows it.
+    """
+    from pipeline_common import ORCHESTRATOR_OWNED_STEPS
+
+    fallback: dict | None = None
+    for entry in reversed(read_run_log(root, slug)):
         step = entry.get("step") or ""
-        if not step or step in ORCHESTRATOR_OWNED_STEPS:
+        if entry.get("result") != "ok":
             continue
-        if entry.get("result") == "ok":
+        if step and step in ORCHESTRATOR_OWNED_STEPS:
+            if run_log_has_ok(root, slug, step):
+                return entry
+            continue
+        if step:
             return entry
-    return None
+        if fallback is None:
+            fallback = entry
+    return fallback
 
 
 def _dispatch_fingerprint(root: Path, slug: str) -> dict[str, float]:
