@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -246,6 +247,17 @@ def _finalize_orchestrator_mode(status: FeatureStatus) -> None:
 
 
 def choose_next_step(status: FeatureStatus, *, root: Path | None = None) -> None:
+    if os.environ.get("PIPELINE_COMPILED_ROUTER") == "1":
+        if root is None:
+            root = workspace_root(Path("."))
+        from pipeline_router import apply_router_decision
+
+        apply_router_decision(status, root, status.slug)
+        return
+    _choose_next_step_legacy(status, root=root)
+
+
+def _choose_next_step_legacy(status: FeatureStatus, *, root: Path | None = None) -> None:
     if (
         status.has_alignment
         and status.alignment_iteration >= ALIGNMENT_MAX_ITERATIONS
@@ -368,7 +380,8 @@ def choose_next_step(status: FeatureStatus, *, root: Path | None = None) -> None
     _finalize_orchestrator_mode(status)
 
 
-def build_status(root: Path, slug: str) -> FeatureStatus:
+def build_status_fields(root: Path, slug: str) -> FeatureStatus:
+    """Collect artifact-derived fields without dispatch routing."""
     status = FeatureStatus(slug=slug)
     context = context_doc_path(root, slug)
     spec = spec_path(root, slug)
@@ -403,6 +416,11 @@ def build_status(root: Path, slug: str) -> FeatureStatus:
         status.alignment_iteration = iteration
         status.critical_major_mismatch = mismatch
     status.stale = detect_stale(root, slug)
+    return status
+
+
+def build_status(root: Path, slug: str) -> FeatureStatus:
+    status = build_status_fields(root, slug)
     choose_next_step(status, root=root)
     return status
 

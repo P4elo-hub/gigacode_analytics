@@ -2,32 +2,38 @@
 
 Maps `choose_next_step()` / `needs_check_feature()` branches to fixture ids.
 
-## `choose_next_step` (priority order)
+Phase 2: same branches are declared in `pipeline.yaml` → `dispatch.spec` and evaluated by
+`pipeline_router.py`. `pipeline_router_parity_test.py` asserts legacy ≡ router on every row below.
 
-| Branch | Fixture | Assert |
-|--------|---------|--------|
-| Alignment limit exhausted | `15-alignment-limit-stopped` | `stopped`, empty next |
-| No context | `01-no-context` | `find-context` |
-| No spec | `02-no-spec` | `write-feature`, `write_feature_cycle` |
-| Graph gate: first check | `03-spec-needs-check` | `check-feature` |
-| Graph gate: SPEC newer GAPS_MAP | `04-spec-newer-gaps-map` | `check-feature`, reason GAPS_MAP |
-| Graph gate: SPEC newer CHALLENGES_MAP | `18-spec-newer-challenges-map` | `check-feature`, reason CHALLENGES_MAP |
-| Graph gate: run-log check ok | `16-graph-gate-run-log`, `10-no-challenges-file` | bypass → gaps / challenge |
-| needs-answer + open gaps | `06-needs-answer-gaps` | `resolve-gaps`, `ask_user` |
-| needs-answer + no gaps (CH) | `08-needs-answer-challenges` | `resolve-challenges`, `ask_user` |
-| pending-apply + open gaps | `07-pending-apply-gaps` | `resolve-gaps`, delegate |
-| pending-apply + no gaps (CH) | `17-pending-apply-challenges` | `resolve-challenges`, delegate |
-| Critical/Major MISMATCH | `14-alignment-fail-mismatch` | `resolve-code-alignment` |
-| Open gaps (plain) | `05-open-gaps` | `resolve-gaps` |
-| Open CH | `09-open-challenges` | `resolve-challenges` |
-| No CHALLENGES file | `10-no-challenges-file` | `challenge-feature` |
-| No ALIGNMENT | `11-no-alignment` | `check-feature-code` |
-| Stale alignment | `12-stale-alignment` | `check-feature-code`, reason устарела |
-| Verdict PASS | `13-alignment-pass` | `ready` |
-| Verdict PASS WITH GAPS | `19-alignment-pass-with-gaps` | `ready` |
-| FAIL, no Critical/Major mismatch | `20-alignment-fail-no-critical-mismatch` | `check-feature-code`, re-audit |
+## Invariant (after P10–P30, before P40+)
 
-## Out of scope (phase 0)
+| Invariant | Fixtures | Effect |
+|-----------|----------|--------|
+| `needs-check-feature` | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` | `check-feature` |
+| (bypass when run-log ok) | `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
+
+Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — same order as legacy `choose_next_step()`.
+
+## `dispatch.spec.rules` (priority / when / next / fixture)
+
+| P | when | next | outcome | Fixture |
+|---|------|------|---------|---------|
+| 10 | `alignment_limit_exhausted` | — | stopped | `15-alignment-limit-stopped` |
+| 20 | `not_has_context` | find-context | | `01-no-context` |
+| 30 | `not_has_spec` | write-feature | | `02-no-spec` |
+| 40 | `needs_answer_with_gaps` | resolve-gaps | | `06-needs-answer-gaps` |
+| 50 | `needs_answer_challenges_only` | resolve-challenges | | `08-needs-answer-challenges` |
+| 60 | `pending_apply_with_gaps` | resolve-gaps | | `07-pending-apply-gaps` |
+| 70 | `pending_apply_challenges_only` | resolve-challenges | | `17-pending-apply-challenges` |
+| 80 | `critical_major_mismatch_resolvable` | resolve-code-alignment | | `14-alignment-fail-mismatch` |
+| 90 | `open_gaps` | resolve-gaps | | `05-open-gaps`, `16-graph-gate-run-log` |
+| 100 | `open_challenges` | resolve-challenges | | `09-open-challenges` |
+| 110 | `no_challenges_file` | challenge-feature | | `10-no-challenges-file` |
+| 120 | `alignment_missing_or_stale` | check-feature-code | | `11-no-alignment`, `12-stale-alignment` |
+| 130 | `alignment_pass` | — | ready | `13-alignment-pass`, `19-alignment-pass-with-gaps` |
+| 140 | `alignment_fail_reaudit` | check-feature-code | | `20-alignment-fail-no-critical-mismatch` |
+
+## Out of scope (phase 0–2)
 
 These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 
@@ -41,5 +47,5 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Calibration pipeline graph | `graph:*:calibration` |
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
-Phase 1+ (registry compile) must keep **dispatch-golden** green; phase 2 router adds no duplicate
-live-slug checks unless a branch is removed from golden first.
+Phase 1+ (registry compile) must keep **dispatch-golden** green; phase 2 adds **router-parity**
+(legacy vs compiled router on the same 20 fixtures).

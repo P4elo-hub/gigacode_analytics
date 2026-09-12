@@ -29,6 +29,78 @@ def load_yaml(path: Path) -> dict:
     return data
 
 
+def validate_dispatch(data: dict, restartable_steps: list[str]) -> list[str]:
+    errors: list[str] = []
+    dispatch = data.get("dispatch")
+    if not isinstance(dispatch, dict):
+        errors.append("missing dispatch mapping")
+        return errors
+
+    try:
+        from pipeline_router import KNOWN_INVARIANTS, KNOWN_PREDICATES, VALID_OUTCOMES, VALID_STEPS
+    except ImportError as exc:
+        errors.append(f"dispatch validation import failed: {exc}")
+        return errors
+
+    valid_steps = set(restartable_steps) | VALID_STEPS
+    spec = dispatch.get("spec")
+    if not isinstance(spec, dict):
+        errors.append("dispatch.spec required")
+        return errors
+
+    invariants = spec.get("invariants") or []
+    if not isinstance(invariants, list):
+        errors.append("dispatch.spec.invariants must be a list")
+    else:
+        for inv in invariants:
+            if not isinstance(inv, dict):
+                errors.append("dispatch.spec.invariants entries must be mappings")
+                continue
+            inv_id = inv.get("id")
+            if inv_id not in KNOWN_INVARIANTS:
+                errors.append(f"dispatch invariant unknown id: {inv_id!r}")
+            step = inv.get("step")
+            if step and step not in valid_steps:
+                errors.append(f"dispatch invariant step invalid: {step!r}")
+
+    rules = spec.get("rules") or []
+    if not isinstance(rules, list):
+        errors.append("dispatch.spec.rules must be a list")
+        return errors
+
+    priorities: set[int] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            errors.append("dispatch.spec.rules entries must be mappings")
+            continue
+        when = rule.get("when")
+        if when not in KNOWN_PREDICATES:
+            errors.append(f"dispatch rule unknown when: {when!r}")
+        priority_raw = rule.get("priority")
+        try:
+            priority = int(priority_raw)
+        except (TypeError, ValueError):
+            errors.append(f"dispatch rule priority must be int: {when!r}")
+            priority = None
+        if priority is not None:
+            if priority in priorities:
+                errors.append(f"dispatch rule duplicate priority: {priority}")
+            else:
+                priorities.add(priority)
+
+        next_step = rule.get("next")
+        outcome = rule.get("outcome")
+        if next_step is None:
+            if outcome not in VALID_OUTCOMES:
+                errors.append(f"dispatch rule next=null requires outcome ready|stopped: {when!r}")
+        elif next_step not in valid_steps:
+            errors.append(f"dispatch rule invalid next: {next_step!r}")
+        if outcome and outcome not in VALID_OUTCOMES:
+            errors.append(f"dispatch rule invalid outcome: {outcome!r}")
+
+    return errors
+
+
 def validate_source(data: dict) -> list[str]:
     errors: list[str] = []
     registry = data.get("registry")
@@ -67,6 +139,8 @@ def validate_source(data: dict) -> list[str]:
         if step in orch_owned:
             errors.append(f"step {step} is both orchestrator_owned and in step_to_subagent")
 
+    errors.extend(validate_dispatch(data, list(registry.get("restartable_steps") or [])))
+
     return errors
 
 
@@ -89,7 +163,7 @@ def build_registry(data: dict) -> dict:
             for node in pipe.get("nodes", [])
             if isinstance(node, dict) and node.get("id")
         ]
-    return {
+    payload = {
         "step_to_subagent": dict(registry_src["step_to_subagent"]),
         "orchestrator_owned": list(registry_src["orchestrator_owned"]),
         "gated_subagents": list(registry_src["gated_subagents"]),
@@ -97,6 +171,10 @@ def build_registry(data: dict) -> dict:
         "step_order": {name: index for index, name in enumerate(restartable)},
         "nodes": nodes_meta,
     }
+    dispatch = data.get("dispatch")
+    if isinstance(dispatch, dict):
+        payload["dispatch"] = dispatch
+    return payload
 
 
 def json_text(payload: dict) -> str:
