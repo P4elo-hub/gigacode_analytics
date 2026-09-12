@@ -12,6 +12,8 @@ PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py --list
 
 Also invoked from `pipeline_smoke_test.py` as `dispatch-golden`.
 
+Pipeline topology compile (phase 1): see [PIPELINE-COMPILE.md](../../PIPELINE-COMPILE.md).
+
 Full branch matrix: [COVERAGE.md](./COVERAGE.md) (20 cases as of phase 0).
 
 Each case in `cases.json`:

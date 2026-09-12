@@ -1,0 +1,170 @@
+{
+  "step_to_subagent": {
+    "find-context": "context-researcher",
+    "check-feature": "spec-reviewer",
+    "resolve-gaps": "gap-resolver",
+    "challenge-feature": "spec-challenger",
+    "resolve-challenges": "challenge-resolver",
+    "check-feature-code": "code-auditor",
+    "resolve-code-alignment": "alignment-resolver"
+  },
+  "orchestrator_owned": [
+    "write-feature"
+  ],
+  "gated_subagents": [
+    "context-researcher",
+    "spec-writer",
+    "spec-reviewer",
+    "gap-resolver",
+    "spec-challenger",
+    "challenge-resolver",
+    "code-auditor",
+    "alignment-resolver"
+  ],
+  "restartable_steps": [
+    "find-context",
+    "write-feature",
+    "check-feature",
+    "resolve-gaps",
+    "challenge-feature",
+    "resolve-challenges",
+    "check-feature-code",
+    "resolve-code-alignment"
+  ],
+  "step_order": {
+    "find-context": 0,
+    "write-feature": 1,
+    "check-feature": 2,
+    "resolve-gaps": 3,
+    "challenge-feature": 4,
+    "resolve-challenges": 5,
+    "check-feature-code": 6,
+    "resolve-code-alignment": 7
+  },
+  "nodes": {
+    "spec": [
+      {
+        "id": "spec-orchestrator",
+        "label": "spec-orchestrator",
+        "kind": "orchestrator",
+        "subagent": null
+      },
+      {
+        "id": "find-context",
+        "label": "find-context",
+        "kind": "step",
+        "subagent": "context-researcher"
+      },
+      {
+        "id": "write-feature",
+        "label": "write-feature",
+        "kind": "step",
+        "subagent": "spec-writer"
+      },
+      {
+        "id": "check-feature",
+        "label": "check-feature",
+        "kind": "step",
+        "subagent": "spec-reviewer"
+      },
+      {
+        "id": "resolve-gaps",
+        "label": "resolve-gaps",
+        "kind": "step",
+        "subagent": "gap-resolver"
+      },
+      {
+        "id": "challenge-feature",
+        "label": "challenge-feature",
+        "kind": "step",
+        "subagent": "spec-challenger"
+      },
+      {
+        "id": "resolve-challenges",
+        "label": "resolve-challenges",
+        "kind": "step",
+        "subagent": "challenge-resolver"
+      },
+      {
+        "id": "check-feature-code",
+        "label": "check-feature-code",
+        "kind": "step",
+        "subagent": "code-auditor"
+      },
+      {
+        "id": "resolve-code-alignment",
+        "label": "resolve-code-alignment",
+        "kind": "step",
+        "subagent": "alignment-resolver"
+      },
+      {
+        "id": "archive-session",
+        "label": "archive-session",
+        "kind": "meta",
+        "subagent": null
+      },
+      {
+        "id": "done",
+        "label": "PASS",
+        "kind": "terminal",
+        "subagent": null
+      }
+    ],
+    "calibration": [
+      {
+        "id": "calibration-orchestrator",
+        "label": "calibration-orchestrator",
+        "kind": "orchestrator",
+        "subagent": null
+      },
+      {
+        "id": "snapshot-baseline",
+        "label": "snapshot-baseline",
+        "kind": "step",
+        "subagent": null
+      },
+      {
+        "id": "capture-review",
+        "label": "capture-review",
+        "kind": "step",
+        "subagent": "review-capturer"
+      },
+      {
+        "id": "analyze-delta",
+        "label": "analyze-delta",
+        "kind": "step",
+        "subagent": "regression-analyst"
+      },
+      {
+        "id": "analyze-telemetry",
+        "label": "analyze-telemetry",
+        "kind": "step",
+        "subagent": "session-telemetry-analyst"
+      },
+      {
+        "id": "propose-calibration",
+        "label": "propose-calibration",
+        "kind": "step",
+        "subagent": "calibration-proposer"
+      },
+      {
+        "id": "apply-calibration",
+        "label": "apply-calibration",
+        "kind": "step",
+        "subagent": "calibration-applier"
+      },
+      {
+        "id": "benchmark-rerun",
+        "label": "benchmark-rerun",
+        "kind": "step",
+        "subagent": "benchmark-runner"
+      },
+      {
+        "id": "cal-done",
+        "label": "Scorecard",
+        "kind": "terminal",
+        "subagent": null
+      }
+    ]
+  }
+}

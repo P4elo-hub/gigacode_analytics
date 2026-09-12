@@ -11,21 +11,11 @@ from pathlib import Path
 from artifact_paths import workspace_root
 from build_pipeline_graph import load_schema, subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_latest
+from pipeline_common import pipeline_gated_subagents
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
 
-PIPELINE_GATED_SUBAGENTS = frozenset(
-    {
-        "context-researcher",
-        "spec-writer",
-        "spec-reviewer",
-        "gap-resolver",
-        "spec-challenger",
-        "challenge-resolver",
-        "code-auditor",
-        "alignment-resolver",
-    }
-)
+PIPELINE_GATED_SUBAGENTS = pipeline_gated_subagents()
 
 DELEGATE_CMD = "python3 scripts/pipeline_delegate.py <slug> --cli qwen"
 

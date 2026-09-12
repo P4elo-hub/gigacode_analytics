@@ -4,22 +4,43 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 from agent_logs import load_manifest, run_log_path
 
-STEP_TO_SUBAGENT: dict[str, str] = {
-    "find-context": "context-researcher",
-    "check-feature": "spec-reviewer",
-    "resolve-gaps": "gap-resolver",
-    "challenge-feature": "spec-challenger",
-    "resolve-challenges": "challenge-resolver",
-    "check-feature-code": "code-auditor",
-    "resolve-code-alignment": "alignment-resolver",
-}
+REGISTRY_PATH = Path(__file__).resolve().parent / "generated" / "pipeline_registry.json"
+
+
+@lru_cache(maxsize=1)
+def load_pipeline_registry() -> dict:
+    if not REGISTRY_PATH.is_file():
+        raise FileNotFoundError(
+            f"Missing {REGISTRY_PATH} — run: python3 scripts/pipeline_compile.py --apply"
+        )
+    payload = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Invalid registry: {REGISTRY_PATH}")
+    return payload
+
+
+def pipeline_gated_subagents() -> frozenset[str]:
+    return frozenset(load_pipeline_registry()["gated_subagents"])
+
+
+def pipeline_restartable_steps() -> tuple[str, ...]:
+    return tuple(load_pipeline_registry()["restartable_steps"])
+
+
+def pipeline_step_order() -> dict[str, int]:
+    return dict(load_pipeline_registry()["step_order"])
+
+
+_registry = load_pipeline_registry()
+STEP_TO_SUBAGENT: dict[str, str] = dict(_registry["step_to_subagent"])
 
 # write-feature is orchestrator-owned (spec-writer loop), not a single subagent task.
-ORCHESTRATOR_OWNED_STEPS = frozenset({"write-feature"})
+ORCHESTRATOR_OWNED_STEPS = frozenset(_registry["orchestrator_owned"])
 
 
 def command_to_step(command: str) -> str:

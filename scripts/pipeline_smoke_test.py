@@ -398,6 +398,20 @@ def check_pipeline_before_subagent(report: Report, slug: str) -> None:
     )
 
 
+def check_pipeline_compile(report: Report) -> None:
+    """Phase 1: compiled schema/registry match pipeline.yaml and legacy mapping."""
+    import pipeline_compile as compile_mod
+
+    try:
+        data = compile_mod.load_yaml(compile_mod.YAML_PATH)
+        ok, messages = compile_mod.run_check(data)
+        failed = [m for m in messages if m.startswith("parity:") or "differs (" in m]
+        detail = "; ".join(failed[:2]) if failed else "schema + registry parity ok"
+        report.add("pipeline-compile", ok and not failed, detail)
+    except Exception as exc:
+        report.add("pipeline-compile", False, str(exc))
+
+
 def check_dispatch_golden(report: Report) -> None:
     """Phase 0: isolated fixture matrix for build_dispatch contract."""
     import pipeline_dispatch_golden_test as golden
@@ -451,6 +465,7 @@ def main() -> int:
     ensure_smoke_fixtures()
 
     check_dispatch_golden(report)
+    check_pipeline_compile(report)
     check_viewer_health(report)
     check_cli_settings(report)
     check_dispatch(report, SMOKE_SLUG)

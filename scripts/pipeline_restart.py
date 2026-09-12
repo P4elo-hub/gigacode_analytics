@@ -22,20 +22,15 @@ from artifact_paths import (
     spec_path,
     workspace_root,
 )
-from pipeline_common import step_to_command, subagent_for_step
-
-RESTARTABLE_STEPS = (
-    "find-context",
-    "write-feature",
-    "check-feature",
-    "resolve-gaps",
-    "challenge-feature",
-    "resolve-challenges",
-    "check-feature-code",
-    "resolve-code-alignment",
+from pipeline_common import (
+    pipeline_restartable_steps,
+    pipeline_step_order,
+    step_to_command,
+    subagent_for_step,
 )
 
-STEP_ORDER = {name: index for index, name in enumerate(RESTARTABLE_STEPS)}
+RESTARTABLE_STEPS = pipeline_restartable_steps()
+STEP_ORDER = pipeline_step_order()
 
 REPORT_SUFFIXES = (
     "-decisions.md",
