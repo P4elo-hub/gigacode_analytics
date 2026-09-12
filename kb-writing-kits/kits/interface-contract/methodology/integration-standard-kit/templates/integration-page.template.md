@@ -1,0 +1,66 @@
+﻿<!--
+Imported from: integration-standard-kit/templates\integration-page.template.md
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+---
+pageEvidencePack: [path]
+sourceSlices:
+  - [SLICE-ID]
+sourceMap:
+  - [TRACE-ID]
+---
+
+# Интеграция с [Название системы]
+
+## Назначение
+
+[Кратко объяснить, зачем нужна интеграция и какой бизнес/системный результат она дает.]
+
+## Кратко
+
+- Тип: [синхронная / асинхронная / batch / bidirectional]
+- Протокол: [REST / gRPC / GraphQL / SOAP / Kafka / RabbitMQ / другое]
+- Направление: [входящая / исходящая / двунаправленная]
+- Producer: [система]
+- Consumer: [система]
+
+## Текущее поведение
+
+[Описание текущего поведения без неподтвержденных допущений.]
+
+## Участники интеграции
+
+| Система | Роль | Что передает | Что получает |
+|---|---|---|---|
+| [System A] | [producer/consumer] | [данные] | [ответ/событие] |
+
+## Контракт
+
+| Метод / операция / topic | Назначение | Producer | Consumer |
+|---|---|---|---|
+| [method] | [назначение] | [producer] | [consumer] |
+
+## Данные и маппинг
+
+| Источник | Поле источника | Получатель | Поле получателя | Правило |
+|---|---|---|---|---|
+| [source] | [field] | [target] | [field] | [mapping rule] |
+
+## Ошибки и исключения
+
+| Условие | Ответ / статус | Поведение системы | Evidence |
+|---|---|---|---|
+| [condition] | [status] | [behavior] | [evidence] |
+
+## Таймауты, retry и fallback
+
+[Описывать только при наличии evidence. Если evidence нет, не писать production policy.]
+
+## Связанные разделы
+
+- [Связанный модуль]
+- [Связанный use case]
+- [Связанная data page]

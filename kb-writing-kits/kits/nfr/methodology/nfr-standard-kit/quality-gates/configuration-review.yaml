@@ -1,0 +1,24 @@
+﻿<!--
+Imported from: nfr-standard-kit/quality-gates\configuration-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: configuration-review
+description: Configuration NFR quality gate aligned with canonical transfer example.
+spec: nfr-standard-kit/spec-kit/configuration.schema.yaml
+canonicalExample: nfr-standard-kit/examples/account-transfer-configuration-example.md
+
+blockingChecks:
+  - id: CONF-GATE-001
+    check: parameters_table_complete
+    description: Each in-scope parameter has type, level, frequency, scope, storage, default, description.
+  - id: CONF-GATE-002
+  - id: CONF-GATE-003
+    check: secret_not_in_configmap
+    description: Secret-level parameters are not stored as plain ConfigMap entries.
+
+warningChecks:
+  - id: CONF-WARN-001
+    check: static_change_without_restart_note

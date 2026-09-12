@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pipeline Viewer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/vendor/cytoscape.min.js"></script>
+</head>
+<body>
+  <div id="app-error" class="notice-banner app-error hidden" role="alert">
+    <p class="notice-body"></p>
+    <button type="button" class="notice-dismiss" aria-label="Закрыть">×</button>
+  </div>
+  <div id="session-outcome" class="notice-banner session-outcome hidden" role="status">
+    <p class="notice-body"></p>
+    <button type="button" class="notice-dismiss" aria-label="Закрыть">×</button>
+  </div>
+  <div id="divergence-banner" class="notice-banner divergence-banner hidden" role="status">
+    <p class="notice-body"></p>
+    <button type="button" class="notice-dismiss" aria-label="Закрыть">×</button>
+  </div>
+  <div id="validation-banner" class="notice-banner validation-banner hidden" role="status">
+    <p class="notice-body"></p>
+    <button type="button" class="notice-dismiss" aria-label="Закрыть">×</button>
+  </div>
+
+  <header>
+    <div class="header-left">
+      <h1>Pipeline Viewer</h1>
+      <nav id="pipeline-tabs" class="tabs" aria-label="Тип пайплайна">
+        <button type="button" class="tab active" data-pipeline="spec">Spec</button>
+        <button type="button" class="tab" data-pipeline="calibration">Calibration</button>
+      </nav>
+    </div>
+    <div class="header-right">
+      <label class="slug-select">
+        <span>Задача</span>
+        <select id="slug-select">
+          <option value="">— загрузка —</option>
+        </select>
+      </label>
+      <span id="run-id" class="badge">—</span>
+      <span id="connection" class="badge conn">…</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="graph-panel">
+      <div id="graph-view-toolbar" class="graph-view-toolbar">
+        <nav id="graph-view-tabs" class="tabs" aria-label="Режим графа">
+          <button type="button" class="tab active" data-view="target">Целевой</button>
+          <button type="button" class="tab" data-view="actual">Факт</button>
+          <button type="button" class="tab" data-view="timing">Время</button>
+        </nav>
+        <span id="graph-view-hint" class="graph-view-hint">Содержательные шаги spec (не hook/validate)</span>
+        <button type="button" id="stale-toggle" class="stale-toggle hidden">
+          Развернуть отменённые
+        </button>
+      </div>
+      <div id="tooltip" class="node-tooltip hidden" role="tooltip"></div>
+      <div id="graph-scroll" class="graph-scroll">
+        <div id="empty-state" class="empty hidden">
+          <p>Выберите задачу в списке «Задача».</p>
+          <p class="hint">Нужен запущенный сервер: <code>python3 pipeline-viewer/server.py</code></p>
+          <p class="hint">Открывайте <code>http://127.0.0.1:8765/</code>, не файл index.html.</p>
+        </div>
+        <div id="cy"></div>
+      </div>
+      <div id="timing-panel" class="timing-panel hidden" aria-label="Длительность шагов">
+        <div id="timing-summary" class="timing-summary"></div>
+        <div id="timing-chart" class="timing-chart"></div>
+        <ul id="timing-notes" class="timing-notes"></ul>
+        <details id="timing-passes-wrap" class="timing-passes-wrap">
+          <summary>Проходы (детализация)</summary>
+          <ol id="timing-passes" class="timing-passes"></ol>
+        </details>
+      </div>
+      <footer id="legend" class="graph-legend" aria-label="Легенда графа">
+        <span class="legend-target">
+          <span class="dot ok"></span> ok
+          <span class="dot fail"></span> fail
+          <span class="dot retry"></span> retry
+          <span class="dot active"></span> running
+          <span class="dot pending"></span> pending
+          <span class="dot skipped"></span> skipped
+          <span class="dot expected"></span> dispatch next
+          <span class="dot diverged"></span> mismatch
+          <span class="dot redo"></span> заново
+          <span class="dot stale"></span> устарел (лог)
+        </span>
+        <span class="legend-actual hidden">
+          <span class="dot ok"></span> шаг ok
+          <span class="dot fail"></span> fail
+          <span class="dot stale"></span> устарел
+          <span class="dot diverged"></span> переход ≠ схема
+        </span>
+      </footer>
+    </section>
+    <aside id="sidebar">
+      <details id="infra-panel" class="infra-panel">
+        <summary>Инфраструктура (не узлы графа)</summary>
+        <p class="sidebar-hint">
+          Hook, validate и set_active_task оборачивают <em>каждый</em> subagent — отдельными
+          узлами на схеме не рисуются.
+        </p>
+        <pre class="infra-cycle" aria-label="Цикл оркестратора">dispatch --json
+  → set_active_task
+  → task (subagent)
+  → [SubagentStop hook]
+       append_run_log → ingest → validate
+  → dispatch → task …</pre>
+        <p class="sidebar-hint infra-legend-note">
+          На графе: зелёный = шаг ok · серый = не было в логе · розовый = redo после
+          restart · фиолетовая рамка = dispatch next.
+        </p>
+      </details>
+
+      <h2>Dispatch (сейчас)</h2>
+      <pre id="dispatch">—</pre>
+
+      <div id="validation-panel" class="validation-panel hidden">
+        <h2>Workflow validate</h2>
+        <p id="validation-summary" class="sidebar-hint"></p>
+        <ul id="validation-advice" class="validation-advice"></ul>
+      </div>
+
+      <h2>Проходы — факт</h2>
+      <p class="sidebar-hint">Хронология всех вызовов subagent. Клик — выбрать шаг на графе.</p>
+      <ol id="timeline" class="timeline-list"></ol>
+
+      <h2>Выбранный шаг</h2>
+      <p class="sidebar-hint">Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.</p>
+      <pre id="step-detail">Кликните узел на графе.</pre>
+      <div id="step-visits" class="step-section hidden"></div>
+      <div id="step-divergence" class="step-section hidden"></div>
+      <div id="restart-actions" class="restart-actions hidden">
+        <button type="button" id="restart-btn" class="btn-restart">
+          Перезапустить с этого шага
+        </button>
+        <p class="sidebar-hint">Удалит артефакты после выбранной фазы. После отката — slash-команда и «продолжи slug» в модалке.</p>
+      </div>
+
+      <details id="stats-panel" class="stats-panel">
+        <summary>Stats</summary>
+        <pre id="stats">—</pre>
+      </details>
+    </aside>
+  </main>
+
+  <div id="restart-modal" class="modal hidden" role="dialog" aria-labelledby="restart-modal-title">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card">
+      <h2 id="restart-modal-title">Перезапуск пайплайна</h2>
+      <p id="restart-modal-summary" class="modal-summary"></p>
+      <div id="restart-modal-warnings" class="modal-warnings"></div>
+      <h3>Будут удалены</h3>
+      <ul id="restart-modal-remove" class="modal-list"></ul>
+      <h3>Останутся</h3>
+      <ul id="restart-modal-keep" class="modal-list"></ul>
+      <h3>Команды в CLI</h3>
+      <pre id="restart-modal-commands" class="restart-commands-block"></pre>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-close="1">Отмена</button>
+        <button type="button" id="restart-confirm-btn" class="btn-danger">Удалить и перезапустить</button>
+      </div>
+      <pre id="restart-result" class="restart-result hidden"></pre>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=13"></script>
+</body>
+</html>

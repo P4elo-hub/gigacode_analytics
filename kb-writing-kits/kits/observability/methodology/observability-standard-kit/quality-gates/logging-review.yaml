@@ -1,0 +1,35 @@
+﻿<!--
+Imported from: observability-standard-kit/quality-gates\logging-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: logging-review
+description: Logging artifact quality gate aligned with account-transfer logging example.
+spec: observability-standard-kit/spec-kit/logging.schema.yaml
+canonicalExample: observability-standard-kit/examples/account-transfer-logging-example.md
+
+blockingChecks:
+  - id: LOG-GATE-001
+    check: log_levels_table
+    description: ERROR, WARN, INFO, DEBUG levels documented.
+  - id: LOG-GATE-002
+    check: events_table
+    description: Events table with journal, level, parameters, init rules.
+  - id: LOG-GATE-003
+    check: automatic_fields_table
+    description: Automatic log fields table with required core attributes.
+  - id: LOG-GATE-004
+    check: application_fields_table
+    description: Application fields include eventType, callType, exSystem, level, message.
+  - id: LOG-GATE-005
+    check: integration_events_have_eventType
+    description: Integration journal rows specify eventType and callType.
+  - id: LOG-GATE-006
+    check: assumptions_traceable
+
+warningChecks:
+  - id: LOG-WARN-001
+    check: rqStr_rsStr_policy
+    description: rqStr/rsStr logging policy not stated for integrations.

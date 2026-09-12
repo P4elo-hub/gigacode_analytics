@@ -1,0 +1,47 @@
+﻿<!--
+Imported from: process-standard-kit/spec-kit\process.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: process
+language: ru
+
+requiredSections:
+  - Контекст процесса
+  - Участники
+  - текущее поведение
+  - Изменения процесса
+  - Связанные артефакты
+  - Gaps и допущения
+
+participantsTable:
+  columns:
+    - Участник
+    - Тип
+    - Роль в процессе
+    - Статус подтверждения
+
+processStepTable:
+  columns:
+    - Шаг
+    - Участник
+    - Действие
+    - Вход
+    - Выход
+    - Решение / правило
+
+deltaTable:
+  columns:
+    - Тип изменения
+    - Было
+    - Стало
+    - Причина / requirement
+
+markers:
+
+qualityRules:
+  - Every process step has participant, action, input and output.
+  - Deltas explain what changed and why.
+  - Exceptions are documented or explicitly marked as gap.

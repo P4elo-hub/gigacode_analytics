@@ -1,0 +1,58 @@
+<!--
+Imported from: observability-standard-kit/templates\observability-clarification-questionnaire.template.md
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+# Уточнение Observability — [Название фичи]
+
+> **Рабочий опросник** до финальных артефактов `#### Логирование — [название области]` и `#### Метрики — [название области]`.  
+> Агент **не пишет** финальные файлы в `08-Observability/`, пока вы не заполните таблицы ниже (или явно не выберете режим **B** / **D** в одном сообщении).
+
+**Домены:** [ ] Логирование  [ ] Метрики
+
+**Режим ответа (обязательно выбрать один):**
+- **A)** Пришлю контракты, примеры логов, дашборды, naming convention
+
+**Контекст из постановки (не заменяет ответы — проверьте и дополните):**
+- [заполнить подтвержденным фактом или удалить пункт]
+
+---
+
+## Логирование
+
+| ID | Тема | Вопрос | Ваш ответ |
+|----|------|--------|-----------|
+| LOG-Q-001 | Scope | Список интеграций и бизнес-событий; тип журнала (интеграционный / системный / бизнес)? | |
+| LOG-Q-002 | eventType | Соглашение по кодам (`CREATE_X`, `FETCH_X`, `SEND_X_RESULT`)? Существующий реестр? | |
+| LOG-Q-003 | rqStr/rsStr | Логировать тела текущее поведение? Какие поля маскировать (PII, суммы, номера заявок)? | |
+| LOG-Q-004 | Trace | `callid` / `traceId` / `requestId` — что сквозное для истории и External Source? | |
+| LOG-Q-005 | Service | Имя сервиса в поле `service`, код `system`, `environment`? | |
+| LOG-Q-006 | Retry / partial | Логировать каждый retry? Partial без источника — код события и поля (`sourcesPartial`)? | |
+| LOG-Q-007 | Исключения | Что **не** логируем (например Circuit Breaker, если не используется)? | |
+
+---
+
+## Метрики
+
+| ID | Тема | Вопрос | Ваш ответ |
+|----|------|--------|-----------|
+| METR-Q-001 | Префикс | Префикс Prometheus (`<service>_`, `bph_`, общий стандарт команды)? | |
+| METR-Q-002 | Endpoints | Список endpoint/RPC для labels (`method`, `endpoint`, `status`)? | |
+| METR-Q-003 | Errors | Какие счётчики ошибок нужны (integration, timeout, retry, partial, DLQ)? | |
+| METR-Q-004 | Breaker | Нужны ли метрики Circuit Breaker? Для каких зависимостей? | |
+| METR-Q-005 | Business KPI | Бизнес-метрики, формулы, целевые пороги на дашборде? | |
+| METR-Q-006 | Frontend | UI-события (имена, параметры, интервалы `Event_duration`)? | |
+| METR-Q-007 | Alerts | Пороги алертов / SLO на observability (связь с NFR)? | |
+
+---
+
+## Gaps и допущения (рабочий слой)
+
+| ID | Где | Что неизвестно / предположено | Как закрыть |
+|----|-----|------------------------------|-------------|
+
+---
+
+**После заполнения:** отправьте файл или ответы в чат → агент пишет `08-Observability/<current-state functionality>-logging.md` и `[current-state-functionality]-metrics.md`.

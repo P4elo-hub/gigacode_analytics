@@ -1,0 +1,46 @@
+﻿<!--
+Imported from: data-mapping-standard-kit/quality-gates\data-mapping-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: data-mapping-review
+description: Quality gate for source-to-target data mapping artifacts.
+scope: data-mapping
+spec: data-mapping-standard-kit/spec-kit/data-mapping.schema.yaml
+
+blockingChecks:
+  - id: MAP-GATE-001
+    check: title_format
+    requiredPattern: "^#### Маппинг данных — .+$"
+  - id: MAP-GATE-002
+    check: required_sections_present
+  - id: MAP-GATE-003
+    check: source_and_target_defined
+  - id: MAP-GATE-004
+    check: every_target_field_mapped_or_gap
+  - id: MAP-GATE-005
+    check: transformation_details_complete
+  - id: MAP-GATE-006
+    check: enum_unknown_behavior_defined
+  - id: MAP-GATE-007
+    check: required_field_rejection_or_fallback_defined
+  - id: MAP-GATE-008
+    check: gaps_registry_synced
+
+warningChecks:
+  - id: MAP-WARN-001
+    check: missing_examples
+  - id: MAP-WARN-002
+    check: no_owner_for_mapping_approval
+  - id: MAP-WARN-003
+    check: weak_timezone_or_currency_rules
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.

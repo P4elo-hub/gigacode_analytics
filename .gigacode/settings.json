@@ -1,0 +1,165 @@
+{
+  "context": {
+    "fileName": [
+      "AGENTS.md",
+      "GIGACODE.md"
+    ],
+    "fileFiltering": {
+      "respectGitIgnore": false,
+      "respectGigaCodeIgnore": true,
+      "enableFuzzySearch": false
+    }
+  },
+  "tools": {
+    "approvalMode": "yolo",
+    "computerUse": {
+      "enabled": false
+    }
+  },
+  "memory": {
+    "enableAutoSkill": false
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(python3 scripts/*)",
+      "Bash(date *)",
+      "Bash(du *)",
+      "Bash(echo *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(head *)",
+      "Bash(ls *)",
+      "Bash(rg *)",
+      "Bash(sort *)",
+      "Bash(stat *)",
+      "Bash(tail *)",
+      "Bash(uniq *)",
+      "Bash(wc *)",
+      "Bash(mkdir *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status *)",
+      "Edit(/Feature-writing/**)",
+      "Write(/Feature-writing/**)",
+      "Edit(/Feature-context/**)",
+      "Write(/Feature-context/**)",
+      "Edit(/agent-logs/**)",
+      "Write(/agent-logs/**)",
+      "Edit(/Calibration/**)",
+      "Write(/Calibration/**)",
+      "Edit(/\\.gigacode/skills/**)",
+      "Agent(context-researcher)",
+      "Bash(rm *)",
+      "Agent(spec-writer)",
+      "Bash(do *)",
+      "Bash(diff *)",
+      "Bash(done)",
+      "Bash(cd *)",
+      "Agent(spec-reviewer)",
+      "Bash(python3 *)",
+      "Bash(import *)",
+      "Bash(.read)",
+      "Bash(def)",
+      "Bash(lines)",
+      "Bash(raise *)",
+      "Bash('not found '+pref)",
+      "Bash(print)",
+      "Bash(blank.)",
+      "Bash(cp *)",
+      "Bash(i53 *)",
+      "Bash('### 5.3. требования к логированию и мониторингу')",
+      "Bash(i54 *)",
+      "Bash('### 5.4. требования к настройкам')",
+      "Bash(i55 *)",
+      "Bash('### 5.5. требования к сопровождению')",
+      "Bash(i6 *)",
+      "Bash('## 6. ссылки и приёмка')",
+      "Bash(locate *)",
+      "Bash(trailing *)",
+      "Bash(end53 *)",
+      "Bash(end53-=1)",
+      "Bash(block53 *)",
+      "Bash(del *)",
+      "Bash(i54b *)",
+      "Bash(new_part *)",
+      "Bash(new_part)",
+      "Bash(open)",
+      "Bash(.write)",
+      "Bash(py)",
+      "Bash(assert *)",
+      "Bash(\" \\npython3 -c \")",
+      "Bash(n-7,n+1)",
+      "Bash(else:)",
+      "Bash(from *)",
+      "Bash(co, *)",
+      "Bash(counter)",
+      "Bash(added *)",
+      "Bash(removed *)",
+      "Bash(return *)",
+      "Bash(h)",
+      "Bash(for *)",
+      "Bash(uc *)",
+      "Bash(r'\\b[a-z][a-za-z]*(?:customizer|creator|converter|processor|merger|wrapper|dto|builder)\\w*', *)",
+      "Agent(gap-resolver)",
+      "Bash(tr *)",
+      "Agent(spec-challenger)",
+      "Agent(challenge-resolver)",
+      "Agent(code-auditor)",
+      "Agent(alignment-resolver)",
+      "Agent(doc-reviewer)",
+      "Agent(session-telemetry-analyst)",
+      "Agent(calibration-orchestrator)",
+      "Agent(review-capturer)",
+      "Agent(regression-analyst)",
+      "Agent(calibration-proposer)",
+      "Agent(calibration-applier)",
+      "Agent(benchmark-runner)"
+    ],
+    "deny": [
+      "WebFetch",
+      "web_search",
+      "Edit(/analytics/**)",
+      "Write(/analytics/**)",
+      "Edit(/db-export/**)",
+      "Write(/db-export/**)",
+      "Edit(/kb-writing-kits/**)",
+      "Write(/kb-writing-kits/**)",
+      "Edit(/repositories/**)",
+      "Write(/repositories/**)",
+      "Edit(/\\.gigacode/settings\\.json)",
+      "Write(/\\.gigacode/settings\\.json)"
+    ]
+  },
+  "$version": 4,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(task|agent)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".gigacode/hooks/pipeline-before-subagent.sh",
+            "name": "pipeline-before-subagent",
+            "description": "deny subagent when type != pipeline_delegate active-task",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "^(context-researcher|spec-writer|spec-reviewer|gap-resolver|spec-challenger|challenge-resolver|code-auditor|alignment-resolver|review-capturer|regression-analyst|calibration-proposer|calibration-applier|benchmark-runner)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".gigacode/hooks/pipeline-after-subagent.sh",
+            "name": "pipeline-after-subagent",
+            "description": "append_run_log + ingest + validate after pipeline subagent",
+            "timeout": 120000
+          }
+        ]
+      }
+    ]
+  }
+}

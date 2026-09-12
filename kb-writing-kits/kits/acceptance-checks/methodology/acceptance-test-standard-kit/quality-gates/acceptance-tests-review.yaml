@@ -1,0 +1,46 @@
+﻿<!--
+Imported from: acceptance-test-standard-kit/quality-gates\acceptance-tests-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: acceptance-tests-review
+description: Quality gate for acceptance test artifacts.
+scope: acceptance-tests
+spec: acceptance-test-standard-kit/spec-kit/acceptance-tests.schema.yaml
+
+blockingChecks:
+  - id: ACC-GATE-001
+    check: title_format
+    requiredPattern: "^#### Acceptance Tests — .+$"
+  - id: ACC-GATE-002
+    check: required_sections_present
+  - id: ACC-GATE-003
+    check: critical_requirements_covered_or_gap
+  - id: ACC-GATE-004
+    check: scenarios_use_given_when_then
+  - id: ACC-GATE-005
+    check: negative_and_edge_cases_present_or_gap
+  - id: ACC-GATE-006
+    check: test_data_present_or_gap
+  - id: ACC-GATE-007
+    check: regression_scope_present
+  - id: ACC-GATE-008
+    check: gaps_registry_synced
+
+warningChecks:
+  - id: ACC-WARN-001
+    check: no_automation_hint
+  - id: ACC-WARN-002
+    check: owner_unknown
+  - id: ACC-WARN-003
+    check: environment_unknown
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.

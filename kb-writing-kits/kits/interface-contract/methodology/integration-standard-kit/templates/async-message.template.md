@@ -1,0 +1,47 @@
+﻿<!--
+Imported from: integration-standard-kit/templates\async-message.template.md
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+# Событие: [EventName]
+
+## Назначение
+
+[Зачем публикуется событие и какой процесс оно запускает.]
+
+## Topic / Queue
+
+| Параметр | Значение |
+|---|---|
+| Transport | Kafka / RabbitMQ / другое |
+| Topic / Queue | `[name]` |
+| Producer | `[service]` |
+| Consumer | `[service]` |
+| Версия схемы | `[version]` |
+| Гарантия доставки | at-least-once / at-most-once / exactly-once / unknown |
+| Partition key | `[field]` |
+
+## Схема сообщения
+
+| Поле | Тип | Обязат. | Описание | Валидация | Пример |
+|---|---|---|---|---|---|
+| eventId | string | Да | Идентификатор события | `format: uuid` | `550e8400-e29b-41d4-a716-446655440000` |
+| occurredAt | string | Да | Время события | `format: date-time` | `2026-01-15T10:30:00Z` |
+
+## Retry и DLQ
+
+| Ошибка | Поведение | Retry | DLQ |
+|---|---|---|---|
+| Ошибка десериализации | [поведение] | [да/нет] | [да/нет] |
+| Бизнес-ошибка | [поведение] | [да/нет] | [да/нет] |
+
+## Примеры
+
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "occurredAt": "2026-01-15T10:30:00Z"
+}
+```

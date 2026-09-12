@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+"""Local pipeline graph viewer — http://127.0.0.1:8765 with SSE updates."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from artifact_paths import list_feature_slugs, workspace_root  # noqa: E402
+from build_pipeline_graph import build_graph  # noqa: E402
+from sync_pipeline_session import sync_session  # noqa: E402
+from pipeline_restart import (  # noqa: E402
+    RESTARTABLE_STEPS,
+    apply_restart_plan,
+    build_restart_plan,
+    plan_to_dict,
+)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+DEFAULT_PORT = 8765
+API_VERSION = 5
+POLL_INTERVAL = 1.0
+PIPELINES = ("spec", "calibration")
+
+
+@dataclass
+class Defaults:
+    slug: str = ""
+    pipeline: str = "spec"
+    run_id: str = "auto"
+
+
+def list_available_slugs(workspace: Path) -> list[dict]:
+    logged: dict[str, dict] = {}
+    logs_root = workspace / "agent-logs"
+    if logs_root.is_dir():
+        for child in logs_root.iterdir():
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            runs_dir = child / "runs"
+            run_count = 0
+            has_events = False
+            if runs_dir.is_dir():
+                for run in runs_dir.iterdir():
+                    if run.is_dir() and run.name.startswith("run-"):
+                        run_count += 1
+                        if (run / "events.jsonl").is_file():
+                            has_events = True
+            logged[child.name] = {
+                "slug": child.name,
+                "has_agent_logs": run_count > 0,
+                "has_events": has_events,
+                "run_count": run_count,
+            }
+
+    slugs: dict[str, dict] = dict(logged)
+    for slug in list_feature_slugs(workspace):
+        if slug not in slugs:
+            slugs[slug] = {
+                "slug": slug,
+                "has_agent_logs": False,
+                "has_events": False,
+                "run_count": 0,
+            }
+        else:
+            slugs[slug]["in_feature_writing"] = True
+    for entry in slugs.values():
+        entry.setdefault("in_feature_writing", entry["slug"] in set(list_feature_slugs(workspace)))
+
+    def sort_key(item: dict) -> tuple:
+        return (0 if item["has_agent_logs"] else 1, item["slug"])
+
+    return sorted(slugs.values(), key=sort_key)
+
+
+def fingerprint_graph(graph: dict) -> dict[str, float]:
+    fp: dict[str, float] = {}
+    validation_raw = graph.get("watch_paths", {}).get("validation")
+    if validation_raw:
+        path = Path(validation_raw)
+        if path.is_file():
+            fp[str(path)] = path.stat().st_mtime
+
+    watch = graph.get("watch_paths") or {}
+    for key in ("run_log", "events", "metrics", "calibration_run", "scorecard", "active_task"):
+        raw = watch.get(key)
+        if not raw:
+            continue
+        path = Path(raw)
+        if path.is_file():
+            fp[str(path)] = path.stat().st_mtime
+        elif path.is_dir():
+            fp[str(path)] = max(
+                (p.stat().st_mtime for p in path.rglob("*") if p.is_file()),
+                default=0.0,
+            )
+        else:
+            fp[str(path)] = 0.0
+    for group_key in ("run_logs", "events_all"):
+        group = watch.get(group_key)
+        if not isinstance(group, dict):
+            continue
+        for path_raw in group.values():
+            path = Path(path_raw)
+            if path.is_file():
+                fp[str(path)] = path.stat().st_mtime
+    dispatch_fp = (graph.get("divergence") or {}).get("fingerprint")
+    if not dispatch_fp:
+        dispatch_fp = graph.get("dispatch_fingerprint")
+    if isinstance(dispatch_fp, dict):
+        for key, mtime in dispatch_fp.items():
+            fp[f"dispatch:{key}"] = float(mtime or 0)
+    return fp
+
+
+def make_handler(workspace: Path, defaults: Defaults):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt: str, *args) -> None:
+            if args and "200" in str(args[1]):
+                return
+            super().log_message(fmt, *args)
+
+        def _send_json(self, payload: dict, status: int = 200) -> None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_file(self, path: Path, content_type: str) -> None:
+            if not path.is_file():
+                self.send_error(404)
+                return
+            body = path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _query_params(self, qs: dict[str, list[str]]) -> tuple[str, str, str]:
+            slug = (qs.get("slug") or [defaults.slug])[0]
+            pipeline = (qs.get("pipeline") or [defaults.pipeline])[0]
+            run_id = (qs.get("run_id") or [defaults.run_id])[0]
+            if pipeline not in PIPELINES:
+                pipeline = "spec"
+            return slug, pipeline, run_id
+
+        def _build(self, slug: str, pipeline: str, run_id: str) -> dict:
+            if not slug:
+                return {
+                    "slug": "",
+                    "pipeline": pipeline,
+                    "error": "No slug selected",
+                    "nodes": [],
+                    "edges": [],
+                    "history": [],
+                }
+            if pipeline == "spec" and slug:
+                try:
+                    sync_session(workspace, slug, cli="qwen")
+                except Exception:
+                    pass
+            return build_graph(workspace, slug, run_id=run_id, pipeline=pipeline)
+
+        def do_GET(self) -> None:
+            parsed = urlparse(self.path)
+            path = parsed.path
+            qs = parse_qs(parsed.query)
+
+            if path in ("/", "/index.html"):
+                self._send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+                return
+
+            if path.startswith("/static/"):
+                rel = path.removeprefix("/static/")
+                target = STATIC_DIR / rel
+                if target.is_file() and STATIC_DIR in target.resolve().parents:
+                    ctype = "text/css" if rel.endswith(".css") else "application/javascript"
+                    self._send_file(target, ctype)
+                else:
+                    self.send_error(404)
+                return
+
+            if path == "/api/slugs":
+                self._send_json({"slugs": list_available_slugs(workspace)})
+                return
+
+            if path == "/api/config":
+                slugs = list_available_slugs(workspace)
+                default_slug = defaults.slug
+                if not default_slug and slugs:
+                    with_logs = [s for s in slugs if s["has_agent_logs"]]
+                    default_slug = (with_logs[0] if with_logs else slugs[0])["slug"]
+                self._send_json(
+                    {
+                        "default_slug": default_slug,
+                        "default_pipeline": defaults.pipeline,
+                        "pipelines": [
+                            {"id": "spec", "label": "Spec pipeline"},
+                            {"id": "calibration", "label": "Calibration"},
+                        ],
+                        "restartable_steps": list(RESTARTABLE_STEPS),
+                    }
+                )
+                return
+
+            if path == "/api/graph":
+                slug, pipeline, run_id = self._query_params(qs)
+                try:
+                    self._send_json(self._build(slug, pipeline, run_id))
+                except Exception as exc:
+                    self._send_json({"error": str(exc), "slug": slug}, status=500)
+                return
+
+            if path == "/api/stream":
+                slug, pipeline, run_id = self._query_params(qs)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                try:
+                    graph = self._build(slug, pipeline, run_id)
+                    last_fp = fingerprint_graph(graph)
+                    self._send_sse(graph)
+                    while True:
+                        time.sleep(POLL_INTERVAL)
+                        graph = self._build(slug, pipeline, run_id)
+                        fp = fingerprint_graph(graph)
+                        if fp != last_fp:
+                            last_fp = fp
+                            self._send_sse(graph)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                except Exception as exc:
+                    self._send_sse({"error": str(exc), "slug": slug})
+                return
+
+            if path == "/api/health":
+                self._send_json(
+                    {"ok": True, "version": API_VERSION, "viewer": "pipeline-viewer"}
+                )
+                return
+
+            if path == "/api/restart-plan":
+                slug = (qs.get("slug") or [""])[0]
+                from_step = (qs.get("from_step") or [""])[0]
+                from_seq_raw = (qs.get("from_seq") or [""])[0]
+                from_seq = int(from_seq_raw) if from_seq_raw.isdigit() else None
+                if not slug or not from_step:
+                    self._send_json({"error": "slug and from_step required"}, status=400)
+                    return
+                try:
+                    plan = build_restart_plan(workspace, slug, from_step, from_seq=from_seq)
+                    self._send_json(plan_to_dict(plan))
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=500)
+                return
+
+            self.send_error(404)
+
+        def do_OPTIONS(self) -> None:
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
+        def do_POST(self) -> None:
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/restart":
+                self.send_error(404)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json({"error": "invalid JSON"}, status=400)
+                return
+            slug = payload.get("slug", "")
+            from_step = payload.get("from_step", "")
+            from_seq = payload.get("from_seq")
+            confirm = payload.get("confirm") is True
+            if not confirm:
+                self._send_json({"error": "confirm: true required"}, status=400)
+                return
+            if not slug or not from_step:
+                self._send_json({"error": "slug and from_step required"}, status=400)
+                return
+            try:
+                plan = build_restart_plan(workspace, slug, from_step, from_seq=from_seq)
+                result = apply_restart_plan(workspace, plan)
+                self._send_json({"plan": plan_to_dict(plan), "result": result})
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=500)
+
+        def _send_sse(self, graph: dict) -> None:
+            data = json.dumps(graph, ensure_ascii=False)
+            msg = f"data: {data}\n\n".encode("utf-8")
+            self.wfile.write(msg)
+            self.wfile.flush()
+
+    return Handler
+
+
+def _bind_server(
+    host: str, port: int, handler: type
+) -> tuple[ThreadingHTTPServer, int]:
+    for attempt in range(20):
+        candidate = port + attempt
+        try:
+            return ThreadingHTTPServer((host, candidate), handler), candidate
+        except OSError as exc:
+            if exc.errno != 48:
+                raise
+    raise SystemExit(
+        f"Ports {port}–{port + 19} are in use. Stop old viewer (lsof -i :{port}) or pick --port."
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--slug", default="", help="Default feature slug (optional)")
+    parser.add_argument("--workspace", type=Path, default=None, help="Workspace root")
+    parser.add_argument("--run-id", default="auto", help="agent-logs run id")
+    parser.add_argument(
+        "--pipeline",
+        choices=("spec", "calibration"),
+        default="spec",
+        help="Default pipeline tab",
+    )
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--host", default="127.0.0.1")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    workspace = (args.workspace or workspace_root()).resolve()
+    defaults = Defaults(slug=args.slug, pipeline=args.pipeline, run_id=args.run_id)
+
+    handler = make_handler(workspace, defaults)
+    server, port = _bind_server(args.host, args.port, handler)
+
+    url = f"http://{args.host}:{port}/"
+    print("")
+    print("=" * 60)
+    print(f"  ОТКРОЙТЕ В БРАУЗЕРЕ:  {url}")
+    print(f"  API v{API_VERSION} — dispatch, validate, перезапуск с шага")
+    print("=" * 60)
+    if port != args.port:
+        print("")
+        print(f"  ⚠ Порт {args.port} занят другим процессом!")
+        print(f"    Не открывайте http://{args.host}:{args.port}/ — там может быть старый API.")
+        print(f"    Остановите: ./pipeline-viewer/start.sh  (убьёт процессы на 8765–8769)")
+    print(f"  workspace: {workspace}")
+    print("  Ctrl+C to stop.")
+    print("")
+    (Path(__file__).parent / "LAST_URL.txt").write_text(url + "\n", encoding="utf-8")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()

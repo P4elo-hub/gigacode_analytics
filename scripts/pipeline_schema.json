@@ -1,0 +1,60 @@
+{
+  "pipelines": {
+    "spec": {
+      "label": "Spec pipeline (SIHIST)",
+      "orchestrator": "spec-orchestrator",
+      "nodes": [
+        {"id": "spec-orchestrator", "label": "spec-orchestrator", "kind": "orchestrator"},
+        {"id": "find-context", "label": "find-context", "subagent": "context-researcher", "kind": "step"},
+        {"id": "write-feature", "label": "write-feature", "subagent": "spec-writer", "kind": "step"},
+        {"id": "check-feature", "label": "check-feature", "subagent": "spec-reviewer", "kind": "step"},
+        {"id": "resolve-gaps", "label": "resolve-gaps", "subagent": "gap-resolver", "kind": "step"},
+        {"id": "challenge-feature", "label": "challenge-feature", "subagent": "spec-challenger", "kind": "step"},
+        {"id": "resolve-challenges", "label": "resolve-challenges", "subagent": "challenge-resolver", "kind": "step"},
+        {"id": "check-feature-code", "label": "check-feature-code", "subagent": "code-auditor", "kind": "step"},
+        {"id": "resolve-code-alignment", "label": "resolve-code-alignment", "subagent": "alignment-resolver", "kind": "step"},
+        {"id": "archive-session", "label": "archive-session", "subagent": null, "kind": "meta"},
+        {"id": "done", "label": "PASS", "kind": "terminal"}
+      ],
+      "edges": [
+        {"id": "e-start", "from": "spec-orchestrator", "to": "find-context", "kind": "main"},
+        {"id": "e-fc-wf", "from": "find-context", "to": "write-feature", "kind": "main"},
+        {"id": "e-wf-cf", "from": "write-feature", "to": "check-feature", "kind": "main"},
+        {"id": "e-cf-rg", "from": "check-feature", "to": "resolve-gaps", "kind": "branch", "label": "gaps open"},
+        {"id": "e-cf-ch", "from": "check-feature", "to": "challenge-feature", "kind": "branch", "label": "no CHALLENGES yet"},
+        {"id": "e-rg-cf", "from": "resolve-gaps", "to": "check-feature", "kind": "loop", "label": "re-check"},
+        {"id": "e-cf-cc", "from": "check-feature", "to": "check-feature-code", "kind": "main", "label": "after gaps/ch"},
+        {"id": "e-ch-rc", "from": "challenge-feature", "to": "resolve-challenges", "kind": "main"},
+        {"id": "e-rc-cf", "from": "resolve-challenges", "to": "check-feature", "kind": "loop"},
+        {"id": "e-cc-ra", "from": "check-feature-code", "to": "resolve-code-alignment", "kind": "branch", "label": "alignment gaps"},
+        {"id": "e-ra-cc", "from": "resolve-code-alignment", "to": "check-feature-code", "kind": "loop", "label": "re-audit"},
+        {"id": "e-cc-done", "from": "check-feature-code", "to": "done", "kind": "main", "label": "PASS"}
+      ]
+    },
+    "calibration": {
+      "label": "Calibration pipeline",
+      "orchestrator": "calibration-orchestrator",
+      "nodes": [
+        {"id": "calibration-orchestrator", "label": "calibration-orchestrator", "kind": "orchestrator"},
+        {"id": "snapshot-baseline", "label": "snapshot-baseline", "subagent": null, "kind": "step"},
+        {"id": "capture-review", "label": "capture-review", "subagent": "review-capturer", "kind": "step"},
+        {"id": "analyze-delta", "label": "analyze-delta", "subagent": "regression-analyst", "kind": "step"},
+        {"id": "analyze-telemetry", "label": "analyze-telemetry", "subagent": "session-telemetry-analyst", "kind": "step"},
+        {"id": "propose-calibration", "label": "propose-calibration", "subagent": "calibration-proposer", "kind": "step"},
+        {"id": "apply-calibration", "label": "apply-calibration", "subagent": "calibration-applier", "kind": "step"},
+        {"id": "benchmark-rerun", "label": "benchmark-rerun", "subagent": "benchmark-runner", "kind": "step"},
+        {"id": "cal-done", "label": "Scorecard", "kind": "terminal"}
+      ],
+      "edges": [
+        {"id": "c-start", "from": "calibration-orchestrator", "to": "snapshot-baseline", "kind": "main"},
+        {"id": "c-sb-cr", "from": "snapshot-baseline", "to": "capture-review", "kind": "main"},
+        {"id": "c-cr-ad", "from": "capture-review", "to": "analyze-delta", "kind": "main"},
+        {"id": "c-ad-at", "from": "analyze-delta", "to": "analyze-telemetry", "kind": "main"},
+        {"id": "c-at-pc", "from": "analyze-telemetry", "to": "propose-calibration", "kind": "main"},
+        {"id": "c-pc-ac", "from": "propose-calibration", "to": "apply-calibration", "kind": "main"},
+        {"id": "c-ac-br", "from": "apply-calibration", "to": "benchmark-rerun", "kind": "main"},
+        {"id": "c-br-done", "from": "benchmark-rerun", "to": "cal-done", "kind": "main"}
+      ]
+    }
+  }
+}

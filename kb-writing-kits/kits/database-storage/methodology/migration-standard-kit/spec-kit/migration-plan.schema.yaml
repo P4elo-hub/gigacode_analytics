@@ -1,0 +1,47 @@
+﻿<!--
+Imported from: migration-standard-kit/spec-kit\migration-plan.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: migration-plan
+description: Contract for database/data migration plan.
+language: ru
+
+requiredSections:
+  - Контекст миграции
+  - Scope и зависимости
+  - Pre-checks
+  - План миграции
+  - Backfill
+  - Validation
+  - Риски и ограничения
+  - Gaps и допущения
+
+phaseTable:
+  columns:
+    - Фаза
+    - Действие
+    - Тип
+    - Совместимость
+    - Owner
+    - Статус
+
+validationTable:
+  columns:
+    - Проверка
+    - Метод
+    - Ожидаемый результат
+    - Blocking
+
+  columns:
+    - Сценарий
+    - Потеря данных
+    - Ограничения
+
+markers:
+
+qualityRules:
+  - Zero-downtime claim requires compatibility strategy.
+  - Backfill has batching/idempotency strategy or gap.

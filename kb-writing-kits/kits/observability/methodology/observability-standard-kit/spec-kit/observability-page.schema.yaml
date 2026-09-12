@@ -1,0 +1,57 @@
+﻿<!--
+Imported from: observability-standard-kit/spec-kit\observability-page.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: observability-page
+description: Umbrella contract for logging and metrics of a current-state functionality.
+language: ru
+sourceStandardSection: "8. Стандарты логирования и мониторинга"
+
+domains:
+  - id: logging
+    label: Логирование
+    spec: observability-standard-kit/spec-kit/logging.schema.yaml
+    template: observability-standard-kit/templates/logging.template.md
+    canonicalExample: observability-standard-kit/examples/account-transfer-logging-example.md
+    qualityGate: observability-standard-kit/quality-gates/logging-review.yaml
+  - id: metrics
+    label: Метрики
+    spec: observability-standard-kit/spec-kit/metrics.schema.yaml
+    template: observability-standard-kit/templates/metrics.template.md
+    canonicalExample: observability-standard-kit/examples/account-transfer-metrics-example.md
+    qualityGate: observability-standard-kit/quality-gates/metrics-review.yaml
+
+documentTitle:
+  logging:
+    pattern: "^#### Логирование — .+$"
+  metrics:
+    pattern: "^#### Метрики — .+$"
+  forbiddenInTitle:
+    - "Пример:"
+    - "СТД-"
+
+clarificationPolicyRef: observability-standard-kit/spec-kit/observability-clarification.schema.yaml
+
+clarificationPolicy:
+  mode: clarification-first
+  summary: >
+    Агент сначала выдаёт опросник (и файл *-clarification.md), пользователь заполняет ответы,
+    затем пишутся logging.md / metrics.md. Без ответов — только GAP/DESIGN после явного режима B.
+
+outputRules:
+  - Do not expose СТД-* in final reader-facing artifacts.
+  - Canonical examples are authoritative for style; copy event/metric rows from example only for matching current-state functionality context.
+
+inlineTraceability:
+  required: true
+  gapsSectionTitle: Gaps и допущения
+  gapsColumns:
+    - ID
+    - Тип
+    - Где в документе
+    - Что предположено / не уточнялось
+    - Подтверждено?
+    - Как закрыть

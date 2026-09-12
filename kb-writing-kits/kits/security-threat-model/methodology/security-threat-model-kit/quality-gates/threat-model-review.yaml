@@ -1,0 +1,46 @@
+﻿<!--
+Imported from: security-threat-model-kit/quality-gates\threat-model-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: threat-model-review
+description: Quality gate for security threat models.
+scope: threat-model
+spec: security-threat-model-kit/spec-kit/threat-model.schema.yaml
+
+blockingChecks:
+  - id: SEC-GATE-001
+    check: title_format
+    requiredPattern: "^#### Threat Model — .+$"
+  - id: SEC-GATE-002
+    check: required_sections_present
+  - id: SEC-GATE-003
+    check: assets_classified_or_gap
+  - id: SEC-GATE-004
+    check: trust_boundaries_explicit
+  - id: SEC-GATE-005
+    check: external_flows_have_threats
+  - id: SEC-GATE-006
+    check: threats_have_mitigation_or_residual_risk
+  - id: SEC-GATE-007
+    check: security_claims_evidence_backed_or_marked
+  - id: SEC-GATE-008
+    check: gaps_registry_synced
+
+warningChecks:
+  - id: SEC-WARN-001
+    check: no_security_owner
+  - id: SEC-WARN-002
+    check: no_audit_logging_link
+  - id: SEC-WARN-003
+    check: residual_risk_without_decision_owner
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.

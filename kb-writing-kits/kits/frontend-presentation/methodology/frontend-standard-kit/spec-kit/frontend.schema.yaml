@@ -1,0 +1,52 @@
+﻿<!--
+Imported from: frontend-standard-kit/spec-kit\frontend.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: frontend
+description: Contract for frontend current-state functionality behavior artifact.
+language: ru
+
+requiredSections:
+  - Контекст UI
+  - Экраны и компоненты
+  - Сценарии пользователя
+  - Состояния UI
+  - API -> UI mapping
+  - Валидация и сообщения
+  - Accessibility / localization
+  - Gaps и допущения
+
+screensTable:
+  columns:
+    - Экран / компонент
+    - Изменение
+    - Пользователь
+    - Источник данных
+    - Статус
+
+stateTable:
+  columns:
+    - State
+    - Условие
+    - Что отображается
+    - Действия пользователя
+    - Статус
+
+mappingTable:
+  columns:
+    - UI element
+    - Source field / API
+    - Formatting / sorting / visibility
+    - Null / empty behavior
+    - Статус
+
+markers:
+
+qualityRules:
+  - Every changed screen/component is listed.
+  - UI states include loading, empty and error or explicit gaps.
+  - API -> UI mapping covers all changed visible data.
+  - Null/empty behavior is specified for changed fields.

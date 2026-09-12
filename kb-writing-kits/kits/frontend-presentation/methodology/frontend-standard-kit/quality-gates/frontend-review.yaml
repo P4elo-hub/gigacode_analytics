@@ -1,0 +1,46 @@
+﻿<!--
+Imported from: frontend-standard-kit/quality-gates\frontend-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: frontend-review
+description: Quality gate for frontend current-state functionality artifacts.
+scope: frontend
+spec: frontend-standard-kit/spec-kit/frontend.schema.yaml
+
+blockingChecks:
+  - id: FE-GATE-001
+    check: title_format
+    requiredPattern: "^#### Frontend — .+$"
+  - id: FE-GATE-002
+    check: required_sections_present
+  - id: FE-GATE-003
+    check: changed_screens_listed
+  - id: FE-GATE-004
+    check: ui_states_documented_or_gap_marked
+  - id: FE-GATE-005
+    check: api_to_ui_mapping_complete_or_gap_marked
+  - id: FE-GATE-006
+    check: null_empty_behavior_defined_or_gap
+  - id: FE-GATE-007
+    check: user_copy_evidence_backed_or_gap
+  - id: FE-GATE-008
+    check: gaps_registry_synced
+
+warningChecks:
+  - id: FE-WARN-001
+    check: missing_accessibility_notes
+  - id: FE-WARN-002
+    check: missing_localization_notes
+  - id: FE-WARN-003
+    check: no_frontend_metrics_link
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.

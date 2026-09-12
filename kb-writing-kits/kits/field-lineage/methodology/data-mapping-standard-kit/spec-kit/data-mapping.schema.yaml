@@ -1,0 +1,45 @@
+﻿<!--
+Imported from: data-mapping-standard-kit/spec-kit\data-mapping.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: data-mapping
+description: Contract for source-to-target data mapping artifact.
+language: ru
+
+requiredSections:
+  - Контекст маппинга
+  - Source и Target
+  - Field mapping
+  - Enum / status mapping
+  - Validation и rejection
+  - Примеры
+  - Gaps и допущения
+
+fieldMappingTable:
+  columns:
+    - Target field
+    - Source path
+    - Transformation
+    - Required / nullable / default
+    - Validation
+    - Example
+    - Статус
+
+enumMappingTable:
+  columns:
+    - Source value
+    - Target value
+    - Условие / комментарий
+    - Unknown behavior
+    - Статус
+
+markers:
+
+qualityRules:
+  - Transformations include units/formats/timezone when relevant.
+  - Enum mapping includes unknown behavior.
+  - Required missing source fields have rejection or fallback rule.
+  - Every marker is present in Gaps и допущения.

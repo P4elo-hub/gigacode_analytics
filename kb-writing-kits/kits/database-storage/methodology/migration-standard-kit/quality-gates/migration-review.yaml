@@ -1,0 +1,44 @@
+﻿<!--
+Imported from: migration-standard-kit/quality-gates\migration-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: migration-review
+description: Quality gate for migration plans.
+scope: migration-plan
+spec: migration-standard-kit/spec-kit/migration-plan.schema.yaml
+
+blockingChecks:
+  - id: MIG-GATE-001
+    check: title_format
+    requiredPattern: "^#### Миграция — .+$"
+  - id: MIG-GATE-002
+    check: required_sections_present
+  - id: MIG-GATE-003
+    check: target_model_linked_or_gap_marked
+  - id: MIG-GATE-004
+  - id: MIG-GATE-005
+  - id: MIG-GATE-006
+    check: backfill_has_idempotency_or_gap
+  - id: MIG-GATE-007
+    check: zero_downtime_claim_has_compatibility_plan
+  - id: MIG-GATE-008
+    check: gaps_registry_synced
+
+warningChecks:
+  - id: MIG-WARN-001
+    check: missing_batch_size
+  - id: MIG-WARN-002
+    check: missing_reconciliation_query
+  - id: MIG-WARN-003
+    check: owner_unknown
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.

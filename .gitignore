@@ -1,0 +1,24 @@
+# Local source data — copy onto the machine after clone; not published
+analytics/
+db-export/
+repositories/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+
+# Qwen Code local (do not commit session artifacts)
+.qwen/PROJECT_SUMMARY.md
+.qwen/archived-skills/
+
+# Agent telemetry (local; keep agent-logs/README.md)
+agent-logs/*
+!agent-logs/README.md
+
+Calibration/*
+!Calibration/README.md

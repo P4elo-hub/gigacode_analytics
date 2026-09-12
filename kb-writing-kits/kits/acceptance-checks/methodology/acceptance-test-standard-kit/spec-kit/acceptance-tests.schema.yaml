@@ -1,0 +1,43 @@
+﻿<!--
+Imported from: acceptance-test-standard-kit/spec-kit\acceptance-tests.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: acceptance-tests
+description: Contract for acceptance test scenarios.
+language: ru
+
+requiredSections:
+  - Контекст тестирования
+  - Coverage matrix
+  - Acceptance scenarios
+  - Negative и edge cases
+  - Test data
+  - Regression scope
+  - Gaps и допущения
+
+scenarioTable:
+  columns:
+    - ID
+    - Requirement / Use Case
+    - Given
+    - When
+    - Then
+    - Тип
+    - Статус
+
+testDataTable:
+  columns:
+    - Data item
+    - Значение / правило
+    - Источник
+    - Статус
+
+markers:
+
+qualityRules:
+  - Every critical requirement has at least one scenario or gap.
+  - Scenarios use Given/When/Then.
+  - Regression scope is explicit.

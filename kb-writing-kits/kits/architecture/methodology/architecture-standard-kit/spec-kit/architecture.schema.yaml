@@ -1,0 +1,61 @@
+﻿<!--
+Imported from: architecture-standard-kit/spec-kit\architecture.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: architecture
+description: Contract for architecture impact artifact.
+language: ru
+
+requiredSections:
+  - Контекст
+  - Архитектурные драйверы и ограничения
+  - Затрагиваемые компоненты
+  - C4-диаграмма
+  - Архитектурные решения
+  - Impact analysis
+  - Gaps и допущения
+
+headingFormat:
+  documentTitle:
+    pattern: "^#### Архитектура фичи — .+$"
+  sectionTitle:
+    pattern: "^\\*\\*.+:\\*\\*$"
+
+componentsTable:
+  columns:
+    - Компонент
+    - Тип
+    - Статус изменения
+    - Ответственность
+    - Владелец / команда
+  allowedChangeStatus:
+    - existing
+    - new
+    - changed
+    - deprecated
+
+decisionTable:
+  columns:
+    - ID
+    - Контекст
+    - Решение
+    - Альтернативы
+    - Последствия
+    - Статус
+
+impactTable:
+  columns:
+    - Область
+    - Влияние
+    - Связанные артефакты / gaps
+
+gapsAndAssumptions:
+
+qualityRules:
+  - Every component in diagram exists in component table.
+  - Every new or changed component has responsibility.
+  - Every decision has rationale and consequences.
+  - Unknown owners, topology and component boundaries are marked as gaps.

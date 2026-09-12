@@ -1,0 +1,47 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    ".opencode/rules/*.md"
+  ],
+  "default_agent": "spec-orchestrator",
+  "subagent_depth": 1,
+  "permission": {
+    "edit": {
+      "*": "ask",
+      "*/Feature-writing/*": "allow",
+      "*/Feature-context/*": "allow",
+      "*/agent-logs/*": "allow",
+      "*/Calibration/*": "allow",
+      "*/.opencode/skills/*": "allow",
+      "*/analytics/*": "deny",
+      "*/db-export/*": "deny",
+      "*/kb-writing-kits/*": "deny",
+      "*/repositories/*": "deny"
+    },
+    "bash": {
+      "*": "ask",
+      "date*": "allow",
+      "du*": "allow",
+      "echo*": "allow",
+      "find*": "allow",
+      "grep*": "allow",
+      "head*": "allow",
+      "ls*": "allow",
+      "rg*": "allow",
+      "sort*": "allow",
+      "stat*": "allow",
+      "tail*": "allow",
+      "uniq*": "allow",
+      "wc*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git status*": "allow",
+      "python3 scripts/*": "allow"
+    },
+    "skill": {
+      "*": "deny"
+    },
+    "webfetch": "deny",
+    "websearch": "deny"
+  }
+}

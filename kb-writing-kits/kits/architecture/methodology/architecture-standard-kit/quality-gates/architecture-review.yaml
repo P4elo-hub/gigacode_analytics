@@ -1,0 +1,53 @@
+﻿<!--
+Imported from: architecture-standard-kit/quality-gates\architecture-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: architecture-review
+description: Quality gate for architecture impact artifacts.
+scope: architecture
+spec: architecture-standard-kit/spec-kit/architecture.schema.yaml
+
+blockingChecks:
+  - id: ARCH-GATE-001
+    check: title_format
+    requiredPattern: "^#### Архитектура фичи — .+$"
+  - id: ARCH-GATE-002
+    check: required_sections_present
+    requiredFields:
+      - Контекст
+      - Архитектурные драйверы и ограничения
+      - Затрагиваемые компоненты
+      - C4-диаграмма
+      - Архитектурные решения
+      - Impact analysis
+      - Gaps и допущения
+  - id: ARCH-GATE-003
+    check: components_have_responsibility
+  - id: ARCH-GATE-004
+    check: diagram_matches_component_table
+  - id: ARCH-GATE-005
+    check: decisions_have_rationale_and_consequences
+  - id: ARCH-GATE-006
+    check: gaps_registry_synced
+  - id: ARCH-GATE-007
+    check: no_unsupported_claims
+    description: Component ownership, topology, protocol and tech choices require evidence or markers.
+
+warningChecks:
+  - id: ARCH-WARN-001
+    check: missing_c4_level
+  - id: ARCH-WARN-002
+    check: impact_scope_too_shallow
+  - id: ARCH-WARN-003
+    check: no_alternatives_for_decision
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.

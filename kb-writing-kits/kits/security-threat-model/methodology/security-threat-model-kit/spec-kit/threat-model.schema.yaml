@@ -1,0 +1,39 @@
+﻿<!--
+Imported from: security-threat-model-kit/spec-kit\threat-model.schema.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+artifact: threat-model
+description: Contract for current-state functionality security threat model.
+language: ru
+
+requiredSections:
+  - Контекст threat model
+  - Assets и данные
+  - Actors и trust boundaries
+  - Data flows
+  - Threats и mitigations
+  - Residual risks
+  - Связанные security/NFR/observability артефакты
+  - Gaps и допущения
+
+threatTable:
+  columns:
+    - ID
+    - Категория
+    - Threat
+    - Asset / flow
+    - Impact
+    - Mitigation
+    - Owner
+    - Статус
+
+markers:
+
+qualityRules:
+  - Trust boundaries are explicit.
+  - Every external flow has threat consideration.
+  - Every threat has mitigation or residual risk.
+  - Security claims are evidence-backed or marked.

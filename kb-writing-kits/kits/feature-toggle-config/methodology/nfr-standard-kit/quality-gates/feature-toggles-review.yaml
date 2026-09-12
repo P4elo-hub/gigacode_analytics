@@ -1,0 +1,36 @@
+﻿<!--
+Imported from: nfr-standard-kit/quality-gates\feature-toggles-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: current-state functionality-toggles-review
+description: current-state functionality toggle quality gate aligned with canonical transfer example.
+spec: nfr-standard-kit/spec-kit/current-state functionality-toggles.schema.yaml
+canonicalExample: nfr-standard-kit/examples/account-transfer-current-state functionality-toggles-example.md
+
+blockingChecks:
+  - id: TOGL-GATE-001
+    check: toggle_card_complete
+  - id: TOGL-GATE-002
+    check: on_off_behavior
+    description: ON and OFF behavior documented for system, UI and API.
+  - id: TOGL-GATE-003
+    check: dependencies_documented
+    description: Dependencies table present when toggle interacts with other flags.
+  - id: TOGL-GATE-006
+    check: assumptions_traceable
+    description: >
+  - id: TOGL-GATE-004
+    check: removal_plan
+    description: Release/Experiment toggles have removal plan with stages and owners.
+  - id: TOGL-GATE-005
+    check: verification_checklist
+
+warningChecks:
+  - id: TOGL-WARN-001
+    check: release_without_removal_date
+    description: Release toggle without planned removal date.
+  - id: TOGL-WARN-002
+    check: experiment_without_segment

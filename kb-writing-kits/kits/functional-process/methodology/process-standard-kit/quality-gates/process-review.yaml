@@ -1,0 +1,57 @@
+﻿<!--
+Imported from: process-standard-kit/quality-gates\process-review.yaml
+Current-state adaptation:
+- Use only confirmed current behavior.
+- Do not write TO BE, rollout/rollback, future requirements, design proposals, GAP/ASM/DESIGN markers as reader-facing content.
+- Put unresolved or future/change-specific material into working-layer gaps, not into permanent KB pages.
+-->
+gate: process-review
+scope: process
+spec: process-standard-kit/spec-kit/process.schema.yaml
+
+blockingChecks:
+  - id: PROC-GATE-001
+    check: title_format
+    requiredPattern: "^#### Процесс — .+$"
+  - id: PROC-GATE-002
+    check: required_sections_present
+    requiredFields:
+      - Контекст процесса
+      - Участники
+      - текущее поведение
+      - Изменения процесса
+      - Связанные артефакты
+      - Gaps и допущения
+  - id: PROC-GATE-003
+    check: as_is_to_be_separated
+  - id: PROC-GATE-004
+    check: process_steps_complete
+    requiredColumns:
+      - Шаг
+      - Участник
+      - Действие
+      - Вход
+      - Выход
+      - Решение / правило
+  - id: PROC-GATE-005
+    check: deltas_trace_to_reason
+  - id: PROC-GATE-006
+    check: gaps_registry_synced
+  - id: PROC-GATE-007
+    check: no_unsupported_claims
+
+warningChecks:
+  - id: PROC-WARN-001
+    check: missing_exception_paths
+  - id: PROC-WARN-002
+    check: missing_activity_diagram_link
+  - id: PROC-WARN-003
+    check: weak_actor_naming
+
+decision:
+  approved:
+    condition: No blocking checks failed.
+  approved-with-warnings:
+    condition: No blocking checks failed, at least one warning remains.
+  needs-rework:
+    condition: One or more blocking checks failed.
