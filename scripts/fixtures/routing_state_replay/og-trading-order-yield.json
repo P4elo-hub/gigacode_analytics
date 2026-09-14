@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "slug": "og-trading-order-yield",
+  "generated_at": "2026-09-14T17:26:54Z",
+  "fields": {
+    "has_context": true,
+    "has_spec": true,
+    "has_decisions": true,
+    "has_gaps_map": true,
+    "has_challenges": true,
+    "has_challenges_map": false,
+    "has_alignment": true,
+    "decisions_needs_answer": 0,
+    "decisions_pending_apply": 0,
+    "decisions_needs_answer_alignment": 0,
+    "decisions_pending_apply_alignment": 0,
+    "open_gaps": [],
+    "open_questions": [],
+    "challenges": {
+      "open": 0,
+      "deferred": 0,
+      "resolved": 12,
+      "covered": 12,
+      "open_critical": 0,
+      "open_major": 0
+    },
+    "verdict": "PASS WITH GAPS",
+    "alignment_iteration": 3,
+    "critical_major_mismatch": 0,
+    "alignment_stale": false,
+    "stale": [
+      "challenges",
+      "context-newer-than-spec"
+    ],
+    "needs_check_feature": false,
+    "needs_check_feature_reason": ""
+  }
+}

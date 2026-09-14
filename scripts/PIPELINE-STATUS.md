@@ -131,8 +131,8 @@ the engine only uses `setattr` / `getattr`.
 
 Spec reference pack: `pipelines/spec/status.yaml`.
 Calibration may keep an empty `artifacts: {}` pack.
-Routing-state overlay (Phase 10 POC): [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md);
-helper `pipeline_routing_state.overlay_collector`. Spec collectors stay.
+Routing-state overlay (Phase 11 dual-run): [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md),
+[PIPELINE-PARITY.md](PIPELINE-PARITY.md). Spec collectors stay until Phase 12.
 
 ## Tests
 

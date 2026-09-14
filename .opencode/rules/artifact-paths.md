@@ -19,7 +19,7 @@ Feature-writing/<slug>/
   <slug>-gaps-resolved.md          ← GAPS_MAP
   <slug>-challenges.md             ← CHALLENGES
   <slug>-challenges-resolved.md    ← CHALLENGES_MAP
-  <slug>-routing-state.json        ← ROUTING_STATE (Phase 10 POC; spec cutover 11–12)
+  <slug>-routing-state.json        ← ROUTING_STATE (Phase 11 parity; cutover 12)
   <slug>.part-<block_id>.md        ← рабочий фрагмент write-feature
   <slug>.context.md                ← рабочий накопленный контекст блоков
 Feature-context/
@@ -53,7 +53,7 @@ agent-logs/
 | `GAPS_MAP` | `FEATURE_DIR<slug>-gaps-resolved.md` | `/resolve-gaps` | `/resolve-gaps` |
 | `CHALLENGES` | `FEATURE_DIR<slug>-challenges.md` | `/challenge-feature` | resolve-challenges (статусы) |
 | `CHALLENGES_MAP` | `FEATURE_DIR<slug>-challenges-resolved.md` | `/resolve-challenges` | `/resolve-challenges` |
-| `ROUTING_STATE` | `FEATURE_DIR<slug>-routing-state.json` | `/analyze-routing` (POC `routing-poc`) | `routing-analyzer` |
+| `ROUTING_STATE` | `FEATURE_DIR<slug>-routing-state.json` | `/analyze-routing` (spec-domain; graph `routing-poc`) | `routing-analyzer` |
 | `AGENT_LOGS` | `agent-logs/<slug>/` | `/archive-session`, ingest | ingest, analyze-telemetry |
 | `AGENT_MANIFEST` | `AGENT_LOGS/manifest.json` | ingest | ingest |
 | `AGENT_EVENTS` | `AGENT_LOGS/runs/<run-id>/events.jsonl` | ingest | ingest |

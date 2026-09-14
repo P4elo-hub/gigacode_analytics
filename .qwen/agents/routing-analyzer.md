@@ -2,7 +2,7 @@
 name: routing-analyzer
 description: >-
   Writes <slug>-routing-state.json for the deterministic router. Does not
-  choose the next pipeline step. Phase 10 POC (routing-poc).
+  choose the next pipeline step. Phase 11 spec-domain (graph still routing-poc).
 model: inherit
 approvalMode: auto-edit
 tools:
@@ -31,7 +31,7 @@ tools:
 # Шаги
 
 1. Загрузи скилл `analyze-routing`.
-2. Разреши slug. Собери поля по скиллу (те же имена, что spec collectors).
+2. Разреши slug. Собери поля по `pipelines/spec/routing_conditions.yaml`.
 3. Запиши JSON `schema_version: 1`. Не ставь `next_step` / `ready`.
 4. Верни путь к файлу и счётчики (`open_gaps`, needs-answer).
 

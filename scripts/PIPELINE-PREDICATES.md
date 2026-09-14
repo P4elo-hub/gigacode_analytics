@@ -117,9 +117,9 @@ rules:
 No edits to `pipeline_router.py` or `pipeline_predicates.py` unless you need a
 **new core builder** (rare).
 
-Phase 10: analyzer writes status fields into `ROUTING_STATE` JSON; pack
-predicates still use the same `when:` names. See
-[PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md). Spec collectors stay.
+Phase 11: spec dual-run overlay (collectors live). See
+[PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md) and
+[PIPELINE-PARITY.md](PIPELINE-PARITY.md). Spec collectors stay until Phase 12.
 
 ## Compile checks
 

@@ -1,8 +1,9 @@
-# Pipeline routing-state (Phase 10)
+# Pipeline routing-state (Phase 10–11)
 
 LLM **analyzer** writes a JSON snapshot. Deterministic **router** reads it
 through `populate_status` — no LLM in `build_dispatch`. Spec collectors stay
-until Phase 12. Live POC: `--pipeline routing-poc`.
+until Phase 12. Live spec dispatch is still collectors. Live POC graph:
+`--pipeline routing-poc`. Phase 11 = dual-run parity, not cutover.
 
 ```
 delegate → (missing/stale) analyze-routing → routing-analyzer
@@ -11,7 +12,8 @@ delegate → (missing/stale) analyze-routing → routing-analyzer
 ```
 
 Orchestrator runtime loop is unchanged: delegate → action → append_run_log →
-ingest → validate (`--pipeline <id>`). Analyzer is a normal graph step.
+ingest → validate (`--pipeline <id>`). Analyzer is a graph step only on
+`routing-poc` (spec graph has no `analyze-routing` until Phase 12).
 
 ## Artifact
 
@@ -37,13 +39,13 @@ Schema version `1`. Analyzer fills `fields` only — never `next_step` /
 ```
 
 Helper: `scripts/pipeline_routing_state.py` (`load_routing_state`,
-`apply_routing_state_fields`, `overlay_collector`). Pack collector id:
-`routing_state`.
+`apply_routing_state_fields`, `overlay_collector`, `spec_overlay_collector`).
+Pack collector id: `routing_state`.
 
 ## Spec status fields the router uses
 
 Inventory from `pipelines/spec/status.yaml` + `predicates.py` (dispatch `when:`).
-Analyzer must populate the same names so Phase 11 can overlay 1:1.
+Analyzer populates the same names so overlay is 1:1.
 
 | Field | Source today | Predicates / invariant |
 |-------|----------------|------------------------|
@@ -69,9 +71,10 @@ Analyzer must populate the same names so Phase 11 can overlay 1:1.
 
 Not used by spec dispatch: `open_questions`, `spec_lines`, `context_lines`,
 other `challenges.*` counts (display). Engine still computes **mtime** `stale[]`
-from `status.yaml` after the overlay.
+and `alignment_stale` from `status.yaml` after the overlay.
 
 Full mapping: `pipelines/spec/routing_conditions.yaml` (shadow, not compiled).
+Parity table: [PIPELINE-PARITY.md](PIPELINE-PARITY.md).
 
 ## Stale / missing
 
@@ -79,21 +82,23 @@ Treat as “run analyzer” (`when: routing_state_needs_refresh` on the POC pack
 
 1. File missing.
 2. Invalid JSON or `schema_version` ≠ 1, or `fields` sets router-owned keys.
-3. `stale` rule `routing_state` older than `spec` (POC). Phase 11: older than
-   spec / context / decisions / challenges / alignment / maps.
+3. `stale` rule `routing_state` older than `spec` (POC). Spec (Phase 11): older
+   than spec / context / decisions / challenges / alignment / gaps_map /
+   challenges_map (`stale_vs` in `routing_conditions.yaml`).
 4. After any step that mutates those artifacts (write/check/resolve/challenge/
    alignment).
 
-Validate ids (pack `extra_advice`): `routing-state-missing`, `routing-state-stale`.
-Invalid JSON is reported as missing. Dispatch still routes to `analyze-routing`.
+Validate ids (pack `extra_advice`, **warn**): `routing-state-missing`,
+`routing-state-stale`. Invalid JSON is reported as missing. Spec dispatch does
+**not** route to `analyze-routing` (not in spec graph). POC dispatch does.
 
 ## When to run the analyzer
 
 | Trigger | Who |
 |---------|-----|
-| No `ROUTING_STATE` / stale / invalid | router → step `analyze-routing` |
-| Orchestrator just finished a mutating step | next delegate; stale rule fires |
-| Manual `/analyze-routing <slug>` | human / POC |
+| No `ROUTING_STATE` / stale / invalid | POC router → step `analyze-routing` |
+| Orchestrator just finished a mutating step | next delegate; stale rule fires (POC) |
+| Manual `/analyze-routing <slug>` | human / dual-run |
 
 Do **not** call the analyzer from `pipeline_dispatch.py`.
 
@@ -101,36 +106,57 @@ Do **not** call the analyzer from `pipeline_dispatch.py`.
 
 | Pack | Role |
 |------|------|
-| `spec` | Collectors unchanged. Shadow `routing_conditions.yaml` only. |
+| `spec` | Collectors live. Overlay collector `routing_state` last, gated. `routing_conditions.yaml` is SSOT for skill + parity. |
 | `routing-poc` | Graph node `analyze-routing`, overlay collector, dispatch from JSON. |
 
-Phase 11: spec overlay + `routing_state_parity.py` (full stale set; optional
-smoke `dispatch:routing-poc` / `pipeline-delegate:routing-poc`). Phase 12: drop
-spec collectors; skill reads `routing_conditions.yaml`. Phase 13: frontend codegen.
+## Phase 11 parity
+
+Dual-run: **A** = `populate_status` collectors (live default). **B** = same
+populate, overlay `fields` from JSON (`spec_overlay_collector`). Overlay-field
+collectors do not win over JSON (`routing_state` is last).
+
+When overlay applies:
+
+- parity B-mode: `overlay_context(mode="on")` or `PIPELINE_ROUTING_STATE_OVERLAY=1`
+- live: valid JSON newer than every existing `stale_vs` artifact
+- otherwise collectors (Mode A). Golden spec 24 cases have no JSON → unchanged.
+
+```bash
+PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug>
+PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --json
+PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --strict
+PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> \
+  --replay scripts/fixtures/routing_state_replay/<slug>.json
+```
+
+Replay fixtures are collector snapshots (no LLM):
+`scripts/routing_state_replay_from_collectors.py`.
+
+Phase 12: `analyze-routing` in spec `graph.yaml`, cutover dispatch to overlay,
+drop spec collectors. Phase 13: frontend codegen.
 
 ## Tests
 
 Phase 10 **не** добавляет отдельный smoke-check на `routing-poc` — pack уже в
-`dispatch-golden N/N`, `pipeline-compile` (`packs=…,routing-poc,…`) и
-`golden-coverage:packs`. Чеклист как у compile (Phase 9 golden + Phase 10 overlay):
+`dispatch-golden N/N`, `pipeline-compile` и `golden-coverage:packs`. Phase 11
+smoke still does **not** add `dispatch:routing-poc` (optional).
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
+PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
-PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug>
+PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --strict
 ```
 
 | Gate | Что закрывает |
 |------|----------------|
-| `pipeline_routing_state_test` | schema, overlay, validate ids, fake `build_dispatch` |
+| `pipeline_routing_state_test` | schema, overlay, spec gating, validate ids |
+| `routing_state_parity_test` | replay identity / mismatch / fixture slugs |
 | `dispatch_golden` `routing-poc` | missing / stale / open_gaps → next_step |
 | `dispatch_golden` `spec` | эталон 24+ **без изменений** |
 | `golden-coverage:packs` | `routing-poc` не orphan |
 | smoke | aggregate golden + compile; **нет** `dispatch:routing-poc` |
-| `routing_state_parity.py` | stub до Phase 11 |
-
-Optional Phase 11: `pipeline_delegate.py <slug> --pipeline routing-poc` в smoke
-(агент `routing-poc-orchestrator` уже есть).
+| `routing_state_parity.py --strict` | A vs B fields + dispatch |

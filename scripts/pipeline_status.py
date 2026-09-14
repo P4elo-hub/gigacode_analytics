@@ -116,7 +116,7 @@ def populate_status(status, root: Path, task_id: str, pipeline_id: str = DEFAULT
     for rule in spec.get("stale") or []:
         if isinstance(rule, dict) and evaluate_stale_rule(rule, paths):
             stale.append(str(rule.get("id") or ""))
-    status.stale = [item for item in stale if item]
+    status.stale = list(dict.fromkeys(item for item in stale if item))
 
     align_rule = spec.get("alignment_stale")
     if isinstance(align_rule, dict):

@@ -39,33 +39,36 @@ Registry: [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
 `DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`, and registry steps not in the graph.
 `--from-json` validates the payload against `pipeline_pack_schema.json` before YAML write.
 
-## Routing-state (Phase 10)
+## Routing-state (Phase 10–11)
 
 Analyzer writes `ROUTING_STATE` JSON; router reads overlay via `populate_status`.
-Spec collectors stay. Contract: [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md).
-Live pack: `pipelines/routing-poc/`.
+Spec collectors stay until Phase 12. Contract:
+[PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md),
+[PIPELINE-PARITY.md](PIPELINE-PARITY.md).
+Live pack graph: `pipelines/routing-poc/`. Spec pack: gated overlay collector +
+shadow `routing_conditions.yaml`.
 
-**Phase 10 contract (намеренные границы)**
+**Phase 11 contract**
 
 1. **Smoke не добавляет `dispatch:routing-poc` / `pipeline-delegate:routing-poc`.**
-   Pack покрыт `dispatch-golden` (в т.ч. fake JSON) + `pipeline-compile` +
-   `golden-coverage:packs`. Усилить smoke (как calibration) — Phase 11, optional.
+   Pack покрыт `dispatch-golden` + `pipeline-compile` + `golden-coverage:packs`.
 2. **Compile чеклист после правок overlay / pack YAML** (после `--apply`):
    ```bash
    PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
    PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
+   PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
    PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
    PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
    PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
+   PYTHONPATH=scripts python3 scripts/routing_state_parity.py pipeline-viewer-smoke --strict
    ```
-   Spec golden ids не сокращать. `routing-poc` ≥ 3 cases (`01-fake-json-open-gaps`,
-   `02-missing-json`, `03-stale-json`).
-3. **Skill POC** может смотреть `pipelines/spec/collectors.py` как эвристику полей.
-   Phase 12: skill опирается на `routing_conditions.yaml`, не на collectors.
-4. **Stale POC** — только `routing_state` vs `spec`. Полный набор (context /
-   decisions / challenges / alignment / maps) — Phase 11.
-5. **`routing-poc-orchestrator`** есть в трёх CLI; отдельный e2e smoke delegate
-   не обязателен (optional Phase 11).
+   Spec golden ids не сокращать. `routing-poc` ≥ 3 cases.
+3. **Skill** заполняет `fields` по `pipelines/spec/routing_conditions.yaml`
+   (семантика = collectors). Phase 12: collectors снимают.
+4. **Stale spec** — JSON vs spec / context / decisions / challenges / alignment /
+   gaps_map / challenges_map. POC stale — только vs spec.
+5. **Live dispatch** collectors-first. Overlay только B-mode / свежий JSON.
+   `analyze-routing` **не** в spec `graph.yaml`.
 
 ## Authoring (Phase 8)
 
@@ -104,6 +107,7 @@ PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py     # full suite (s
 PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py      # pack-first validate + orchestrator loop
 PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py         # schema, catalog, --from-json, --init-pack
 PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
+PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
 ```
 
 `pipeline_registry_test.py`: `registry_for("calibration")` ≠ spec, calibration
@@ -115,8 +119,9 @@ rolls back `Calibration/<slug>/` only. Smoke only has `pipeline-registry:scoped`
 engine duplicate), spec extra_advice severity matrix, orchestrator runtime loop
 block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>`).
 
-`pipeline_routing_state_test.py`: overlay schema + POC validate ids + fake JSON
-dispatch. Not a smoke row — see **Routing-state (Phase 10)** checklist above.
+`pipeline_routing_state_test.py`: overlay schema + spec gating + validate ids +
+fake JSON dispatch. `routing_state_parity_test.py`: A vs B replay. Not smoke
+rows — see **Routing-state (Phase 10–11)** checklist above.
 Smoke still does **not** call `pipeline_delegate --pipeline routing-poc`.
 
 ## Edit workflow

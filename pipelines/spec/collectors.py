@@ -170,6 +170,13 @@ def collect_needs_check_feature(root: Path, task_id: str, status, paths: dict[st
     status.needs_check_feature_reason = reason
 
 
+def collect_routing_state(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
+    """Gated overlay (last). Live path skips unless JSON is fresh or B-mode."""
+    from pipeline_routing_state import spec_overlay_collector
+
+    spec_overlay_collector(root, task_id, status, paths)
+
+
 COLLECTORS = {
     "decisions_table": collect_decisions_table,
     "spec_gaps": collect_spec_gaps,
@@ -177,6 +184,7 @@ COLLECTORS = {
     "challenges_table": collect_challenges_table,
     "alignment_frontmatter": collect_alignment_frontmatter,
     "needs_check_feature": collect_needs_check_feature,
+    "routing_state": collect_routing_state,
 }
 
 

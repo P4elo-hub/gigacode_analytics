@@ -1,4 +1,6 @@
 # Spec pipeline topology (SIHIST). Compile: scripts/pipeline_compile.py
+# Phase 11: analyze-routing is NOT a node here — live dispatch stays collectors.
+# Analyzer is /analyze-routing (pack routing-poc graph). Cutover: Phase 12.
 label: Spec pipeline (SIHIST)
 orchestrator: spec-orchestrator
 nodes:

@@ -22,6 +22,8 @@ SPEC_PACK_ADVICE_IDS = (
     "needs-answer-not-asked",
     "check-feature-redundant-loop",
     "challenge-repeat-blocked",
+    "routing-state-missing",
+    "routing-state-stale",
 )
 ENGINE_ADVICE_IDS = (
     "dispatch-not-configured",
@@ -79,8 +81,10 @@ class SpecValidateIdsTest(unittest.TestCase):
 
     def test_spec_pack_advice_ids_unchanged(self) -> None:
         text = (ROOT / "pipelines" / "spec" / "validate.py").read_text(encoding="utf-8")
+        helper = (SCRIPTS / "pipeline_routing_state.py").read_text(encoding="utf-8")
+        combined = text + "\n" + helper
         for advice_id in SPEC_PACK_ADVICE_IDS:
-            self.assertIn(f'id="{advice_id}"', text)
+            self.assertIn(f'id="{advice_id}"', combined)
 
     def test_pipeline_ready_copy_from_status_messages(self) -> None:
         fake_dispatch = {

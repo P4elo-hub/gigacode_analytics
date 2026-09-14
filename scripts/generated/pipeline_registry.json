@@ -390,6 +390,11 @@
         "alignment": {
           "path": "Feature-writing/{task_id}/{task_id}-code-alignment.md",
           "exists_as": "has_alignment"
+        },
+        "routing_state": {
+          "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+          "exists_as": "has_routing_state",
+          "missing_reason": "нет routing-state.json — extra_advice, не dispatch"
         }
       },
       "collectors": [
@@ -416,6 +421,10 @@
         {
           "id": "needs_check_feature",
           "source": "spec"
+        },
+        {
+          "id": "routing_state",
+          "source": "routing_state"
         }
       ],
       "stale": [
@@ -436,6 +445,48 @@
           "when": "artifact_newer_than",
           "left": "context",
           "right": "spec"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "spec"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "context"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "decisions"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "challenges"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "alignment"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "gaps_map"
+        },
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "challenges_map"
         }
       ],
       "alignment_stale": {
@@ -644,6 +695,7 @@
       "file_missing_context",
       "file_missing_decisions",
       "file_missing_gaps_map",
+      "file_missing_routing_state",
       "file_missing_spec",
       "has_alignment",
       "has_challenges",
@@ -651,6 +703,7 @@
       "has_context",
       "has_decisions",
       "has_gaps_map",
+      "has_routing_state",
       "has_spec",
       "needs_answer_alignment_only",
       "needs_answer_challenges_only",
@@ -662,6 +715,7 @@
       "not_has_context",
       "not_has_decisions",
       "not_has_gaps_map",
+      "not_has_routing_state",
       "not_has_spec",
       "open_challenges",
       "open_gaps",

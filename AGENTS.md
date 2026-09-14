@@ -75,7 +75,7 @@ It pauses only for real questions (write-feature section plan, `needs-answer` in
 | `apply-calibration` | Apply approved L1 skill patches |
 | `benchmark-rerun` | Isolated rerun workspace under `Calibration/.../rerun/` |
 | `calibrate` | Full calibration chain (calibration-orchestrator) |
-| `analyze-routing` | Writes `<slug>-routing-state.json` (POC pack `routing-poc`; spec cutover Phase 11) |
+| `analyze-routing` | Writes `<slug>-routing-state.json` (spec-domain Phase 11 parity; graph still `routing-poc` until Phase 12) |
 
 ## Slash commands and subagents
 
@@ -104,7 +104,7 @@ same name from `skills/`. Основная сессия — оркестрато
 | `/propose-calibration` | `calibration-proposer` |
 | `/apply-calibration` | `calibration-applier` |
 | `/benchmark-rerun` | `benchmark-runner` |
-| `/analyze-routing` | `routing-analyzer` (POC `--pipeline routing-poc`) |
+| `/analyze-routing` | `routing-analyzer` (spec-domain; graph `--pipeline routing-poc`) |
 
 Slash commands: `.gigacode/commands/` or `.qwen/commands/`. Pipeline rule: `analytics-workflow`.
 

@@ -38,6 +38,7 @@ class FeatureStatus:
     has_challenges: bool = False
     has_challenges_map: bool = False
     has_alignment: bool = False
+    has_routing_state: bool = False
     spec_lines: int = 0
     context_lines: int = 0
     open_gaps: list[str] = field(default_factory=list)

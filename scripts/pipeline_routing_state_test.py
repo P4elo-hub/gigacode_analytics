@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 10: routing-state schema, overlay collector, POC validate ids."""
+"""Phase 10–11: routing-state schema, overlay collector, spec dual-run validate ids."""
 
 from __future__ import annotations
 
@@ -93,16 +93,87 @@ class SchemaOverlayTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-class SpecCollectorsUntouchedTest(unittest.TestCase):
+class SpecCollectorsStillPresentTest(unittest.TestCase):
     def test_spec_collectors_still_registered(self) -> None:
         collectors = load_pack_module("spec", "collectors")
         self.assertIsNotNone(collectors)
         keys = set(collectors.COLLECTORS)
         self.assertTrue(set(SPEC_COLLECTORS) <= keys)
-        spec_src = (ROOT / "pipelines" / "spec" / "collectors.py").read_text(encoding="utf-8")
-        self.assertNotIn("overlay_collector", spec_src)
+        self.assertIn("routing_state", keys)
         graph = (ROOT / "pipelines" / "spec" / "graph.yaml").read_text(encoding="utf-8")
-        self.assertNotIn("analyze-routing", graph)
+        self.assertNotIn("\n  - id: analyze-routing\n", graph)
+
+
+class SpecOverlayGatingTest(unittest.TestCase):
+    def test_live_skips_stale_json_mode_off_uses_collectors(self) -> None:
+        from feature_status import FeatureStatus
+        from pipeline_routing_state import overlay_context
+        from pipeline_status import populate_status
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-gate-"))
+        slug = "demo"
+        try:
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            spec = fw / f"{slug}.md"
+            spec.write_text("# spec\n\n[GAP-SPEC]\n", encoding="utf-8")
+            path = routing_state_path(tmp, slug)
+            path.write_text(
+                json.dumps(example_payload(slug, open_gaps=["GAP-JSON"])),
+                encoding="utf-8",
+            )
+            older = time.time() - 120
+            os.utime(path, (older, older))
+            status = FeatureStatus(slug=slug)
+            with overlay_context(mode="off"):
+                populate_status(status, tmp, slug, "spec")
+            self.assertEqual(status.open_gaps, ["GAP-SPEC"])
+            status_b = FeatureStatus(slug=slug)
+            with overlay_context(mode="on", replay=path):
+                populate_status(status_b, tmp, slug, "spec")
+            self.assertEqual(status_b.open_gaps, ["GAP-JSON"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class SpecValidateRoutingStateTest(unittest.TestCase):
+    def setUp(self) -> None:
+        extra = load_pack_module("spec", "validate")
+        assert extra is not None
+        self.extra = extra
+
+    def _advice_ids(self, root: Path, slug: str) -> set[str]:
+        report = SimpleNamespace(advice=[], next_step="")
+
+        def add(_report, *, id, severity, title, detail, fix):
+            report.advice.append(id)
+
+        status = SimpleNamespace(
+            decisions_pending_apply=0,
+            decisions_needs_answer=0,
+            has_challenges=False,
+            has_alignment=False,
+            has_gaps_map=False,
+            pipeline_id="spec",
+        )
+        self.extra.extra_advice(root, slug, status, {"orchestrator_mode": "delegate"}, report, add)
+        return set(report.advice)
+
+    def test_missing_and_stale_ids(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="rs-spec-val-"))
+        slug = "demo"
+        try:
+            self.assertIn("routing-state-missing", self._advice_ids(tmp, slug))
+            path = routing_state_path(tmp, slug)
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(example_payload(slug)), encoding="utf-8")
+            spec = tmp / "Feature-writing" / slug / f"{slug}.md"
+            spec.write_text("# spec\n", encoding="utf-8")
+            older = time.time() - 120
+            os.utime(path, (older, older))
+            self.assertIn("routing-state-stale", self._advice_ids(tmp, slug))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class PocValidateTest(unittest.TestCase):

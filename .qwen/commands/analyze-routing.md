@@ -1,5 +1,5 @@
 ---
-description: Записать routing-state.json для детерминированного роутера (POC)
+description: Записать routing-state.json для детерминированного роутера (spec-domain)
 ---
 
 Делегируй субагенту `routing-analyzer` через инструмент `task`:

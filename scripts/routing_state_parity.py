@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Compare spec collectors vs routing-state.json fields.
+"""Compare spec collectors (A) vs routing-state overlay (B).
 
-Phase 10 stub: prints a field report. Spec dispatch still uses collectors.
-Phase 11: overlay JSON into spec populate_status and diff next_step.
+Live dispatch stays collectors. Mode B overlays JSON (replay or live file).
 
   PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug>
+  PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --json
+  PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --strict
+  PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --replay path.json
 """
 
 from __future__ import annotations
@@ -21,69 +23,104 @@ from artifact_paths import resolve_slug, workspace_root  # noqa: E402
 from feature_status import build_status_fields  # noqa: E402
 from pipeline_dispatch import build_dispatch  # noqa: E402
 from pipeline_routing_state import (  # noqa: E402
+    CHALLENGES_KEYS,
     STATUS_OVERLAY_FIELDS,
-    load_routing_state,
+    default_replay_path,
+    overlay_context,
     routing_state_path,
 )
 
-PHASE11_TODO = (
-    "TODO Phase 11: wire overlay into spec populate_status and diff "
-    "collector vs analyzer next_step"
+DISPATCH_KEYS = (
+    "next_step",
+    "next_subagent",
+    "orchestrator_mode",
+    "ready",
+    "must_continue",
 )
 
 
-def _flag(value) -> str:
+def _challenges_dict(status) -> dict:
+    ch = getattr(status, "challenges", None)
+    return {key: int(getattr(ch, key, 0) or 0) if ch is not None else 0 for key in CHALLENGES_KEYS}
+
+
+def _field_value(status, field: str):
+    if field == "challenges":
+        return _challenges_dict(status)
+    value = getattr(status, field, None)
     if isinstance(value, list):
-        return "true" if value else "false"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if value in (None, "", 0):
-        return "false" if not value else str(value)
-    return "true" if value else "false"
+        return list(value)
+    return value
 
 
-def _collector_value(status, field: str):
-    if field == "challenges":
-        ch = getattr(status, "challenges", None)
-        return getattr(ch, "open", 0) if ch is not None else 0
-    return getattr(status, field, None)
+def _equal(left, right) -> bool:
+    return json.dumps(left, sort_keys=True, default=str) == json.dumps(right, sort_keys=True, default=str)
 
 
-def _analyzer_value(fields: dict, field: str):
-    if field == "challenges":
-        raw = fields.get("challenges") or {}
-        if isinstance(raw, dict):
-            return raw.get("open", 0)
-        return raw
-    return fields.get(field)
+def _resolve_replay(root: Path, slug: str, replay: Path | None) -> Path | None:
+    if replay is not None:
+        return replay if replay.is_file() else replay
+    fixture = default_replay_path(root, slug)
+    if fixture.is_file():
+        return fixture
+    live = routing_state_path(root, slug)
+    if live.is_file():
+        return live
+    return None
 
 
-def compare(root: Path, slug: str) -> dict:
-    collector_status = build_status_fields(root, slug, "spec")
-    collector_dispatch = build_dispatch(root, slug, "spec")
-    path = routing_state_path(root, slug)
-    payload, error = load_routing_state(path, slug=slug)
-    fields = (payload or {}).get("fields") if payload else None
-    rows: list[dict] = []
+def compare(root: Path, slug: str, *, replay: Path | None = None) -> dict:
+    analyzer_path = _resolve_replay(root, slug, replay)
+    with overlay_context(mode="off"):
+        status_a = build_status_fields(root, slug, "spec")
+        dispatch_a = build_dispatch(root, slug, "spec")
+    if analyzer_path is not None and analyzer_path.is_file():
+        with overlay_context(mode="on", replay=analyzer_path):
+            status_b = build_status_fields(root, slug, "spec")
+            dispatch_b = build_dispatch(root, slug, "spec")
+        load_error = None
+    else:
+        status_b = status_a
+        dispatch_b = dispatch_a
+        load_error = "missing"
+
+    field_rows = []
+    fields_match = load_error is None
     for field in STATUS_OVERLAY_FIELDS:
-        left = _collector_value(collector_status, field)
-        right = _analyzer_value(fields or {}, field) if isinstance(fields, dict) else None
-        rows.append(
-            {
-                "field": field,
-                "collector": _flag(left),
-                "analyzer": _flag(right) if fields is not None else "missing",
-                "match": fields is not None and _flag(left) == _flag(right),
-            }
-        )
+        left = _field_value(status_a, field)
+        right = _field_value(status_b, field) if load_error is None else None
+        ok = load_error is None and _equal(left, right)
+        if not ok:
+            fields_match = False
+        field_rows.append({"field": field, "collector": left, "analyzer": right, "match": ok})
+
+    dispatch_diff = {}
+    dispatch_match = True
+    for key in DISPATCH_KEYS:
+        left = dispatch_a.get(key)
+        right = dispatch_b.get(key) if load_error is None else None
+        same = load_error is None and left == right
+        if not same:
+            dispatch_match = False
+            dispatch_diff[key] = {"collector": left, "analyzer": right}
+    match = fields_match and dispatch_match and load_error is None
+    rel = None
+    if analyzer_path is not None and analyzer_path.is_file():
+        try:
+            rel = str(analyzer_path.resolve().relative_to(root.resolve()))
+        except ValueError:
+            rel = str(analyzer_path)
     return {
         "slug": slug,
-        "routing_state": str(path.relative_to(root)) if path.is_file() else None,
-        "load_error": error or None,
-        "collector_next_step": collector_dispatch.get("next_step") or "",
-        "analyzer_next_step": None,
-        "todo": PHASE11_TODO,
-        "fields": rows,
+        "routing_state": rel,
+        "load_error": load_error,
+        "match": match,
+        "fields_match": fields_match,
+        "dispatch_match": dispatch_match,
+        "collector_dispatch": {key: dispatch_a.get(key) for key in DISPATCH_KEYS},
+        "analyzer_dispatch": {key: dispatch_b.get(key) for key in DISPATCH_KEYS} if load_error is None else None,
+        "dispatch_diff": dispatch_diff,
+        "fields": field_rows,
     }
 
 
@@ -91,20 +128,26 @@ def format_report(report: dict) -> str:
     lines = [
         f"slug: {report['slug']}",
         f"routing-state: {report['routing_state'] or 'ABSENT'}",
-        f"collector next_step: {report['collector_next_step'] or '—'}",
-        f"analyzer next_step: n/a ({report['todo']})",
+        f"match: {'PASS' if report['match'] else 'DIFF'}",
         "",
     ]
-    if not report.get("routing_state"):
-        lines.append("Нет JSON — сначала analyze-routing, затем сравни поля.")
-        return "\n".join(lines) + "\n"
-    if report.get("load_error") and report["load_error"] != "missing":
+    if report.get("load_error"):
         lines.append(f"load: {report['load_error']}")
+        lines.append("Нет JSON — analyze-routing или --replay scripts/fixtures/routing_state_replay/<slug>.json")
         lines.append("")
+    col = report["collector_dispatch"]
+    ana = report.get("analyzer_dispatch") or {}
+    lines.append("dispatch A (collectors) vs B (overlay):")
+    for key in DISPATCH_KEYS:
+        mark = "ok" if key not in report["dispatch_diff"] else "DIFF"
+        right = ana.get(key, "—") if ana else "—"
+        lines.append(f"  {key}: collector={col.get(key)!r} analyzer={right!r}  [{mark}]")
+    lines.append("")
+    lines.append("fields:")
     for row in report["fields"]:
         mark = "ok" if row["match"] else "DIFF"
         lines.append(
-            f"{row['field']}: collector={row['collector']} analyzer={row['analyzer']}  [{mark}]"
+            f"  {row['field']}: collector={row['collector']!r} analyzer={row['analyzer']!r}  [{mark}]"
         )
     return "\n".join(lines) + "\n"
 
@@ -113,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="routing-state-parity")
     parser.add_argument("slug")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--strict", action="store_true", help="exit 1 on mismatch")
+    parser.add_argument("--replay", type=Path, help="routing-state JSON (CI, no LLM)")
     parser.add_argument("--root", default=".", type=Path)
     args = parser.parse_args(argv)
     root = workspace_root(args.root)
@@ -120,11 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     if slug is None:
         print("не удалось определить slug", file=sys.stderr)
         return 2
-    report = compare(root, slug)
+    replay = args.replay.expanduser().resolve() if args.replay else None
+    report = compare(root, slug, replay=replay)
     if args.json:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
     else:
         print(format_report(report))
+    if args.strict and not report["match"]:
+        return 1
     return 0
 
 
