@@ -51,6 +51,7 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Calibration pipeline graph | `graph:*:calibration` |
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
-Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 24 cases + calibration 1 orchestrator_only).
+Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 24 cases + calibration 1 orchestrator_only)
+and **golden-coverage:packs** (every `pipelines/<id>/` has a golden folder or waiver).
 
 Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`.

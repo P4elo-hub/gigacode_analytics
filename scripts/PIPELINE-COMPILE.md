@@ -49,13 +49,13 @@ New pipeline = pack + agents/skills. Not a fork of the engine.
 4. Smoke after apply: schema contains `<id>`; `pipeline_delegate.py … --pipeline <id>`.
 5. Dispatch optional: empty rules = calibration-style (`orchestrator_only`).
    Full dispatch = spec-style; add `predicates.py` for domain `when:` and golden under
-   `fixtures/dispatch_golden/<id>/`.
+   `fixtures/dispatch_golden/<id>/` (required — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md)).
 
 `--catalog` is the versioned UI palette (`catalog_version`, `pack_schema`, steps,
 predicates core vs `by_pipeline`, `runtime.<id>.loop`). Additive keys only.
 `--from-json` = schema (shape) then compile (`when:` / agents). Schema runtime is
 a subset walker; `pipeline_pack_schema.json` is the UI `$schema`. Agent files and
-dispatch golden for a new pack are manual (Phase 9). See
+dispatch golden for a new pack are manual. Coverage gate is Phase 9 done. See
 [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md).
 
 ## Tests
@@ -68,6 +68,7 @@ After `--apply`:
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py  # pack ↔ golden / waiver
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 python3 scripts/feature_status_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of smoke
@@ -90,9 +91,12 @@ block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>
 1. Change the pack under `pipelines/<id>/` (not `scripts/pipeline.yaml`).
 2. `--check` → review validation + diff.
 3. `--apply` → commit YAML + generated JSON together.
-4. Golden (`fixtures/dispatch_golden/<id>/cases.json`) + smoke must stay green.
+4. Golden (`fixtures/dispatch_golden/<id>/cases.json` or `WAIVER.md`) + smoke must stay green.
+   Smoke: `dispatch-golden N/N` and `golden-coverage:packs`.
 
-Spec pack is the reference (24+ dispatch cases). New packs need their own golden folder.
+Spec pack is the reference (24+ dispatch cases). Every pack needs its own golden
+folder or a no-dispatch waiver — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
 
-See `pipelines/README.md`, [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md),
+See `pipelines/README.md`, [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md),
+[PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md),
 [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md), and [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).

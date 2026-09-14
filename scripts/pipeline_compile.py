@@ -504,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.init_pack:
-        from pipeline_pack_authoring import init_pack
+        from pipeline_pack_authoring import init_pack, init_pack_golden_hints
 
         try:
             written = init_pack(args.init_pack, args.template, root)
@@ -528,6 +528,8 @@ def main(argv: list[str] | None = None) -> int:
         print("then: PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply")
         print("then: PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check")
         print("note: --check before --apply will FAIL (generated JSON stale until apply)")
+        for hint in init_pack_golden_hints(args.init_pack, args.template):
+            print(hint)
         print("-" * 40)
         print("PASS")
         return 0

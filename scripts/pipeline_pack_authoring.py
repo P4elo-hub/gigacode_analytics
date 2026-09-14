@@ -131,6 +131,20 @@ def init_pack(pipeline_id: str, template: str = "minimal", root: Path | None = N
     return apply_pack_json(build_template_payload(pipeline_id, template), root)
 
 
+def init_pack_golden_hints(pipeline_id: str, template: str) -> list[str]:
+    """Phase 9: remind authors to add dispatch golden (or a no-dispatch waiver)."""
+    golden = f"scripts/fixtures/dispatch_golden/{pipeline_id}"
+    if template == "full-dispatch":
+        return [
+            f"then: add {golden}/cases.json (+ COVERAGE.md) — "
+            "dispatch golden is required (see scripts/PIPELINE-GOLDEN.md)",
+        ]
+    return [
+        f"then: add {golden}/cases.json or {golden}/WAIVER.md "
+        "(no-dispatch) — see scripts/PIPELINE-GOLDEN.md",
+    ]
+
+
 def _graph(pipeline_id: str, label: str, step_id: str) -> dict:
     orch = f"{pipeline_id}-orchestrator"
     return {

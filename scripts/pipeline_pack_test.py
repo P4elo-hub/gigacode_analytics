@@ -34,6 +34,7 @@ from pipeline_pack_authoring import (  # noqa: E402
     TEMPLATES,
     build_template_payload,
     init_pack,
+    init_pack_golden_hints,
     load_pack_schema,
     validate_pack_json,
 )
@@ -166,6 +167,13 @@ class PackRoundtripTest(unittest.TestCase):
 class InitPackTest(unittest.TestCase):
     def test_templates_defined(self) -> None:
         self.assertEqual(TEMPLATES, ("minimal", "orchestrator-only", "full-dispatch"))
+
+    def test_full_dispatch_init_hints_golden(self) -> None:
+        hints = init_pack_golden_hints("demo-dispatch", "full-dispatch")
+        joined = "\n".join(hints)
+        self.assertIn("cases.json", joined)
+        self.assertIn("COVERAGE.md", joined)
+        self.assertIn("demo-dispatch", joined)
 
     def test_init_minimal_compiles(self) -> None:
         with tempfile.TemporaryDirectory(prefix="pack-init-") as tmp:

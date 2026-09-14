@@ -9,8 +9,8 @@ JSON contract (frontend / `--from-json`): [pipeline_pack_schema.json](pipeline_p
 Catalog (UI palette): `PYTHONPATH=scripts python3 scripts/pipeline_compile.py --catalog`.
 Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 
-**Порядок нового pack:** `--init-pack` → скопировать orchestrator agent → `--apply` → `--check` → `pipeline_delegate --pipeline <id>`.
-`--init-pack` **не** делает `--apply`. Golden на 3-й pipeline — Phase 9.
+**Порядок нового pack:** `--init-pack` → скопировать orchestrator agent → `--apply` → `--check` → golden (`cases.json` или `WAIVER.md`) → `pipeline_delegate --pipeline <id>`.
+`--init-pack` **не** делает `--apply`. Golden на каждый pack — обязательно ([PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md), Phase 9 done).
 
 ## Phase 8 contract (намеренные границы)
 
@@ -18,7 +18,7 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 2. **Schema runtime — subset, не `jsonschema`.** Файл [pipeline_pack_schema.json](pipeline_pack_schema.json) (`$schema` Draft 2020-12) — контракт для UI. Python ходит по нему через `_validate_schema()` (type / required / properties / items / pattern). Для текущих pack достаточно. Если фронт начнёт слать сложные payload — подключить `jsonschema` поверх того же файла, без смены schema.
 3. **Orchestrator agent — руками.** Шаблон: [fixtures/pack_authoring/orchestrator-agent.md](fixtures/pack_authoring/orchestrator-agent.md). `--init-pack` **не** пишет `.qwen/` / `.gigacode/` / `.opencode/`. Шаг 2 чеклиста.
 4. **`--init-pack` без `--apply`.** Generated JSON обновляется только `--apply` (или `--from-json`, который apply делает). До apply: `--check` = drift, delegate = `unknown pipeline_id`.
-5. **Golden.** Эталон dispatch — только spec (24+). `full-dispatch` template компилируется; golden `fixtures/dispatch_golden/<id>/` — Phase 9.
+5. **Golden (Phase 9 done).** Каждый pack: `fixtures/dispatch_golden/<id>/cases.json` или `WAIVER.md` (только no-dispatch). Spec — эталон 24+, не сокращать. `full-dispatch` template компилируется; после init добавь golden. Policy + parity test: [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
 
 ## Who writes what
 
@@ -27,7 +27,7 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 | graph / dispatch / status / registry | Full 4 YAML; dispatch 24+ rules | 4 YAML; dispatch empty (`dispatch_supported: false`) | Same 4 files. `dispatch` optional in JSON |
 | optional `.py` | `collectors.py`, `predicates.py`, `validate.py` | `validate.py` only | Optional. Add when you parse files / domain `when:` / extra validate |
 | orchestrator agent | `spec-orchestrator.md` + Runtime loop | `calibration-orchestrator.md` + Runtime loop | Copy [fixtures/pack_authoring/orchestrator-agent.md](fixtures/pack_authoring/orchestrator-agent.md) |
-| golden / smoke | `fixtures/dispatch_golden/spec/` (24+) | no dispatch golden; smoke validate | `--init-pack` / `pack_smoke/minimal`; golden 3-го pack — Phase 9 |
+| golden / smoke | `fixtures/dispatch_golden/spec/` (24+) | `fixtures/dispatch_golden/calibration/` (`01-orchestrator-only`) | `--init-pack` → `fixtures/dispatch_golden/<id>/cases.json` (или `WAIVER.md` для no-dispatch) |
 
 ## New pipeline (checklist)
 
@@ -39,6 +39,7 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
    # or: --from-json pack.json
    ```
    `--init-pack` writes `pipelines/<id>/` and runs compile **validation** (not `--apply`).
+   Template `full-dispatch` prints a hint to add `fixtures/dispatch_golden/<id>/cases.json`.
 2. **Orchestrator + skills.** Copy
    `scripts/fixtures/pack_authoring/orchestrator-agent.md` to
    `.qwen/agents/<id>-orchestrator.md` (and `.gigacode/`, `.opencode/`).
@@ -64,8 +65,14 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
      Optional `validate.py` still runs (`extra_advice`).
    - **Full dispatch** (spec-style, template `full-dispatch`): `when:` names from
      the predicate catalog (core from `status.yaml` artifacts, domain from
-     `predicates.py`). Add `fixtures/dispatch_golden/<id>/` when you have rules.
-6. **Do not** change `scripts/pipeline_*.py` engine modules for topology or `when:` names.
+     `predicates.py`).
+6. **Golden (required).** After `--apply`, add the pack to the coverage gate:
+   - **Full dispatch:** `scripts/fixtures/dispatch_golden/<id>/cases.json` (≥ 1 case)
+     and `COVERAGE.md` mapping `when:` → fixture ids.
+   - **No dispatch:** the same `cases.json` (calibration-style `orchestrator_only`
+     is enough) **or** `WAIVER.md`. See [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
+   Smoke: `dispatch-golden N/N` plus `golden-coverage:packs`.
+7. **Do not** change `scripts/pipeline_*.py` engine modules for topology or `when:` names.
 
 ## Templates (`--init-pack --template`)
 
@@ -78,6 +85,9 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 `--init-pack` сам проверяет YAML (это не CLI `--check`). Generated JSON
 появляется только после `--apply`. До `--apply` CLI `--check` покажет
 `content differs` — это ожидаемо, не ошибка pack.
+
+`full-dispatch` also prints: add `scripts/fixtures/dispatch_golden/<id>/cases.json`
+(+ `COVERAGE.md`). No-dispatch templates hint `cases.json` or `WAIVER.md`.
 
 ## Pack JSON (`--from-json` / `--export-json`)
 
@@ -123,6 +133,7 @@ the UI; `--from-json` uses the subset walker. Compile still rejects unknown
 PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py

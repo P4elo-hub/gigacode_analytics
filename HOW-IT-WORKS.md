@@ -389,6 +389,9 @@ Dispatch **не обязателен**: пустые `rules` = как calibratio
 полный router = как spec (`when:` из catalog). Чеклист:
 [scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md).
 Schema: `scripts/pipeline_pack_schema.json`. Catalog: `--catalog`.
+Golden gate: каждый pack в `pipelines/` покрыт
+`scripts/fixtures/dispatch_golden/<id>/` (`cases.json` или `WAIVER.md` для
+no-dispatch) — [scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md).
 
 Новый `when:` — функция в `pipelines/<id>/predicates.py` и правило в
 `dispatch.yaml`. Router не правится. Typo в `when:` ловит
@@ -400,8 +403,9 @@ Schema: `scripts/pipeline_pack_schema.json`. Catalog: `--catalog`.
 [scripts/PIPELINE-RUNTIME.md](scripts/PIPELINE-RUNTIME.md),
 [scripts/PIPELINE-STATUS.md](scripts/PIPELINE-STATUS.md),
 [scripts/PIPELINE-REGISTRY.md](scripts/PIPELINE-REGISTRY.md),
-[scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md).
-Golden: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
+[scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md),
+[scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md).
+Spec matrix: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.
 
@@ -467,6 +471,7 @@ python3 scripts/quality_gates.py <slug>
 # pipeline infra (после правок pipelines/<id>/)
 python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```
 

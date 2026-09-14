@@ -123,7 +123,11 @@ the engine only uses `setattr` / `getattr`.
 2. If you parse file contents, add `collectors.py` with `COLLECTORS`.
 3. Point domain `when:` predicates at the fields you set.
 4. `PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check` then `--apply`.
-5. Golden: `scripts/fixtures/status_golden/<id>/` (optional) and dispatch golden.
+5. Dispatch golden is **required** (`scripts/fixtures/dispatch_golden/<id>/`,
+   see [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md)). Status golden
+   (`scripts/fixtures/status_golden/<id>/`) is **optional** — only for packs
+   with complex status/collectors (currently spec). Calibration does not need
+   status golden; do not add one without a collector-contract reason.
 
 Spec reference pack: `pipelines/spec/status.yaml`.
 Calibration may keep an empty `artifacts: {}` pack.

@@ -624,6 +624,23 @@ def check_dispatch_golden(report: Report) -> None:
     )
 
 
+def check_golden_coverage(report: Report) -> None:
+    """Phase 9: every pack has dispatch golden (or a no-dispatch waiver)."""
+    try:
+        from pipeline_golden_coverage import coverage_detail, live_golden_coverage_problems
+        from pipeline_pack import discover_pipeline_ids, repo_root
+
+        pipeline_ids = discover_pipeline_ids(repo_root())
+        problems = live_golden_coverage_problems()
+        report.add(
+            "golden-coverage:packs",
+            not problems,
+            coverage_detail(pipeline_ids, problems),
+        )
+    except Exception as exc:
+        report.add("golden-coverage:packs", False, str(exc))
+
+
 def check_run_until_done_policy(report: Report, slug: str) -> None:
     d = build_dispatch(ROOT, slug)
     policy = d.get("exit_policy") or {}
@@ -652,6 +669,7 @@ def main() -> int:
     ensure_smoke_fixtures()
 
     check_dispatch_golden(report)
+    check_golden_coverage(report)
     check_pipeline_compile(report)
     check_pipeline_registry_scoped(report)
     check_viewer_health(report)

@@ -19,6 +19,11 @@ sys.path.insert(0, str(SCRIPTS))
 
 from pipeline_common import parse_run_log_ts  # noqa: E402
 from pipeline_dispatch import build_dispatch  # noqa: E402
+from pipeline_golden_coverage import (  # noqa: E402
+    coverage_detail,
+    live_golden_coverage_problems,
+)
+from pipeline_pack import discover_pipeline_ids, repo_root  # noqa: E402
 
 FIXTURES_DIR = SCRIPTS / "fixtures" / "dispatch_golden"
 SLUG = "dispatch-golden"
@@ -229,6 +234,14 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             ok, detail = False, str(exc)
         report.add(case_id, ok, detail)
+
+    if not args.case:
+        try:
+            pipeline_ids = discover_pipeline_ids(repo_root())
+            problems = live_golden_coverage_problems()
+            report.add("coverage:packs", not problems, coverage_detail(pipeline_ids, problems))
+        except Exception as exc:
+            report.add("coverage:packs", False, str(exc))
 
     report.print_report()
     return 0 if report.passed else 1
