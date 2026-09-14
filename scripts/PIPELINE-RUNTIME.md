@@ -73,6 +73,8 @@ Ready / write-cycle copy comes from pack config, not engine literals:
 | `pipelines/calibration/validate.py` | `cal-orchestrator-only` + graph orchestrator node | pack-only when no dispatch |
 
 Phase 7 (done): pack-first validate; shared orchestrator runtime loop.
+Phase 10: routing-state overlay POC — [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md).
+Smoke does not add `dispatch:routing-poc` (golden + compile cover the pack).
 
 ## Tests
 
@@ -81,4 +83,5 @@ PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
 ```

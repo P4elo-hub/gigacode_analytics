@@ -1,0 +1,17 @@
+# Dispatch from overlay fields only. when: names in predicates.py + core artifacts.
+invariant_after_priority: 30
+invariants: []
+fallback:
+  next: analyze-routing
+  reason: routing-state не готов
+rules:
+  - priority: 10
+    when: routing_state_needs_refresh
+    next: analyze-routing
+  - priority: 20
+    when: open_gaps
+    next: resolve-gaps
+  - priority: 30
+    when: routing_state_ready
+    next: null
+    outcome: ready

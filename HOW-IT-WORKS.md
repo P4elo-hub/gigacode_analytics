@@ -375,6 +375,9 @@ pipeline_dispatch / pipeline_delegate / pipeline_validate
 `--pipeline calibration` — граф и проверка рёбер; правил dispatch нет
 (`orchestrator_mode: orchestrator_only`). Validate всё равно вызывает
 `pipelines/calibration/validate.py` (`extra_advice`).
+`--pipeline routing-poc` — Phase 10 POC: шаг `analyze-routing` пишет
+`<slug>-routing-state.json`, роутер читает overlay (спек-коллекторы не
+тронуты). Контракт: [scripts/PIPELINE-ROUTING-STATE.md](scripts/PIPELINE-ROUTING-STATE.md).
 
 `.pipeline-active-task.json` хранит `"pipeline"`. Hooks читают его,
 если `--pipeline` не задан.
@@ -404,7 +407,8 @@ no-dispatch) — [scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md).
 [scripts/PIPELINE-STATUS.md](scripts/PIPELINE-STATUS.md),
 [scripts/PIPELINE-REGISTRY.md](scripts/PIPELINE-REGISTRY.md),
 [scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md),
-[scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md).
+[scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md),
+[scripts/PIPELINE-ROUTING-STATE.md](scripts/PIPELINE-ROUTING-STATE.md).
 Spec matrix: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.
@@ -420,6 +424,7 @@ Feature-writing/<slug>/
   <slug>-gaps-resolved.md        карта гэпов
   <slug>-challenges.md           банк CH-*
   <slug>-challenges-resolved.md  карта CH-*
+  <slug>-routing-state.json      снимок для роутера (Phase 10 POC; spec cutover 11–12)
   <slug>.part-*.md               рабочие куски (удаляются после assemble)
   <slug>.context.md              накопленное по блокам (тоже удаляется)
 

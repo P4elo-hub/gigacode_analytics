@@ -1,0 +1,11 @@
+step_to_subagent:
+  analyze-routing: routing-analyzer
+  resolve-gaps: gap-resolver
+orchestrator_owned: []
+gated_subagents:
+  - routing-analyzer
+  - gap-resolver
+restartable_steps:
+  - analyze-routing
+  - resolve-gaps
+delegate_modes: {}

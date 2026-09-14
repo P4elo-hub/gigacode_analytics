@@ -39,6 +39,34 @@ Registry: [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
 `DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`, and registry steps not in the graph.
 `--from-json` validates the payload against `pipeline_pack_schema.json` before YAML write.
 
+## Routing-state (Phase 10)
+
+Analyzer writes `ROUTING_STATE` JSON; router reads overlay via `populate_status`.
+Spec collectors stay. Contract: [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md).
+Live pack: `pipelines/routing-poc/`.
+
+**Phase 10 contract (намеренные границы)**
+
+1. **Smoke не добавляет `dispatch:routing-poc` / `pipeline-delegate:routing-poc`.**
+   Pack покрыт `dispatch-golden` (в т.ч. fake JSON) + `pipeline-compile` +
+   `golden-coverage:packs`. Усилить smoke (как calibration) — Phase 11, optional.
+2. **Compile чеклист после правок overlay / pack YAML** (после `--apply`):
+   ```bash
+   PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+   PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
+   PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+   PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
+   PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
+   ```
+   Spec golden ids не сокращать. `routing-poc` ≥ 3 cases (`01-fake-json-open-gaps`,
+   `02-missing-json`, `03-stale-json`).
+3. **Skill POC** может смотреть `pipelines/spec/collectors.py` как эвристику полей.
+   Phase 12: skill опирается на `routing_conditions.yaml`, не на collectors.
+4. **Stale POC** — только `routing_state` vs `spec`. Полный набор (context /
+   decisions / challenges / alignment / maps) — Phase 11.
+5. **`routing-poc-orchestrator`** есть в трёх CLI; отдельный e2e smoke delegate
+   не обязателен (optional Phase 11).
+
 ## Authoring (Phase 8)
 
 New pipeline = pack + agents/skills. Not a fork of the engine.
@@ -75,6 +103,7 @@ PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of s
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py     # full suite (smoke has scoped check only)
 PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py      # pack-first validate + orchestrator loop
 PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py         # schema, catalog, --from-json, --init-pack
+PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
 ```
 
 `pipeline_registry_test.py`: `registry_for("calibration")` ≠ spec, calibration
@@ -85,6 +114,10 @@ rolls back `Calibration/<slug>/` only. Smoke only has `pipeline-registry:scoped`
 `pipeline_runtime_test.py`: pack-first validate (calibration extra_advice without
 engine duplicate), spec extra_advice severity matrix, orchestrator runtime loop
 block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>`).
+
+`pipeline_routing_state_test.py`: overlay schema + POC validate ids + fake JSON
+dispatch. Not a smoke row — see **Routing-state (Phase 10)** checklist above.
+Smoke still does **not** call `pipeline_delegate --pipeline routing-poc`.
 
 ## Edit workflow
 
@@ -99,4 +132,5 @@ folder or a no-dispatch waiver — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
 
 See `pipelines/README.md`, [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md),
 [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md),
-[PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md), and [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
+[PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md), [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md),
+and [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md).

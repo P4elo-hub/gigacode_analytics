@@ -1,4 +1,8 @@
-"""Spec-pack extra validate rules (DECISIONS / challenge one-pass / check loop)."""
+"""Spec-pack extra validate rules (DECISIONS / challenge one-pass / check loop).
+
+Phase 11: add routing-state-missing / routing-state-stale (see
+scripts/PIPELINE-ROUTING-STATE.md). Spec collectors stay until Phase 12.
+"""
 
 from __future__ import annotations
 

@@ -45,6 +45,8 @@ Compiled mapping is only `pipelines.<id>` in `pipeline_registry.json`.
 Spec remains the reference pack (24+ golden cases).
 Every pack must have `scripts/fixtures/dispatch_golden/<id>/` (or `WAIVER.md`)
 — [PIPELINE-GOLDEN.md](../scripts/PIPELINE-GOLDEN.md).
+Phase 10 POC: `pipelines/routing-poc/` (JSON overlay, spec collectors unchanged)
+— [PIPELINE-ROUTING-STATE.md](../scripts/PIPELINE-ROUTING-STATE.md).
 
 `validate.py` — add when the pack has workflow rules beyond generic idle/fail/
 divergence (spec: DECISIONS / challenge one-pass; calibration: orchestrator_only

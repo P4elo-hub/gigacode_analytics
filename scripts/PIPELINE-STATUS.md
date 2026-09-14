@@ -131,6 +131,8 @@ the engine only uses `setattr` / `getattr`.
 
 Spec reference pack: `pipelines/spec/status.yaml`.
 Calibration may keep an empty `artifacts: {}` pack.
+Routing-state overlay (Phase 10 POC): [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md);
+helper `pipeline_routing_state.overlay_collector`. Spec collectors stay.
 
 ## Tests
 
@@ -138,5 +140,6 @@ Calibration may keep an empty `artifacts: {}` pack.
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 python3 scripts/feature_status_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```

@@ -13,6 +13,7 @@ ALIGNMENT_SUFFIX = "-code-alignment.md"
 GAPS_MAP_SUFFIX = "-gaps-resolved.md"
 CHALLENGES_SUFFIX = "-challenges.md"
 CHALLENGES_MAP_SUFFIX = "-challenges-resolved.md"
+ROUTING_STATE_SUFFIX = "-routing-state.json"
 
 ALIGNMENT_MAX_ITERATIONS = 3
 VERDICT_PASS = "PASS"
@@ -60,6 +61,10 @@ def challenges_path(root: Path, slug: str) -> Path:
 
 def challenges_map_path(root: Path, slug: str) -> Path:
     return feature_dir(root, slug) / f"{slug}{CHALLENGES_MAP_SUFFIX}"
+
+
+def routing_state_path(root: Path, slug: str) -> Path:
+    return feature_dir(root, slug) / f"{slug}{ROUTING_STATE_SUFFIX}"
 
 
 def list_feature_slugs(root: Path) -> list[str]:

@@ -1,0 +1,100 @@
+# Spec routing-state mapping (shadow). Not loaded by compile or dispatch.
+# Phase 10 contract; cutover is Phase 11 (overlay) / 12 (drop collectors).
+# Live POC: pipelines/routing-poc/. See scripts/PIPELINE-ROUTING-STATE.md.
+schema_version: 1
+artifact:
+  id: routing_state
+  path: Feature-writing/{task_id}/{task_id}-routing-state.json
+  exists_as: has_routing_state
+analyzer:
+  step: analyze-routing
+  subagent: routing-analyzer
+  graph: not in spec graph.yaml yet — POC pack only
+status_fields:
+  has_context:
+    source: artifacts.context
+    predicates: [not_has_context]
+  has_spec:
+    source: artifacts.spec
+    predicates: [not_has_spec]
+  has_decisions:
+    source: artifacts.decisions
+    predicates: []
+  has_gaps_map:
+    source: artifacts.gaps_map
+    predicates: []
+    invariant: needs-check-feature
+  has_challenges:
+    source: artifacts.challenges
+    predicates: [open_challenges, no_challenges_file]
+  has_challenges_map:
+    source: artifacts.challenges_map
+    invariant: needs-check-feature
+  has_alignment:
+    source: artifacts.alignment
+    predicates: [alignment_limit_exhausted, alignment_missing_or_stale]
+  decisions_needs_answer:
+    source: collectors.decisions_table
+    predicates: [needs_answer_with_gaps, needs_answer_challenges_only]
+    orchestrator: ask_user_when
+  decisions_pending_apply:
+    source: collectors.decisions_table
+    predicates: [pending_apply_with_gaps, pending_apply_challenges_only]
+  decisions_needs_answer_alignment:
+    source: collectors.decisions_table
+    predicates: [needs_answer_alignment_only, needs_answer_challenges_only]
+  decisions_pending_apply_alignment:
+    source: collectors.decisions_table
+    predicates: [pending_apply_alignment_only, pending_apply_challenges_only]
+  open_gaps:
+    source: collectors.spec_gaps
+    predicates: [open_gaps, needs_answer_with_gaps, pending_apply_with_gaps]
+  challenges.open:
+    source: collectors.challenges_table
+    predicates: [open_challenges]
+  verdict:
+    source: collectors.alignment_frontmatter
+    predicates: [alignment_pass, alignment_limit_exhausted]
+  alignment_iteration:
+    source: collectors.alignment_frontmatter
+    predicates: [alignment_limit_exhausted, critical_major_mismatch_resolvable, pending_apply_alignment_only]
+  critical_major_mismatch:
+    source: collectors.alignment_frontmatter
+    predicates: [critical_major_mismatch_resolvable, pending_apply_alignment_only]
+  alignment_stale:
+    source: alignment_stale
+    predicates: [critical_major_mismatch_resolvable, pending_apply_alignment_only]
+  stale:
+    source: stale[]
+    predicates: [alignment_missing_or_stale]
+  needs_check_feature:
+    source: collectors.needs_check_feature
+    invariant: needs-check-feature
+  needs_check_feature_reason:
+    source: collectors.needs_check_feature
+    invariant: needs-check-feature
+not_in_dispatch:
+  - open_questions
+  - spec_lines
+  - context_lines
+  - challenges.open_critical
+  - challenges.open_major
+  - challenges.deferred
+  - challenges.resolved
+  - challenges.covered
+stale_vs:
+  - spec
+  - context
+  - decisions
+  - challenges
+  - alignment
+  - gaps_map
+  - challenges_map
+when_to_run_analyzer:
+  - routing-state missing
+  - invalid JSON / schema_version mismatch / router-owned keys in fields
+  - routing-state older than any stale_vs artifact
+  - after write-feature, check-feature, resolve-*, challenge-feature, check-feature-code, resolve-code-alignment
+validate_ids:
+  - routing-state-missing
+  - routing-state-stale

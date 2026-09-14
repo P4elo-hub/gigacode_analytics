@@ -20,6 +20,7 @@ Policy lives here; fixtures live in [fixtures/dispatch_golden/](fixtures/dispatc
 | `dispatch_supported` (compiled rules or invariants) | `cases.json` with **≥ 1** case. Waiver is **not** allowed. |
 | no-dispatch / `orchestrator_only` | `cases.json` **or** `WAIVER.md` (calibration-style: 1 case `orchestrator_only` is enough) |
 | `spec` | **≥ 24** cases; waiver is **not** allowed even if dispatch is emptied; do not drop existing ids except a documented bugfix |
+| `routing-poc` | Phase 10 overlay POC; fake JSON cases in `fixtures/dispatch_golden/routing-poc/` |
 
 Orphan `fixtures/dispatch_golden/<id>/` with no matching `pipelines/<id>/` fails.
 
@@ -47,7 +48,8 @@ PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```
 
 Smoke keeps aggregate `dispatch-golden N/N` and adds `golden-coverage:packs`
-(dynamic `discover_pipeline_ids()`).
+(dynamic `discover_pipeline_ids()`). Phase 10 `routing-poc` is in that aggregate;
+there is **no** extra `dispatch:routing-poc` smoke row (optional in Phase 11).
 
 ## New pack
 

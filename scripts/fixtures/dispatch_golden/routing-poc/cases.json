@@ -1,0 +1,58 @@
+[
+  {
+    "id": "01-fake-json-open-gaps",
+    "slug": "dispatch-golden",
+    "files": {
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nPOC spec.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-routing-state.json": "{\"schema_version\":1,\"slug\":\"dispatch-golden\",\"generated_at\":\"2026-01-01T00:00:00Z\",\"fields\":{\"has_spec\":true,\"open_gaps\":[\"GAP-POC-01\"],\"decisions_needs_answer\":0,\"challenges\":{\"open\":0,\"deferred\":0,\"resolved\":0,\"covered\":0,\"open_critical\":0,\"open_major\":0}}}\n"
+    },
+    "touch_after": [
+      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-routing-state.json"]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "resolve-gaps",
+      "next_subagent": "gap-resolver",
+      "orchestrator_mode": "delegate",
+      "must_continue": true,
+      "pipeline_id": "routing-poc"
+    },
+    "expect_reason_contains": "незакрытые факты"
+  },
+  {
+    "id": "02-missing-json",
+    "slug": "dispatch-golden",
+    "files": {
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nPOC spec.\n"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "analyze-routing",
+      "next_subagent": "routing-analyzer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true,
+      "pipeline_id": "routing-poc"
+    },
+    "expect_reason_contains": "analyze-routing"
+  },
+  {
+    "id": "03-stale-json",
+    "slug": "dispatch-golden",
+    "files": {
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nEdited spec.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-routing-state.json": "{\"schema_version\":1,\"slug\":\"dispatch-golden\",\"generated_at\":\"2026-01-01T00:00:00Z\",\"fields\":{\"has_spec\":true,\"open_gaps\":[]}}\n"
+    },
+    "touch_after": [
+      ["Feature-writing/dispatch-golden/dispatch-golden-routing-state.json", "Feature-writing/dispatch-golden/dispatch-golden.md"]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "analyze-routing",
+      "next_subagent": "routing-analyzer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true,
+      "pipeline_id": "routing-poc"
+    },
+    "expect_reason_contains": "устарел"
+  }
+]

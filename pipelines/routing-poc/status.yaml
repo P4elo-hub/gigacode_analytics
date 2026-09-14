@@ -1,0 +1,28 @@
+# POC status: routing-state.json overlay + spec file for stale mtime.
+task_kind: slug
+artifacts:
+  routing_state:
+    path: Feature-writing/{task_id}/{task_id}-routing-state.json
+    exists_as: has_routing_state
+    missing_reason: нет routing-state.json — нужен analyze-routing
+  spec:
+    path: Feature-writing/{task_id}/{task_id}.md
+    exists_as: has_spec
+    missing_reason: спецификация не написана
+collectors:
+  - id: routing_state
+    source: routing_state
+stale:
+  - id: routing_state
+    when: artifact_older_than
+    left: routing_state
+    right: spec
+orchestrator: {}
+messages:
+  ready: routing-state актуален, открытых фактов нет.
+  ready_title: Routing-state POC готов
+  ready_detail: нет open_gaps в JSON
+  ready_fix: Финальный ответ; spec cutover — Phase 11.
+  stopped: Routing-state POC остановлен.
+  ask_user: НЕ вызывай task.
+  write_cycle: не используется
