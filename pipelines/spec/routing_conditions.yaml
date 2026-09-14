@@ -1,6 +1,7 @@
-# Spec routing-state mapping. Not loaded by compile or dispatch.
-# Phase 12 SSOT for analyze-routing + routing_state_baseline (CI etalon).
-# Live spec graph includes analyze-routing. See scripts/PIPELINE-ROUTING-STATE.md.
+# Spec routing-state mapping + edge_conditions (Phase 13).
+# status_fields = analyzer field SSOT. edge_conditions = when: formulas + dispatch.
+# Runtime: scripts/pipeline_edge_conditions.py interpreter (choice A). No LLM in dispatch.
+# See scripts/PIPELINE-ROUTING-STATE.md and scripts/PIPELINE-PREDICATES.md.
 schema_version: 1
 artifact:
   id: routing_state
@@ -238,6 +239,10 @@ router_owned:
   - orchestrator_mode
   - must_continue
   - ready
+engine_fields:
+  - has_routing_state
+  - routing_state_invalid
+  - routing_state_error
 stale_vs:
   - spec
   - context
@@ -261,3 +266,222 @@ overlay:
   collector_order: routing_state is the only overlay-field collector
   freshness: dispatch P5 routing_state_needs_refresh → analyze-routing
   needs_check_feature: analyzer writes the bool + reason into JSON (includes run-log); engine does not recompute on the hot path
+edge_conditions:
+  _rs_missing_with_error:
+    expr:
+      all:
+        - field: has_routing_state
+          op: falsy
+        - field: routing_state_error
+          op: neq
+          value: ""
+  routing_state_needs_refresh:
+    expr:
+      any:
+        - field: routing_state_invalid
+          op: truthy
+        - ref: _rs_missing_with_error
+        - field: stale
+          op: contains
+          value: routing_state
+    dispatch:
+      priority: 5
+      next: analyze-routing
+    label: routing-state missing/stale
+  routing_state_ready:
+    expr:
+      all:
+        - ref: routing_state_needs_refresh
+          negate: true
+        - field: open_gaps
+          op: empty
+    label: routing-state актуален
+  alignment_limit_exhausted:
+    expr:
+      all:
+        - field: has_alignment
+          op: truthy
+        - field: alignment_iteration
+          op: gte
+          constant: alignment_max_iterations
+        - field: verdict
+          op: eq
+          constant: verdict_fail
+    dispatch:
+      priority: 10
+      next: null
+      outcome: stopped
+    label: alignment limit exhausted
+  not_has_context:
+    core: true
+    expr:
+      field: has_context
+      op: falsy
+    dispatch:
+      priority: 20
+      next: find-context
+    label: no context
+  not_has_spec:
+    core: true
+    expr:
+      field: has_spec
+      op: falsy
+    dispatch:
+      priority: 30
+      next: write-feature
+    label: no spec
+  needs_answer_with_gaps:
+    expr:
+      all:
+        - field: decisions_needs_answer
+          op: gt
+          value: 0
+        - field: open_gaps
+          op: non_empty
+    dispatch:
+      priority: 40
+      next: resolve-gaps
+    orchestrator: ask_user
+    label: needs-answer with gaps
+  needs_answer_alignment_only:
+    expr:
+      all:
+        - field: decisions_needs_answer_alignment
+          op: gt
+          value: 0
+        - field: open_gaps
+          op: empty
+    dispatch:
+      priority: 45
+      next: resolve-code-alignment
+    orchestrator: ask_user
+    label: needs-answer alignment only
+  needs_answer_challenges_only:
+    expr:
+      all:
+        - field: decisions_needs_answer
+          op: gt
+          other: decisions_needs_answer_alignment
+        - field: open_gaps
+          op: empty
+    dispatch:
+      priority: 50
+      next: resolve-challenges
+    orchestrator: ask_user
+    label: needs-answer challenges only
+  pending_apply_with_gaps:
+    expr:
+      all:
+        - field: decisions_pending_apply
+          op: gt
+          value: 0
+        - field: open_gaps
+          op: non_empty
+    dispatch:
+      priority: 60
+      next: resolve-gaps
+    label: pending-apply with gaps
+  pending_apply_alignment_only:
+    expr:
+      all:
+        - field: decisions_pending_apply_alignment
+          op: gt
+          value: 0
+        - field: critical_major_mismatch
+          op: gt
+          value: 0
+        - field: alignment_iteration
+          op: lt
+          constant: alignment_max_iterations
+        - field: alignment_stale
+          op: falsy
+    dispatch:
+      priority: 65
+      next: resolve-code-alignment
+    label: pending-apply alignment only
+  pending_apply_challenges_only:
+    expr:
+      all:
+        - field: decisions_pending_apply
+          op: gt
+          other: decisions_pending_apply_alignment
+        - field: open_gaps
+          op: empty
+    dispatch:
+      priority: 70
+      next: resolve-challenges
+    label: pending-apply challenges only
+  critical_major_mismatch_resolvable:
+    expr:
+      all:
+        - field: critical_major_mismatch
+          op: gt
+          value: 0
+        - field: alignment_iteration
+          op: lt
+          constant: alignment_max_iterations
+        - field: alignment_stale
+          op: falsy
+    dispatch:
+      priority: 80
+      next: resolve-code-alignment
+    label: alignment findings
+  open_gaps:
+    expr:
+      field: open_gaps
+      op: non_empty
+    dispatch:
+      priority: 90
+      next: resolve-gaps
+    label: gaps open
+  open_challenges:
+    expr:
+      all:
+        - field: has_challenges
+          op: truthy
+        - field: challenges.open
+          op: gt
+          value: 0
+    dispatch:
+      priority: 100
+      next: resolve-challenges
+    label: open challenges
+  no_challenges_file:
+    expr:
+      field: has_challenges
+      op: falsy
+    dispatch:
+      priority: 110
+      next: challenge-feature
+    label: no CHALLENGES yet
+  alignment_missing_or_stale:
+    expr:
+      any:
+        - field: has_alignment
+          op: falsy
+        - field: stale
+          op: contains
+          value: alignment
+    dispatch:
+      priority: 120
+      next: check-feature-code
+    label: alignment missing or stale
+  alignment_pass:
+    expr:
+      field: verdict
+      op: in
+      constants:
+        - verdict_pass
+        - verdict_pass_with_gaps
+    dispatch:
+      priority: 130
+      next: null
+      outcome: ready
+    label: PASS
+  alignment_fail_reaudit:
+    expr:
+      always: true
+    dispatch:
+      priority: 140
+      next: check-feature-code
+    label: alignment without PASS

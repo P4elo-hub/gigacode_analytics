@@ -1,0 +1,7 @@
+@startuml spec-sample
+' Phase 13 fixture: labeled edges → edge_conditions ids (label is the when: id).
+spec-orchestrator --> find-context : not_has_context
+spec-orchestrator --> analyze-routing : routing_state_needs_refresh
+check-feature --> resolve-gaps : open_gaps
+check-feature-code --> done : alignment_pass
+@enduml

@@ -1,0 +1,41 @@
+# Snapshot of codegen stubs from spec-sample.puml on an empty pack (not spec SSOT).
+# Spec formulas live in pipelines/spec/routing_conditions.yaml edge_conditions.
+edge_conditions:
+  not_has_context:
+    expr:
+      field: has_context
+      op: falsy
+    dispatch:
+      priority: 10
+      next: find-context
+    label: not_has_context
+    core: true
+    reason: condition not_has_context
+  routing_state_needs_refresh:
+    expr:
+      field: routing_state_needs_refresh
+      op: non_empty
+    dispatch:
+      priority: 20
+      next: analyze-routing
+    label: routing_state_needs_refresh
+    reason: condition routing_state_needs_refresh
+  open_gaps:
+    expr:
+      field: open_gaps
+      op: non_empty
+    dispatch:
+      priority: 30
+      next: resolve-gaps
+    label: open_gaps
+    reason: condition open_gaps
+  alignment_pass:
+    expr:
+      field: alignment_pass
+      op: non_empty
+    dispatch:
+      priority: 40
+      next: null
+      outcome: ready
+    label: alignment_pass
+    reason: condition alignment_pass

@@ -1,33 +1,16 @@
-"""Spec-pack domain predicates and reasons. YAML dispatch uses these names only."""
+"""Spec-pack domain predicates: names + reasons. Bodies live in edge_conditions YAML."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
 
+from pipeline_edge_conditions import predicates_from_edge_conditions
 from pipeline_pack import load_pack
 
 PIPELINE_ID = "spec"
-DOMAIN_PREDICATE_NAMES = frozenset(
-    {
-        "routing_state_needs_refresh",
-        "routing_state_ready",
-        "alignment_limit_exhausted",
-        "needs_answer_with_gaps",
-        "needs_answer_alignment_only",
-        "needs_answer_challenges_only",
-        "pending_apply_with_gaps",
-        "pending_apply_alignment_only",
-        "pending_apply_challenges_only",
-        "critical_major_mismatch_resolvable",
-        "open_gaps",
-        "open_challenges",
-        "no_challenges_file",
-        "alignment_missing_or_stale",
-        "alignment_pass",
-        "alignment_fail_reaudit",
-    }
-)
+PREDICATES = predicates_from_edge_conditions(PIPELINE_ID)
+DOMAIN_PREDICATE_NAMES = frozenset(PREDICATES)
 DOMAIN_INVARIANT_NAMES = frozenset({"needs-check-feature"})
 
 
@@ -41,131 +24,6 @@ def _constants() -> dict:
 
 def _max_iter() -> int:
     return int(_constants().get("alignment_max_iterations", 3))
-
-
-def _verdict_pass() -> set[str]:
-    const = _constants()
-    return {
-        str(const.get("verdict_pass", "PASS")),
-        str(const.get("verdict_pass_with_gaps", "PASS WITH GAPS")),
-    }
-
-
-def _verdict_fail() -> str:
-    return str(_constants().get("verdict_fail", "FAIL"))
-
-
-def _routing_state_needs_refresh(_root: Path, _task_id: str, status) -> bool:
-    from pipeline_routing_state import STALE_ID
-
-    if getattr(status, "routing_state_invalid", False):
-        return True
-    if not getattr(status, "has_routing_state", False):
-        if getattr(status, "routing_state_error", None) != "":
-            return True
-    stale = getattr(status, "stale", None) or []
-    return STALE_ID in stale
-
-
-def _routing_state_ready(root: Path, task_id: str, status) -> bool:
-    return not _routing_state_needs_refresh(root, task_id, status) and not _open_gaps(
-        root, task_id, status
-    )
-
-
-def _alignment_limit_exhausted(_root: Path, _slug: str, status) -> bool:
-    return (
-        status.has_alignment
-        and status.alignment_iteration >= _max_iter()
-        and status.verdict == _verdict_fail()
-    )
-
-
-def _needs_answer_with_gaps(_root: Path, _slug: str, status) -> bool:
-    return status.decisions_needs_answer > 0 and bool(status.open_gaps)
-
-
-def _needs_answer_alignment_only(_root: Path, _slug: str, status) -> bool:
-    return status.decisions_needs_answer_alignment > 0 and not status.open_gaps
-
-
-def _needs_answer_challenges_only(_root: Path, _slug: str, status) -> bool:
-    return (
-        status.decisions_needs_answer > status.decisions_needs_answer_alignment
-        and not status.open_gaps
-    )
-
-
-def _pending_apply_with_gaps(_root: Path, _slug: str, status) -> bool:
-    return status.decisions_pending_apply > 0 and bool(status.open_gaps)
-
-
-def _pending_apply_alignment_only(_root: Path, _slug: str, status) -> bool:
-    return (
-        status.decisions_pending_apply_alignment > 0
-        and status.critical_major_mismatch > 0
-        and status.alignment_iteration < _max_iter()
-        and not status.alignment_stale
-    )
-
-
-def _pending_apply_challenges_only(_root: Path, _slug: str, status) -> bool:
-    return (
-        status.decisions_pending_apply > status.decisions_pending_apply_alignment
-        and not status.open_gaps
-    )
-
-
-def _critical_major_mismatch_resolvable(_root: Path, _slug: str, status) -> bool:
-    return (
-        status.critical_major_mismatch > 0
-        and status.alignment_iteration < _max_iter()
-        and not status.alignment_stale
-    )
-
-
-def _open_gaps(_root: Path, _slug: str, status) -> bool:
-    return bool(status.open_gaps)
-
-
-def _open_challenges(_root: Path, _slug: str, status) -> bool:
-    return status.has_challenges and status.challenges.open > 0
-
-
-def _no_challenges_file(_root: Path, _slug: str, status) -> bool:
-    return not status.has_challenges
-
-
-def _alignment_missing_or_stale(_root: Path, _slug: str, status) -> bool:
-    return not status.has_alignment or "alignment" in status.stale
-
-
-def _alignment_pass(_root: Path, _slug: str, status) -> bool:
-    return status.verdict in _verdict_pass()
-
-
-def _alignment_fail_reaudit(_root: Path, _slug: str, status) -> bool:
-    return True
-
-
-PREDICATES = {
-    "routing_state_needs_refresh": _routing_state_needs_refresh,
-    "routing_state_ready": _routing_state_ready,
-    "alignment_limit_exhausted": _alignment_limit_exhausted,
-    "needs_answer_with_gaps": _needs_answer_with_gaps,
-    "needs_answer_alignment_only": _needs_answer_alignment_only,
-    "needs_answer_challenges_only": _needs_answer_challenges_only,
-    "pending_apply_with_gaps": _pending_apply_with_gaps,
-    "pending_apply_alignment_only": _pending_apply_alignment_only,
-    "pending_apply_challenges_only": _pending_apply_challenges_only,
-    "critical_major_mismatch_resolvable": _critical_major_mismatch_resolvable,
-    "open_gaps": _open_gaps,
-    "open_challenges": _open_challenges,
-    "no_challenges_file": _no_challenges_file,
-    "alignment_missing_or_stale": _alignment_missing_or_stale,
-    "alignment_pass": _alignment_pass,
-    "alignment_fail_reaudit": _alignment_fail_reaudit,
-}
 
 
 def reason_for_predicate(when: str, status) -> str:

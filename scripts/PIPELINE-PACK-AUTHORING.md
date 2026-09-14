@@ -120,6 +120,7 @@ the UI; `--from-json` uses the subset walker. Compile still rejects unknown
 | `steps` | `{<id>: [step_id]}` | node palette per pipeline |
 | `predicates.core` | `[str]` | core `when:` names (union across packs) |
 | `predicates.by_pipeline` | `{<id>: [str]}` | core + domain for that pack |
+| `routing_conditions` | `{<id>: {fields, edge_conditions, stale_vs}}` | Phase 13: field palette + edge editor (`catalog_version` 2) |
 | `runtime` | `{<id>: runtime_contract}` | loop commands (`--pipeline <id>`) |
 | `pack_files` | `[str]` | YAML files in a pack |
 | `optional_python` | `[str]` | `collectors.py` / `predicates.py` / `validate.py` |
@@ -137,4 +138,64 @@ PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
 ```
+
+## Phase 13 Authoring (graph edge → routing_conditions + dispatch)
+
+**Choice A (runtime):** generic interpreter `evaluate_edge_condition(expr, status)` in
+`scripts/pipeline_edge_conditions.py`. `when:` is still a name. The **body** lives in
+`pipelines/<id>/routing_conditions.yaml` → `edge_conditions`. Spec `predicates.py` is a
+thin wrapper (reasons + invariants). Do **not** add new domain functions there.
+
+Frontend / PlantUML does not call the analyzer. Runtime dispatch stays deterministic.
+
+### Flow
+
+1. Draw the graph (PlantUML or UI). Label a branch arrow with a `when:` id (`open_gaps`)
+   or human text (`gaps open` → slug `gaps_open`).
+2. Codegen (review the YAML before compile apply):
+
+```bash
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py \
+  --pipeline spec --from-plantuml scripts/fixtures/routing_codegen/spec-sample.puml --dry-run
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py \
+  --pipeline spec --from-plantuml path.puml --apply
+# or bootstrap from graph.edges[].condition:
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py \
+  --pipeline spec --from-graph-conditions --dry-run
+# sync dispatch.rules from existing edge_conditions:
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec --apply
+```
+
+3. Review `routing_conditions.yaml` (`status_fields` instructions, `expr`, `dispatch.priority` / `next`).
+   Merge does **not** wipe hand-patched field instructions.
+4. `PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply` then `--check`.
+5. If you added a new `when:`, add a dispatch golden case (`scripts/PIPELINE-GOLDEN.md`).
+   Spec 24 expect values stay frozen.
+
+`--apply` on compile does **not** run codegen. Codegen is a separate step first.
+
+### PlantUML / UI convention
+
+- `A --> B : open_gaps` — label is the condition id (preferred).
+- `A --> B : gaps open` — codegen slugs to `gaps_open` and stubs `expr` / `status_fields`.
+- Pack JSON: `graph.edges[].condition` (id) and optional `condition_label` (human).
+- UI palette: `--catalog` → `routing_conditions.<id>.fields` (analyzer fields) and
+  `.edge_conditions` (edge editor: id, label, priority, next). `catalog_version` is **2**.
+
+### New pack with routing-state
+
+`--init-pack <id> --template routing-state` adds `analyze-routing`, `routing_conditions.yaml`
+stub, overlay collector, and P5 `routing_state_needs_refresh`. `--from-json` with
+`status.collector_mode: routing_state` gets the same stub if `routing_conditions` is missing.
+
+### Add one edge condition (no predicates.py)
+
+1. Put `condition: my_when` on a graph edge (or PlantUML label) and run codegen `--apply`.
+2. Edit the new `edge_conditions.my_when.expr` (and `status_fields` instruction).
+3. Set `dispatch.priority` / `next` (unique priority).
+4. Compile `--apply` / `--check`. Add golden.
+
+Coverage check: `PYTHONPATH=scripts python3 scripts/routing_conditions_extract.py --pipeline spec --check`.
+

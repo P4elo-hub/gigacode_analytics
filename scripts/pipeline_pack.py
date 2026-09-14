@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Any
 
 PACK_FILES = ("graph.yaml", "dispatch.yaml", "status.yaml", "registry.yaml")
+OPTIONAL_YAML = ("routing_conditions.yaml",)
 OPTIONAL_PY = ("collectors.py", "predicates.py", "validate.py")
 DEFAULT_PIPELINE_ID = "spec"
 PACK_SCHEMA_RELPATH = "scripts/pipeline_pack_schema.json"
-CATALOG_VERSION = 1
+CATALOG_VERSION = 2
 CATALOG_KEYS = (
     "catalog_version",
     "pipelines",
@@ -21,6 +22,7 @@ CATALOG_KEYS = (
     "skills",
     "steps",
     "predicates",
+    "routing_conditions",
     "runtime",
     "pack_files",
     "optional_python",
@@ -28,6 +30,7 @@ CATALOG_KEYS = (
 )
 CATALOG_PIPELINE_ITEM_KEYS = ("id", "label", "orchestrator")
 CATALOG_PREDICATES_KEYS = ("core", "by_pipeline")
+CATALOG_ROUTING_CONDITION_KEYS = ("fields", "edge_conditions", "stale_vs")
 CATALOG_RUNTIME_KEYS = ("pipeline_id", "orchestrator", "dispatch_supported", "loop", "validate")
 
 
@@ -144,6 +147,51 @@ def load_all_packs(root: Path | None = None) -> dict[str, dict]:
     return {pid: load_pack(pid, root) for pid in discover_pipeline_ids(root)}
 
 
+def _catalog_routing_block(rc: dict) -> dict:
+    fields_out: list[dict] = []
+    raw_fields = rc.get("status_fields") or {}
+    if isinstance(raw_fields, dict):
+        for fid, spec in raw_fields.items():
+            if not isinstance(spec, dict):
+                continue
+            instruction = str(spec.get("instruction") or "").strip().split("\n", 1)[0].strip()
+            fields_out.append(
+                {
+                    "id": fid,
+                    "type": spec.get("type") or "",
+                    "label": spec.get("label") or instruction or fid,
+                }
+            )
+    edges_out: list[dict] = []
+    raw_edges = rc.get("edge_conditions") or {}
+    if isinstance(raw_edges, dict):
+        for eid, spec in raw_edges.items():
+            if not isinstance(spec, dict):
+                continue
+            if str(eid).startswith("_"):
+                continue
+            disp = spec.get("dispatch") if isinstance(spec.get("dispatch"), dict) else {}
+            edges_out.append(
+                {
+                    "id": eid,
+                    "label": spec.get("label") or eid,
+                    "priority": disp.get("priority"),
+                    "next": disp.get("next"),
+                }
+            )
+    return {
+        "fields": fields_out,
+        "edge_conditions": edges_out,
+        "stale_vs": list(rc.get("stale_vs") or []),
+    }
+
+
+def load_routing_conditions_for_catalog(pipeline_id: str, root: Path | None = None) -> dict:
+    from pipeline_edge_conditions import load_routing_conditions
+
+    return load_routing_conditions(pipeline_id, root)
+
+
 def merge_compiled_source(root: Path | None = None) -> dict:
     """Flatten packs into the compile input shape (pipelines + per-id registry/dispatch/status)."""
     packs = load_all_packs(root)
@@ -246,6 +294,10 @@ def build_catalog(root: Path | None = None) -> dict:
             "core": sorted(core_predicate_names()),
             "by_pipeline": predicates,
         },
+        "routing_conditions": {
+            pid: _catalog_routing_block(load_routing_conditions_for_catalog(pid, base))
+            for pid, pack in packs.items()
+        },
         "runtime": runtime,
         "pack_files": list(PACK_FILES),
         "optional_python": list(OPTIONAL_PY),
@@ -258,7 +310,7 @@ def write_pack_yaml(pipeline_id: str, data: dict, root: Path | None = None) -> l
     folder = packs_dir(root) / pipeline_id
     folder.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for key in ("graph", "dispatch", "status", "registry"):
+    for key in ("graph", "dispatch", "status", "registry", "routing_conditions"):
         if key not in data:
             continue
         path = folder / f"{key}.yaml"
@@ -349,21 +401,31 @@ def _dump_simple_list(items: list, indent: int) -> str:
 def export_pack_json(pipeline_id: str, root: Path | None = None) -> dict:
     """YAML pack → authoring JSON (editor roundtrip)."""
     pack = load_pack(pipeline_id, root)
-    return {
+    payload = {
         "id": pack["id"],
         "graph": pack["graph"],
         "dispatch": pack["dispatch"],
         "status": pack["status"],
         "registry": pack["registry"],
     }
+    if pack.get("routing_conditions"):
+        payload["routing_conditions"] = pack["routing_conditions"]
+    else:
+        from pipeline_edge_conditions import load_routing_conditions
+
+        rc = load_routing_conditions(pipeline_id, root)
+        if rc:
+            payload["routing_conditions"] = rc
+    return payload
 
 
 def apply_pack_json(payload: dict, root: Path | None = None) -> list[Path]:
-    from pipeline_pack_authoring import normalize_pack_payload, validate_pack_json
+    from pipeline_pack_authoring import ensure_routing_state_authoring, normalize_pack_payload, validate_pack_json
 
     if not isinstance(payload, dict):
         raise ValueError("invalid pack JSON:\n  pack JSON: payload must be an object")
     data = normalize_pack_payload(payload)
+    data = ensure_routing_state_authoring(data)
     errors = validate_pack_json(data)
     if errors:
         raise ValueError("invalid pack JSON:\n  " + "\n  ".join(errors))

@@ -9,8 +9,9 @@ pipelines/<id>/
   dispatch.yaml    # invariants, rules (when / next / priority)
   status.yaml      # artifacts, collectors, stale, invariants, display
   registry.yaml    # step → subagent, gated, restart
+  routing_conditions.yaml  # optional: status_fields + edge_conditions (Phase 13)
   collectors.py    # optional domain collectors (COLLECTORS + INVARIANTS)
-  predicates.py    # optional domain predicates
+  predicates.py    # optional domain predicates (thin wrapper if edge_conditions exist)
   validate.py      # extra_advice for pipeline_validate (optional, but needed
                    # for pack-specific rules — even without dispatch)
 ```
@@ -26,7 +27,7 @@ PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
 — `--init-pack <id>`, pack JSON schema, catalog contract, orchestrator template.
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_compile.py --init-pack <id> [--template minimal|orchestrator-only|full-dispatch]
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --init-pack <id> [--template minimal|orchestrator-only|full-dispatch|routing-state]
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --catalog
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --from-json pack.json
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --export-json <id>

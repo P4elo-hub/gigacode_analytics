@@ -21,6 +21,7 @@ from pipeline_pack import (  # noqa: E402
     CATALOG_KEYS,
     CATALOG_PIPELINE_ITEM_KEYS,
     CATALOG_PREDICATES_KEYS,
+    CATALOG_ROUTING_CONDITION_KEYS,
     CATALOG_RUNTIME_KEYS,
     CATALOG_VERSION,
     PACK_SCHEMA_RELPATH,
@@ -58,6 +59,14 @@ class CatalogContractTest(unittest.TestCase):
         self.assertTrue(set(CATALOG_PREDICATES_KEYS) <= set(catalog["predicates"]))
         self.assertIsInstance(catalog["predicates"]["core"], list)
         self.assertIsInstance(catalog["predicates"]["by_pipeline"], dict)
+        self.assertIn("routing_conditions", catalog)
+        spec_rc = catalog["routing_conditions"]["spec"]
+        self.assertTrue(set(CATALOG_ROUTING_CONDITION_KEYS) <= set(spec_rc), spec_rc)
+        field_ids = {item["id"] for item in spec_rc["fields"]}
+        self.assertIn("open_gaps", field_ids)
+        edge_ids = {item["id"] for item in spec_rc["edge_conditions"]}
+        self.assertIn("open_gaps", edge_ids)
+        self.assertIn("not_has_context", edge_ids)
         self.assertIn("spec", catalog["steps"])
         self.assertIn("calibration", catalog["steps"])
         ids = {item["id"] for item in catalog["pipelines"]}
@@ -92,7 +101,12 @@ class PackSchemaTest(unittest.TestCase):
         self.assertEqual(schema["required"], ["id", "graph", "status", "registry"])
         self.assertIn("dispatch", schema["properties"])
         self.assertNotIn("dispatch", schema["required"])
+        self.assertIn("routing_conditions", schema["properties"])
+        self.assertNotIn("routing_conditions", schema["required"])
         self.assertTrue(SCHEMA_PATH.is_file())
+        edge_props = schema["properties"]["graph"]["properties"]["edges"]["items"]["properties"]
+        self.assertIn("condition", edge_props)
+        self.assertIn("condition_label", edge_props)
 
     def test_minimal_pack_json_validates(self) -> None:
         payload = json.loads(PACK_JSON.read_text(encoding="utf-8"))
@@ -166,7 +180,7 @@ class PackRoundtripTest(unittest.TestCase):
 
 class InitPackTest(unittest.TestCase):
     def test_templates_defined(self) -> None:
-        self.assertEqual(TEMPLATES, ("minimal", "orchestrator-only", "full-dispatch"))
+        self.assertEqual(TEMPLATES, ("minimal", "orchestrator-only", "full-dispatch", "routing-state"))
 
     def test_full_dispatch_init_hints_golden(self) -> None:
         hints = init_pack_golden_hints("demo-dispatch", "full-dispatch")
@@ -209,6 +223,22 @@ class InitPackTest(unittest.TestCase):
             self.assertIn("demo-dispatch", schema_text)
             registry = json.loads(registry_text)
             self.assertIn("demo-dispatch", registry.get("dispatch") or {})
+
+    def test_init_routing_state_writes_stub_and_analyze_routing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="pack-init-") as tmp:
+            root = Path(tmp)
+            written = init_pack("demo-rs", "routing-state", root)
+            names = {path.name for path in written}
+            self.assertIn("routing_conditions.yaml", names)
+            self.assertIn("collectors.py", names)
+            with patch("pipeline_pack.repo_root", return_value=root):
+                data = merge_compiled_source(root)
+                errors = validate_source(data)
+            self.assertEqual(errors, [])
+            graph = (root / "pipelines" / "demo-rs" / "graph.yaml").read_text(encoding="utf-8")
+            self.assertIn("analyze-routing", graph)
+            rc = (root / "pipelines" / "demo-rs" / "routing_conditions.yaml").read_text(encoding="utf-8")
+            self.assertIn("edge_conditions", rc)
 
     def test_init_refuses_existing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="pack-init-") as tmp:

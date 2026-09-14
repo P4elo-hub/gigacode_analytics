@@ -112,6 +112,9 @@ def _domain_module(pipeline_id: str):
 
 def catalog_names(pipeline_id: str = DEFAULT_PIPELINE_ID) -> frozenset[str]:
     names = set(core_predicates_from_status(_status_spec(pipeline_id)))
+    from pipeline_edge_conditions import edge_conditions_map
+
+    names.update(name for name in edge_conditions_map(pipeline_id) if not str(name).startswith("_"))
     domain = _domain_module(pipeline_id)
     if domain is not None:
         declared = getattr(domain, "DOMAIN_PREDICATE_NAMES", None)
@@ -138,6 +141,9 @@ def invariant_names(pipeline_id: str = DEFAULT_PIPELINE_ID) -> frozenset[str]:
 
 def predicates_for(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict[str, Predicate]:
     preds = core_predicates_from_status(_status_spec(pipeline_id))
+    from pipeline_edge_conditions import predicates_from_edge_conditions
+
+    preds.update(predicates_from_edge_conditions(pipeline_id, include_core=True))
     domain = _domain_module(pipeline_id)
     if domain is not None:
         impl = getattr(domain, "PREDICATES", None)
@@ -172,6 +178,11 @@ def reason_for(when: str, status: object, pipeline_id: str = DEFAULT_PIPELINE_ID
         text = domain.reason_for_predicate(when, status)
         if text:
             return text
+    from pipeline_edge_conditions import reason_from_edge_condition
+
+    yaml_reason = reason_from_edge_condition(when, status, pipeline_id)
+    if yaml_reason:
+        return yaml_reason
     return _core_reasons(_status_spec(pipeline_id)).get(when, "") or ""
 
 

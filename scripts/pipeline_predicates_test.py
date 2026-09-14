@@ -74,6 +74,20 @@ class SpecCatalogTest(unittest.TestCase):
         missing = [name for name in _dispatch_when_names("spec") if name not in catalog]
         self.assertEqual(missing, [], f"dispatch when not in catalog: {missing}")
 
+    def test_dispatch_when_in_edge_conditions_or_core(self) -> None:
+        from pipeline_edge_conditions import edge_conditions_map, validate_edge_conditions
+        from pipeline_predicates import core_predicate_names
+
+        conditions = edge_conditions_map("spec")
+        core = core_predicate_names("spec")
+        missing = [
+            name
+            for name in _dispatch_when_names("spec")
+            if name not in conditions and name not in core
+        ]
+        self.assertEqual(missing, [])
+        self.assertEqual(validate_edge_conditions("spec", load_pack("spec")["dispatch"]), [])
+
     def test_domain_names_match_predicates(self) -> None:
         domain = load_pack_module("spec", "predicates")
         self.assertIsNotNone(domain)

@@ -56,11 +56,13 @@ edges:
     from: spec-orchestrator
     to: find-context
     kind: main
+    condition: not_has_context
   - id: e-orch-ar
     from: spec-orchestrator
     to: analyze-routing
     kind: branch
     label: routing-state missing/stale
+    condition: routing_state_needs_refresh
   - id: e-fc-wf
     from: find-context
     to: write-feature
@@ -84,6 +86,7 @@ edges:
     to: resolve-gaps
     kind: branch
     label: gaps open
+    condition: open_gaps
   - id: e-cf-rc
     from: check-feature
     to: resolve-challenges
@@ -99,6 +102,7 @@ edges:
     to: challenge-feature
     kind: branch
     label: no CHALLENGES yet
+    condition: no_challenges_file
   - id: e-cf-ar
     from: check-feature
     to: analyze-routing
@@ -232,3 +236,4 @@ edges:
     to: done
     kind: main
     label: PASS
+    condition: alignment_pass

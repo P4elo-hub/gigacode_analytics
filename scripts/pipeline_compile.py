@@ -206,6 +206,9 @@ def validate_source(data: dict) -> list[str]:
             from pipeline_predicates import validate_catalog
 
             errors.extend(validate_catalog(pipe_id, dispatch if isinstance(dispatch, dict) else None))
+        from pipeline_edge_conditions import validate_edge_conditions
+
+        errors.extend(validate_edge_conditions(pipe_id, dispatch if isinstance(dispatch, dict) else None))
     return errors
 
 
@@ -497,7 +500,7 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true")
     group.add_argument("--apply", action="store_true")
-    group.add_argument("--catalog", action="store_true", help="JSON palette: agents, skills, steps, predicates")
+    group.add_argument("--catalog", action="store_true", help="JSON palette: agents, skills, steps, predicates, routing_conditions")
     group.add_argument("--from-json", metavar="FILE", help="Write pack YAML from JSON, then --apply")
     group.add_argument("--init-pack", metavar="ID", help="Scaffold pipelines/<id>/ from a template")
     group.add_argument("--export-json", metavar="ID", help="Print pack JSON for an existing pack")

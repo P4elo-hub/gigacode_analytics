@@ -36,7 +36,9 @@ Predicate catalog (`when:` names): [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.
 Registry: [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
 
 `--check` rejects unknown `when:`, empty reasons,
-`DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`, and registry steps not in the graph.
+`DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`, registry steps not in the graph,
+and (Phase 13) dispatch `when:` missing from `edge_conditions` **and** core, plus
+`dispatch.rules` drift vs `edge_conditions.dispatch`.
 `--from-json` validates the payload against `pipeline_pack_schema.json` before YAML write.
 
 ## Routing-state (Phase 12)
@@ -72,20 +74,38 @@ reference.
 5. **Live dispatch** overlay always-on (`collector_mode: routing_state`).
    `analyze-routing` **в** spec `graph.yaml`. JSON freshness = P5 + extra_advice block.
 
+## Phase 13 (edge_conditions authoring)
+
+1. Label graph edges / PlantUML → `pipeline_routing_codegen.py --apply`.
+2. Review `routing_conditions.yaml` `edge_conditions` (formulas) and `status_fields` (analyzer).
+3. `--apply` compile then `--check`. `when:` must have `edge_conditions` or core.
+4. Spec 24 golden `expect` unchanged. Interpreter must match former Python predicates.
+5. `--catalog` `catalog_version` 2 includes `routing_conditions.<id>`.
+
+```bash
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec --apply
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+```
+
 ## Authoring (Phase 8)
 
 New pipeline = pack + agents/skills. Not a fork of the engine.
 
-1. `--init-pack <id>` (templates: `minimal`, `orchestrator-only`, `full-dispatch`) or `--from-json`.
+1. `--init-pack <id>` (templates: `minimal`, `orchestrator-only`, `full-dispatch`, `routing-state`) or `--from-json`.
 2. Copy `scripts/fixtures/pack_authoring/orchestrator-agent.md` → `*/agents/<id>-orchestrator.md`.
 3. `--apply` → `--check` (новый pack: apply первым, иначе `--check` = drift).
 4. Smoke after apply: schema contains `<id>`; `pipeline_delegate.py … --pipeline <id>`.
 5. Dispatch optional: empty rules = calibration-style (`orchestrator_only`).
-   Full dispatch = spec-style; add `predicates.py` for domain `when:` and golden under
-   `fixtures/dispatch_golden/<id>/` (required — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md)).
+   Full dispatch = spec-style; `edge_conditions` (Phase 13) for domain `when:`;
+   golden under `fixtures/dispatch_golden/<id>/` (required — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md)).
 
-`--catalog` is the versioned UI palette (`catalog_version`, `pack_schema`, steps,
-predicates core vs `by_pipeline`, `runtime.<id>.loop`). Additive keys only.
+`--catalog` is the versioned UI palette (`catalog_version` **2**, `pack_schema`, steps,
+predicates core vs `by_pipeline`, `routing_conditions.<id>.fields` / `.edge_conditions`,
+`runtime.<id>.loop`). Additive keys only.
 `--from-json` = schema (shape) then compile (`when:` / agents). Schema runtime is
 a subset walker; `pipeline_pack_schema.json` is the UI `$schema`. Agent files and
 dispatch golden for a new pack are manual. Coverage gate is Phase 9 done. See
@@ -108,6 +128,7 @@ PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of s
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py     # full suite (smoke has scoped check only)
 PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py      # pack-first validate + orchestrator loop
 PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py         # schema, catalog, --from-json, --init-pack
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
 PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
 ```

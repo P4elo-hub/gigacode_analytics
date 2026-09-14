@@ -251,14 +251,16 @@
           "id": "e-start",
           "from": "spec-orchestrator",
           "to": "find-context",
-          "kind": "main"
+          "kind": "main",
+          "condition": "not_has_context"
         },
         {
           "id": "e-orch-ar",
           "from": "spec-orchestrator",
           "to": "analyze-routing",
           "kind": "branch",
-          "label": "routing-state missing/stale"
+          "label": "routing-state missing/stale",
+          "condition": "routing_state_needs_refresh"
         },
         {
           "id": "e-fc-wf",
@@ -291,7 +293,8 @@
           "from": "check-feature",
           "to": "resolve-gaps",
           "kind": "branch",
-          "label": "gaps open"
+          "label": "gaps open",
+          "condition": "open_gaps"
         },
         {
           "id": "e-cf-rc",
@@ -312,7 +315,8 @@
           "from": "check-feature",
           "to": "challenge-feature",
           "kind": "branch",
-          "label": "no CHALLENGES yet"
+          "label": "no CHALLENGES yet",
+          "condition": "no_challenges_file"
         },
         {
           "id": "e-cf-ar",
@@ -499,7 +503,8 @@
           "from": "check-feature-code",
           "to": "done",
           "kind": "main",
-          "label": "PASS"
+          "label": "PASS",
+          "condition": "alignment_pass"
         }
       ]
     }

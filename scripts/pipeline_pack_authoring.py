@@ -11,7 +11,7 @@ from pipeline_pack import packs_dir
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "pipeline_pack_schema.json"
 PACK_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-TEMPLATES = ("minimal", "orchestrator-only", "full-dispatch")
+TEMPLATES = ("minimal", "orchestrator-only", "full-dispatch", "routing-state")
 
 
 def load_pack_schema() -> dict:
@@ -117,6 +117,8 @@ def build_template_payload(pipeline_id: str, template: str = "minimal") -> dict[
         raise ValueError(f"pack id must be kebab-case, got {pipeline_id!r}")
     if template == "full-dispatch":
         return _template_full_dispatch(pipeline_id)
+    if template == "routing-state":
+        return _template_routing_state(pipeline_id)
     if template == "orchestrator-only":
         return _template_orchestrator_only(pipeline_id)
     return _template_minimal(pipeline_id)
@@ -128,13 +130,19 @@ def init_pack(pipeline_id: str, template: str = "minimal", root: Path | None = N
         raise FileExistsError(f"pack already exists: {folder}")
     from pipeline_pack import apply_pack_json
 
-    return apply_pack_json(build_template_payload(pipeline_id, template), root)
+    payload = build_template_payload(pipeline_id, template)
+    written = apply_pack_json(payload, root)
+    if template == "routing-state":
+        collectors = folder / "collectors.py"
+        collectors.write_text(_ROUTING_STATE_COLLECTORS, encoding="utf-8")
+        written.append(collectors)
+    return written
 
 
 def init_pack_golden_hints(pipeline_id: str, template: str) -> list[str]:
     """Phase 9: remind authors to add dispatch golden (or a no-dispatch waiver)."""
     golden = f"scripts/fixtures/dispatch_golden/{pipeline_id}"
-    if template == "full-dispatch":
+    if template in {"full-dispatch", "routing-state"}:
         return [
             f"then: add {golden}/cases.json (+ COVERAGE.md) — "
             "dispatch golden is required (see scripts/PIPELINE-GOLDEN.md)",
@@ -238,3 +246,148 @@ def _template_full_dispatch(pipeline_id: str) -> dict:
         ],
     }
     return payload
+
+
+_ROUTING_STATE_COLLECTORS = '''"""Overlay collector for a routing-state pack (Phase 13 template)."""
+
+from pipeline_routing_state import overlay_collector
+
+COLLECTORS = {"routing_state": overlay_collector}
+'''
+
+
+def _routing_conditions_stub(pipeline_id: str, first_step: str = "first-step") -> dict:
+    return {
+        "schema_version": 1,
+        "status_fields": {},
+        "engine_fields": [
+            "has_routing_state",
+            "routing_state_invalid",
+            "routing_state_error",
+            "stale",
+        ],
+        "edge_conditions": {
+            "routing_state_needs_refresh": {
+                "expr": {
+                    "any": [
+                        {"field": "has_routing_state", "op": "falsy"},
+                        {"field": "stale", "op": "contains", "value": "routing_state"},
+                    ]
+                },
+                "dispatch": {"priority": 5, "next": "analyze-routing"},
+                "label": "routing-state missing/stale",
+                "reason": "нет routing-state.json — нужен analyze-routing",
+            },
+            "not_has_main": {
+                "core": True,
+                "expr": {"field": "has_main", "op": "falsy"},
+                "dispatch": {"priority": 10, "next": first_step},
+                "label": "no main",
+                "reason": "Нет артефакта main",
+            },
+        },
+        "stale_vs": ["spec"],
+        "validate_ids": ["routing-state-missing", "routing-state-stale"],
+        "when_to_run_analyzer": ["routing-state missing"],
+        "overlay": {"live_default": "routing_state"},
+    }
+
+
+def ensure_routing_state_authoring(payload: dict) -> dict:
+    """If collector_mode is routing_state, add analyze-routing + routing_conditions stub."""
+    data = dict(payload)
+    status = data.get("status") if isinstance(data.get("status"), dict) else {}
+    if str(status.get("collector_mode") or "") != "routing_state":
+        return data
+    graph = dict(data.get("graph") or {})
+    nodes = [dict(node) if isinstance(node, dict) else node for node in (graph.get("nodes") or [])]
+    ids = {node.get("id") for node in nodes if isinstance(node, dict)}
+    orch = graph.get("orchestrator")
+    if "analyze-routing" not in ids:
+        nodes.append(
+            {
+                "id": "analyze-routing",
+                "label": "analyze-routing",
+                "subagent": "routing-analyzer",
+                "kind": "step",
+            }
+        )
+        graph["nodes"] = nodes
+        edges = [dict(edge) if isinstance(edge, dict) else edge for edge in (graph.get("edges") or [])]
+        if orch:
+            edges.append(
+                {
+                    "id": "e-orch-ar",
+                    "from": orch,
+                    "to": "analyze-routing",
+                    "kind": "branch",
+                    "label": "routing-state missing/stale",
+                    "condition": "routing_state_needs_refresh",
+                }
+            )
+            graph["edges"] = edges
+        data["graph"] = graph
+    artifacts = dict(status.get("artifacts") or {})
+    if "routing_state" not in artifacts:
+        artifacts["routing_state"] = {
+            "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+            "exists_as": "has_routing_state",
+            "missing_reason": "нет routing-state.json — нужен analyze-routing",
+        }
+        status["artifacts"] = artifacts
+        data["status"] = status
+    if not data.get("routing_conditions"):
+        first = "first-step"
+        for node in nodes:
+            if isinstance(node, dict) and node.get("kind") == "step" and node.get("id") not in {
+                "analyze-routing",
+            }:
+                first = str(node.get("id") or first)
+                break
+        data["routing_conditions"] = _routing_conditions_stub(str(data.get("id") or ""), first)
+    return data
+
+
+def _template_routing_state(pipeline_id: str) -> dict:
+    payload = _template_full_dispatch(pipeline_id)
+    payload["status"]["collector_mode"] = "routing_state"
+    payload["status"]["collectors"] = [{"id": "routing_state", "source": "routing_state"}]
+    payload["status"]["artifacts"]["routing_state"] = {
+        "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+        "exists_as": "has_routing_state",
+        "missing_reason": "нет routing-state.json — нужен analyze-routing",
+    }
+    orch = payload["graph"]["orchestrator"]
+    payload["graph"]["nodes"].insert(
+        1,
+        {
+            "id": "analyze-routing",
+            "label": "analyze-routing",
+            "subagent": "routing-analyzer",
+            "kind": "step",
+        },
+    )
+    payload["graph"]["edges"].append(
+        {
+            "id": "e-orch-ar",
+            "from": orch,
+            "to": "analyze-routing",
+            "kind": "branch",
+            "label": "routing-state missing/stale",
+            "condition": "routing_state_needs_refresh",
+        }
+    )
+    payload["registry"]["step_to_subagent"] = {"analyze-routing": "routing-analyzer"}
+    payload["registry"]["gated_subagents"] = ["routing-analyzer"]
+    payload["registry"]["restartable_steps"] = ["analyze-routing", "first-step"]
+    payload["routing_conditions"] = _routing_conditions_stub(pipeline_id)
+    payload["dispatch"]["rules"] = [
+        {"priority": 5, "when": "routing_state_needs_refresh", "next": "analyze-routing"},
+        {"priority": 10, "when": "not_has_main", "next": "first-step"},
+    ]
+    payload["dispatch"]["fallback"] = {
+        "next": "analyze-routing",
+        "reason": "routing-state не готов",
+    }
+    return payload
+

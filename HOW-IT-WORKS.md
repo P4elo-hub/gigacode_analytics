@@ -369,7 +369,7 @@ pipeline_dispatch / pipeline_delegate / pipeline_validate
 | **Runtime** | `pipeline_delegate.py`, hooks, `append_run_log.py`, `pipeline_validate.py` | цикл оркестратора; pack `validate.py` = `extra_advice` |
 | **Topology** | `pipelines/<id>/` → `pipeline_compile.py` | граф, registry, status, predicates |
 | **Registry** | `pipelines/<id>/registry.yaml` | step → subagent активного `pipeline_id`; `registry_for(id)` |
-| **Predicates** | `pipeline_predicates.py` + pack `predicates.py` | `when:` names: core from status.yaml + domain |
+| **Predicates** | `pipeline_predicates.py` + `routing_conditions.yaml` `edge_conditions` (interpreter) + pack `predicates.py` (reasons) | `when:` names: core from status.yaml + YAML expr |
 
 `--pipeline spec` — полный declarative dispatch (эталон, 24+ golden).
 Live overlay: `routing-state.json` (Phase 12). Node `analyze-routing` в
@@ -394,14 +394,18 @@ JSON, роутер читает overlay. Pack оставлен как reference.
 Dispatch **не обязателен**: пустые `rules` = как calibration (`orchestrator_only`);
 полный router = как spec (`when:` из catalog). Чеклист:
 [scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md).
-Schema: `scripts/pipeline_pack_schema.json`. Catalog: `--catalog`.
+Schema: `scripts/pipeline_pack_schema.json`. Catalog: `--catalog` (`catalog_version` 2,
+`routing_conditions` field/edge palette).
 Golden gate: каждый pack в `pipelines/` покрыт
 `scripts/fixtures/dispatch_golden/<id>/` (`cases.json` или `WAIVER.md` для
 no-dispatch) — [scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md).
 
-Новый `when:` — функция в `pipelines/<id>/predicates.py` и правило в
-`dispatch.yaml`. Router не правится. Typo в `when:` ловит
-`pipeline_compile.py --check`.
+**Authoring loop (Phase 13):** фронт / PlantUML рисует граф и ставит label на стрелке
+→ `scripts/pipeline_routing_codegen.py` пишет `routing_conditions.yaml` (`edge_conditions.expr`
++ `dispatch`) → review YAML → `pipeline_compile.py --apply` / `--check`. Runtime router
+читает YAML через интерпретатор, без LLM. Новый `when:` — `edge_conditions`, не
+`predicates.py`. Чеклист:
+[scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md) (Phase 13).
 
 Подробнее: [scripts/PIPELINE-ROUTER.md](scripts/PIPELINE-ROUTER.md),
 [scripts/PIPELINE-PREDICATES.md](scripts/PIPELINE-PREDICATES.md),

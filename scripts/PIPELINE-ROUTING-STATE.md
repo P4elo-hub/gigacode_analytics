@@ -72,7 +72,8 @@ Not used by spec dispatch: `open_questions`, `spec_lines`, `context_lines`,
 other `challenges.*` counts (display). Engine still computes **mtime** `stale[]`
 and `alignment_stale` from `status.yaml` after the overlay (`ENGINE_RECOMPUTED_FIELDS`).
 
-Full mapping: `pipelines/spec/routing_conditions.yaml` (SSOT for the skill).
+Full mapping: `pipelines/spec/routing_conditions.yaml` (`status_fields` SSOT for the skill;
+`edge_conditions` SSOT for `when:` bodies — Phase 13).
 Parity / replay: [PIPELINE-PARITY.md](PIPELINE-PARITY.md).
 
 ## Stale / missing
@@ -148,7 +149,17 @@ python3 scripts/feature_status_test.py
 Replay fixtures are collector-equivalent snapshots (no LLM):
 `scripts/routing_state_baseline.py` via `routing_state_replay_from_collectors.py`.
 
-Phase 13: `routing_conditions.yaml` → frontend edge-condition codegen.
+Phase 13: `routing_conditions.yaml` is the SSOT for **two** things:
+
+| Section | Who reads it | Purpose |
+|---------|--------------|---------|
+| `status_fields` | analyze-routing skill, `--catalog` field palette, baseline | Analyzer JSON field names + instructions |
+| `edge_conditions` | interpreter + codegen + `--catalog` edge editor | `when:` formulas (`expr`) + `dispatch` (priority / next / outcome) |
+
+Runtime choice **A**: `scripts/pipeline_edge_conditions.evaluate_edge_condition`. Spec
+`predicates.py` does not contain domain formulas. Router stays deterministic (no LLM).
+Authoring: PlantUML / UI label → `pipeline_routing_codegen.py` → YAML → `pipeline_compile.py --apply`.
+See [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md) Phase 13.
 
 ## Tests
 

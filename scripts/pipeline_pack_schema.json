@@ -49,7 +49,16 @@
               "id": { "type": "string" },
               "from": { "type": "string", "minLength": 1 },
               "to": { "type": "string", "minLength": 1 },
-              "kind": { "type": "string" }
+              "kind": { "type": "string" },
+              "label": { "type": "string" },
+              "condition": {
+                "type": "string",
+                "description": "edge_conditions key (when: id). PlantUML label maps to this id or auto-slug."
+              },
+              "condition_label": {
+                "type": "string",
+                "description": "Human text from PlantUML / UI; codegen may slug this into condition."
+              }
             }
           }
         }
@@ -84,6 +93,29 @@
         "constants": { "type": "object" },
         "display": { "type": "object" },
         "core_predicates": { "type": "object" }
+      }
+    },
+    "routing_conditions": {
+      "type": "object",
+      "description": "Optional. Phase 13 SSOT: analyzer status_fields + edge_conditions (expr + dispatch). Packs without routing-state omit this block.",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "type": "integer" },
+        "status_fields": { "type": "object" },
+        "edge_conditions": { "type": "object" },
+        "stale_vs": { "type": "array", "items": { "type": "string" } },
+        "validate_ids": { "type": "array", "items": { "type": "string" } },
+        "overlay": { "type": "object" },
+        "when_to_run_analyzer": { "type": "array" },
+        "engine_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Status attrs set by the engine, not the analyzer. Expr may reference them."
+        },
+        "artifact": { "type": "object" },
+        "analyzer": { "type": "object" },
+        "not_in_dispatch": { "type": "array" },
+        "router_owned": { "type": "array" }
       }
     },
     "registry": {
