@@ -7,6 +7,19 @@ Branches are declared in `pipelines/spec/dispatch.yaml` and evaluated by
 Golden fixtures are the spec routing contract. Calibration has no dispatch rules
 (`orchestrator_only`).
 
+Phase 12: live dispatch overlays `routing_state` (option B — key on each case,
+injected after `touch_after` / run-log, JSON mtime newest so P5
+`routing_state_needs_refresh` is false). `expect` values are unchanged.
+Domain parse for the etalon is `scripts/routing_state_baseline.py`
+(`routing_state_replay_from_collectors.py --golden`).
+
+`needs_check_feature` is stored in JSON (analyzer / baseline), including
+run-log cases `03`, `04`, `16`, `18`. Engine does not recompute it on the hot
+path. `stale` / `alignment_stale` are engine mtime after overlay.
+
+P5 `routing_state_needs_refresh` → `analyze-routing` is covered by routing-poc
+golden (`02-missing-json`, `03-stale-json`), not by renaming the 24 spec ids.
+
 ## Invariant (after P10–P30, before P40+)
 
 | Invariant | Fixtures | Effect |
@@ -20,6 +33,7 @@ Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — be
 
 | P | when | next | outcome | Fixture |
 |---|------|------|---------|---------|
+| 5 | `routing_state_needs_refresh` | analyze-routing | | routing-poc `02`/`03` (spec 24 cases inject fresh JSON) |
 | 10 | `alignment_limit_exhausted` | — | stopped | `15-alignment-limit-stopped` |
 | 20 | `not_has_context` | find-context | | `01-no-context` |
 | 30 | `not_has_spec` | write-feature | | `02-no-spec` |
@@ -54,4 +68,5 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 24 cases + calibration 1 orchestrator_only)
 and **golden-coverage:packs** (every `pipelines/<id>/` has a golden folder or waiver).
 
-Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`.
+Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`
+(imports `routing_state_baseline`).

@@ -193,6 +193,12 @@
           "kind": "step"
         },
         {
+          "id": "analyze-routing",
+          "label": "analyze-routing",
+          "subagent": "routing-analyzer",
+          "kind": "step"
+        },
+        {
           "id": "check-feature",
           "label": "check-feature",
           "subagent": "spec-reviewer",
@@ -248,16 +254,37 @@
           "kind": "main"
         },
         {
+          "id": "e-orch-ar",
+          "from": "spec-orchestrator",
+          "to": "analyze-routing",
+          "kind": "branch",
+          "label": "routing-state missing/stale"
+        },
+        {
           "id": "e-fc-wf",
           "from": "find-context",
           "to": "write-feature",
           "kind": "main"
         },
         {
+          "id": "e-fc-ar",
+          "from": "find-context",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after CONTEXT"
+        },
+        {
           "id": "e-wf-cf",
           "from": "write-feature",
           "to": "check-feature",
           "kind": "main"
+        },
+        {
+          "id": "e-wf-ar",
+          "from": "write-feature",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after SPEC"
         },
         {
           "id": "e-cf-rg",
@@ -288,6 +315,13 @@
           "label": "no CHALLENGES yet"
         },
         {
+          "id": "e-cf-ar",
+          "from": "check-feature",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after mutate"
+        },
+        {
           "id": "e-rg-cf",
           "from": "resolve-gaps",
           "to": "check-feature",
@@ -309,6 +343,13 @@
           "label": "alignment after gaps"
         },
         {
+          "id": "e-rg-ar",
+          "from": "resolve-gaps",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after mutate"
+        },
+        {
           "id": "e-cf-cc",
           "from": "check-feature",
           "to": "check-feature-code",
@@ -322,10 +363,24 @@
           "kind": "main"
         },
         {
+          "id": "e-ch-ar",
+          "from": "challenge-feature",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after mutate"
+        },
+        {
           "id": "e-rc-cf",
           "from": "resolve-challenges",
           "to": "check-feature",
           "kind": "loop"
+        },
+        {
+          "id": "e-rc-ar",
+          "from": "resolve-challenges",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after mutate"
         },
         {
           "id": "e-cc-cf",
@@ -349,6 +404,13 @@
           "label": "alignment gaps"
         },
         {
+          "id": "e-cc-ar",
+          "from": "check-feature-code",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after mutate"
+        },
+        {
           "id": "e-ra-cc",
           "from": "resolve-code-alignment",
           "to": "check-feature-code",
@@ -361,6 +423,76 @@
           "to": "check-feature",
           "kind": "loop",
           "label": "SPEC edited per alignment"
+        },
+        {
+          "id": "e-ra-ar",
+          "from": "resolve-code-alignment",
+          "to": "analyze-routing",
+          "kind": "loop",
+          "label": "refresh after mutate"
+        },
+        {
+          "id": "e-ar-fc",
+          "from": "analyze-routing",
+          "to": "find-context",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-wf",
+          "from": "analyze-routing",
+          "to": "write-feature",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-cf",
+          "from": "analyze-routing",
+          "to": "check-feature",
+          "kind": "main",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-rg",
+          "from": "analyze-routing",
+          "to": "resolve-gaps",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-ch",
+          "from": "analyze-routing",
+          "to": "challenge-feature",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-rc",
+          "from": "analyze-routing",
+          "to": "resolve-challenges",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-cc",
+          "from": "analyze-routing",
+          "to": "check-feature-code",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-ra",
+          "from": "analyze-routing",
+          "to": "resolve-code-alignment",
+          "kind": "branch",
+          "label": "next by dispatch"
+        },
+        {
+          "id": "e-ar-done",
+          "from": "analyze-routing",
+          "to": "done",
+          "kind": "branch",
+          "label": "ready"
         },
         {
           "id": "e-cc-done",

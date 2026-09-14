@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 10–11: routing-state schema, overlay collector, spec dual-run validate ids."""
+"""Phase 12: routing-state schema, overlay always-on for spec, validate ids."""
 
 from __future__ import annotations
 
@@ -28,15 +28,6 @@ from pipeline_routing_state import (  # noqa: E402
     overlay_collector,
     routing_state_path,
     validate_payload,
-)
-
-SPEC_COLLECTORS = (
-    "decisions_table",
-    "spec_gaps",
-    "context_questions",
-    "challenges_table",
-    "alignment_frontmatter",
-    "needs_check_feature",
 )
 
 
@@ -93,19 +84,20 @@ class SchemaOverlayTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-class SpecCollectorsStillPresentTest(unittest.TestCase):
-    def test_spec_collectors_still_registered(self) -> None:
+class SpecCollectorsThinTest(unittest.TestCase):
+    def test_spec_collectors_overlay_only(self) -> None:
         collectors = load_pack_module("spec", "collectors")
         self.assertIsNotNone(collectors)
-        keys = set(collectors.COLLECTORS)
-        self.assertTrue(set(SPEC_COLLECTORS) <= keys)
-        self.assertIn("routing_state", keys)
+        self.assertEqual(set(collectors.COLLECTORS), {"routing_state"})
+        self.assertIn("needs-check-feature", collectors.INVARIANTS)
         graph = (ROOT / "pipelines" / "spec" / "graph.yaml").read_text(encoding="utf-8")
-        self.assertNotIn("\n  - id: analyze-routing\n", graph)
+        self.assertIn("\n  - id: analyze-routing\n", graph)
+        status = (ROOT / "pipelines" / "spec" / "status.yaml").read_text(encoding="utf-8")
+        self.assertIn("collector_mode: routing_state", status)
 
 
-class SpecOverlayGatingTest(unittest.TestCase):
-    def test_live_skips_stale_json_mode_off_uses_collectors(self) -> None:
+class SpecOverlayAlwaysOnTest(unittest.TestCase):
+    def test_live_overlay_uses_json(self) -> None:
         from feature_status import FeatureStatus
         from pipeline_routing_state import overlay_context
         from pipeline_status import populate_status
@@ -122,24 +114,15 @@ class SpecOverlayGatingTest(unittest.TestCase):
                 json.dumps(example_payload(slug, open_gaps=["GAP-JSON"])),
                 encoding="utf-8",
             )
-            older = time.time() - 120
-            os.utime(path, (older, older))
-            status = FeatureStatus(slug=slug)
-            with overlay_context(mode="off"):
-                populate_status(status, tmp, slug, "spec")
-            self.assertEqual(status.open_gaps, ["GAP-SPEC"])
-            status_live = FeatureStatus(slug=slug)
-            populate_status(status_live, tmp, slug, "spec")
-            self.assertEqual(status_live.open_gaps, ["GAP-SPEC"])
             newer = time.time() + 60
             os.utime(path, (newer, newer))
-            status_fresh = FeatureStatus(slug=slug)
-            populate_status(status_fresh, tmp, slug, "spec")
-            self.assertEqual(status_fresh.open_gaps, ["GAP-SPEC"])
-            status_b = FeatureStatus(slug=slug)
-            with overlay_context(mode="on", replay=path):
-                populate_status(status_b, tmp, slug, "spec")
-            self.assertEqual(status_b.open_gaps, ["GAP-JSON"])
+            status_live = FeatureStatus(slug=slug)
+            populate_status(status_live, tmp, slug, "spec")
+            self.assertEqual(status_live.open_gaps, ["GAP-JSON"])
+            status_off = FeatureStatus(slug=slug)
+            with overlay_context(mode="off"):
+                populate_status(status_off, tmp, slug, "spec")
+            self.assertEqual(status_off.open_gaps, [])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -150,11 +133,11 @@ class SpecValidateRoutingStateTest(unittest.TestCase):
         assert extra is not None
         self.extra = extra
 
-    def _advice_ids(self, root: Path, slug: str) -> set[str]:
+    def _advice(self, root: Path, slug: str) -> list:
         report = SimpleNamespace(advice=[], next_step="")
 
         def add(_report, *, id, severity, title, detail, fix):
-            report.advice.append(id)
+            report.advice.append((id, severity))
 
         status = SimpleNamespace(
             decisions_pending_apply=0,
@@ -162,16 +145,19 @@ class SpecValidateRoutingStateTest(unittest.TestCase):
             has_challenges=False,
             has_alignment=False,
             has_gaps_map=False,
+            needs_check_feature=False,
+            needs_check_feature_reason="",
             pipeline_id="spec",
         )
         self.extra.extra_advice(root, slug, status, {"orchestrator_mode": "delegate"}, report, add)
-        return set(report.advice)
+        return report.advice
 
-    def test_missing_and_stale_ids(self) -> None:
+    def test_missing_and_stale_ids_are_block(self) -> None:
         tmp = Path(tempfile.mkdtemp(prefix="rs-spec-val-"))
         slug = "demo"
         try:
-            self.assertIn("routing-state-missing", self._advice_ids(tmp, slug))
+            missing = self._advice(tmp, slug)
+            self.assertIn(("routing-state-missing", "block"), missing)
             path = routing_state_path(tmp, slug)
             path.parent.mkdir(parents=True)
             path.write_text(json.dumps(example_payload(slug)), encoding="utf-8")
@@ -179,7 +165,8 @@ class SpecValidateRoutingStateTest(unittest.TestCase):
             spec.write_text("# spec\n", encoding="utf-8")
             older = time.time() - 120
             os.utime(path, (older, older))
-            self.assertIn("routing-state-stale", self._advice_ids(tmp, slug))
+            stale = self._advice(tmp, slug)
+            self.assertIn(("routing-state-stale", "block"), stale)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

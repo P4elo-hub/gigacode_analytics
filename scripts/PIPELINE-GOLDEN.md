@@ -49,7 +49,8 @@ PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 
 Smoke keeps aggregate `dispatch-golden N/N` and adds `golden-coverage:packs`
 (dynamic `discover_pipeline_ids()`). Phase 10 `routing-poc` is in that aggregate;
-there is **no** extra `dispatch:routing-poc` smoke row (optional, not Phase 11).
+there is **no** extra `dispatch:routing-poc` smoke row. Optional:
+`dispatch:spec-with-routing-state` (Phase 12 overlay).
 
 ## New pack
 

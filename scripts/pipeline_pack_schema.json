@@ -71,6 +71,10 @@
       "additionalProperties": true,
       "properties": {
         "task_kind": { "type": "string" },
+        "collector_mode": {
+          "type": "string",
+          "description": "routing_state = overlay JSON is the live domain-field source (Phase 12 spec)."
+        },
         "artifacts": { "type": "object" },
         "collectors": { "type": "array" },
         "stale": { "type": "array" },

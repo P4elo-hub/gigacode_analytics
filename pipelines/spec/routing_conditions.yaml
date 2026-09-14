@@ -1,6 +1,6 @@
-# Spec routing-state mapping (shadow). Not loaded by compile or dispatch.
-# Phase 11 SSOT for analyze-routing + routing_state_parity. Cutover: Phase 12.
-# Live POC graph: pipelines/routing-poc/. See scripts/PIPELINE-ROUTING-STATE.md.
+# Spec routing-state mapping. Not loaded by compile or dispatch.
+# Phase 12 SSOT for analyze-routing + routing_state_baseline (CI etalon).
+# Live spec graph includes analyze-routing. See scripts/PIPELINE-ROUTING-STATE.md.
 schema_version: 1
 artifact:
   id: routing_state
@@ -9,7 +9,7 @@ artifact:
 analyzer:
   step: analyze-routing
   subagent: routing-analyzer
-  graph: not in spec graph.yaml — POC pack only until Phase 12
+  graph: pipelines/spec/graph.yaml (also routing-poc)
 status_fields:
   has_context:
     type: bool
@@ -255,8 +255,9 @@ validate_ids:
   - routing-state-missing
   - routing-state-stale
 overlay:
-  live_default: collectors
+  live_default: routing_state
   apply_when:
-    - parity B-mode (PIPELINE_ROUTING_STATE_OVERLAY=1 or overlay_context)
-  collector_order: routing_state last so JSON wins over overlay-field collectors
-  freshness: extra_advice routing-state-stale / analyzer refresh — not live dispatch (Phase 12)
+    - collector_mode routing_state (spec pack default — always)
+  collector_order: routing_state is the only overlay-field collector
+  freshness: dispatch P5 routing_state_needs_refresh → analyze-routing
+  needs_check_feature: analyzer writes the bool + reason into JSON (includes run-log); engine does not recompute on the hot path

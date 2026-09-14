@@ -48,8 +48,9 @@
 
 ---
 
-Канон подсчёта — `pipelines/spec/status.yaml` + `pipelines/spec/collectors.py`
-(`pipeline_status.populate_status`).
+Канон подсчёта — `pipelines/spec/routing_conditions.yaml` + overlay
+`routing-state.json` (`pipeline_status.populate_status`, collector_mode
+`routing_state`). Hot path не парсит SPEC/DECISIONS.
 Канон routing — `pipelines/spec/dispatch.yaml` → `pipeline_router.py`.
 
 Полная таблица правил, приоритетов и golden-fixtures:
@@ -99,7 +100,7 @@ stat -f '%m %N' Feature-writing/<slug>/* Feature-context/<slug>.md 2>/dev/null |
 | Сравнение | Вывод |
 |-----------|-------|
 | `SPEC` новее `ALIGNMENT` | «alignment устарел» |
-| `SPEC` новее `CHALLENGES` | «challenges могли устареть» |
+| `SPEC` новее `CHALLENGES` | «challenges старше spec» (информационно; re-challenge не dispatch'ится) |
 | `CONTEXT_DOC` новее `SPEC` | «контекст обновлён после spec — возможно, нужен `/check-feature`» |
 
 mtime — эвристика: правка одной опечатки формально «устаревает» отчёт.

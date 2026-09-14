@@ -15,16 +15,22 @@ from types import SimpleNamespace
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from pipeline_pack import load_pack_module  # noqa: E402
 from pipeline_status import populate_status  # noqa: E402
 from feature_status import build_status_fields, render_markdown  # noqa: E402
-
-_collectors = load_pack_module("spec", "collectors")
-ALIGNMENT_RELATES_RE = _collectors.ALIGNMENT_RELATES_RE
-DECISION_ROW_RE = _collectors.DECISION_ROW_RE
-parse_alignment = _collectors.parse_alignment
+from pipeline_routing_state import routing_state_path  # noqa: E402
+from routing_state_baseline import ALIGNMENT_RELATES_RE, DECISION_ROW_RE, parse_alignment  # noqa: E402
+from routing_state_replay_from_collectors import snapshot  # noqa: E402
 
 GOLDEN = SCRIPTS / "fixtures" / "status_golden" / "spec" / "cases.json"
+
+
+def _write_baseline_json(root: Path, slug: str) -> None:
+    payload = snapshot(root, slug)
+    path = routing_state_path(root, slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    newest = time.time() + 60
+    os.utime(path, (newest, newest))
 
 
 class ParseAlignmentTest(unittest.TestCase):
@@ -106,6 +112,7 @@ class DecisionsParsingTest(unittest.TestCase):
             (ctx_dir / f"{slug}.md").write_text("# Context\n\nVerified.\n", encoding="utf-8")
             (fw / f"{slug}.md").write_text("# spec\n", encoding="utf-8")
             (fw / f"{slug}-decisions.md").write_text(self.SAMPLE, encoding="utf-8")
+            _write_baseline_json(root, slug)
 
             status = build_status_fields(root, slug)
             self.assertEqual(status.decisions_needs_answer, 2)
@@ -158,6 +165,7 @@ class StatusGoldenTest(unittest.TestCase):
             base = time.time() - max(len(order), 1) * 10
             for index, rel in enumerate(order):
                 os.utime(root / rel, (base + index * 10, base + index * 10))
+            _write_baseline_json(root, task_id)
             status = build_status_fields(root, task_id)
             for key, expected in (case.get("expect") or {}).items():
                 actual = getattr(status, key)
@@ -181,7 +189,8 @@ class PipelineRuntimeTest(unittest.TestCase):
         spec = load_status_spec("spec")
         self.assertIn("artifacts", spec)
         self.assertIn("spec", spec["artifacts"])
-        self.assertTrue(any(item.get("id") == "needs_check_feature" for item in spec.get("collectors") or []))
+        self.assertTrue(any(item.get("id") == "routing_state" for item in spec.get("collectors") or []))
+        self.assertEqual(spec.get("collector_mode"), "routing_state")
         self.assertTrue(any(item.get("id") == "needs-check-feature" for item in spec.get("invariants") or []))
         cal = load_status_spec("calibration")
         self.assertIsInstance(cal.get("artifacts"), dict)

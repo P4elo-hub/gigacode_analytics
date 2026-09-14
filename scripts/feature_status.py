@@ -14,13 +14,9 @@ from artifact_paths import (
     resolve_slug,
     workspace_root,
 )
-from pipeline_pack import DEFAULT_PIPELINE_ID, load_pack_module
+from pipeline_pack import DEFAULT_PIPELINE_ID
 from pipeline_status import load_status_spec, populate_status
-
-_spec_collectors = load_pack_module("spec", "collectors")
-if _spec_collectors is None:
-    raise ImportError("pipelines/spec/collectors.py is required for feature-status")
-ChallengeCounts = _spec_collectors.ChallengeCounts
+from routing_state_baseline import ChallengeCounts
 
 
 @dataclass

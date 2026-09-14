@@ -26,5 +26,6 @@ Each case:
 - `files` — paths relative to temp workspace root
 - `touch_after` — `[older, newer]` mtime pairs
 - `run_log` — optional `agent-logs` rows
+- `routing_state` — option B: JSON body injected after mtimes (spec pack)
 - `expect` — `next_step`, `orchestrator_mode`, `ready`, …
 - `pipeline_id` — set from the parent folder name

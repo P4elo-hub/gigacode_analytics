@@ -1,5 +1,7 @@
 # Spec-pack status contract. Engine: pipeline_status.populate_status.
-# Inventory: field → source (artifact exists_as/lines_as, collector id, or stale rule).
+# Phase 12: collector_mode routing_state — overlay is the only source of
+# domain dispatch fields. Engine still sets exists_as / lines_as / stale[] /
+# alignment_stale after overlay.
 #   has_context / context_lines                 artifacts.context
 #   has_spec / spec_lines                       artifacts.spec
 #   has_decisions                               artifacts.decisions
@@ -7,27 +9,15 @@
 #   has_challenges                              artifacts.challenges
 #   has_challenges_map                          artifacts.challenges_map
 #   has_alignment                               artifacts.alignment
-#   has_routing_state                           artifacts.routing_state (Phase 11 dual-run)
-#   decisions_needs_answer                      collectors.decisions_table
-#   decisions_pending_apply                     collectors.decisions_table
-#   decisions_needs_answer_alignment            collectors.decisions_table
-#   decisions_pending_apply_alignment           collectors.decisions_table
-#   open_gaps                                   collectors.spec_gaps
-#   open_questions                              collectors.context_questions
-#   challenges.*                                collectors.challenges_table
-#   verdict / alignment_iteration               collectors.alignment_frontmatter
-#   critical_major_mismatch                     collectors.alignment_frontmatter
+#   has_routing_state                           artifacts.routing_state
+#   overlay fields                              collectors.routing_state (JSON)
 #   stale                                       stale[]
 #   alignment_stale                             alignment_stale
-#   needs_check_feature / _reason               collectors.needs_check_feature
-#                                               (invariants.needs-check-feature)
-#   overlay fields                              collectors.routing_state (last; gated)
+#   needs_check_feature / _reason               JSON (analyzer / baseline etalon)
 # Core when names: not_has_<artifact> / {field}_gt_{n} from core_predicates.counters
-# Live dispatch stays collectors-first. Overlay runs only in parity B-mode
-# (overlay_context / PIPELINE_ROUTING_STATE_OVERLAY=1). JSON freshness is
-# extra_advice, not live populate_status (Phase 12 cutover).
-# analyze-routing is NOT a spec graph node (Phase 12).
+# Live overlay ALWAYS ON. Missing/stale JSON → dispatch analyze-routing (P5).
 task_kind: slug
+collector_mode: routing_state
 constants:
   alignment_max_iterations: 3
   verdict_pass: PASS
@@ -70,20 +60,8 @@ artifacts:
   routing_state:
     path: Feature-writing/{task_id}/{task_id}-routing-state.json
     exists_as: has_routing_state
-    missing_reason: нет routing-state.json — extra_advice, не dispatch
+    missing_reason: нет routing-state.json — нужен analyze-routing
 collectors:
-  - id: decisions_table
-    source: decisions
-  - id: spec_gaps
-    source: spec
-  - id: context_questions
-    source: context
-  - id: challenges_table
-    source: challenges
-  - id: alignment_frontmatter
-    source: alignment
-  - id: needs_check_feature
-    source: spec
   - id: routing_state
     source: routing_state
 stale:
@@ -134,7 +112,7 @@ alignment_stale:
   require_left: true
 invariants:
   - id: needs-check-feature
-    collector: needs_check_feature
+    # overlay field; collectors.INVARIANTS is a thin reader (no file parse)
 orchestrator:
   write_cycle_step: write-feature
   ask_user_when: decisions_needs_answer

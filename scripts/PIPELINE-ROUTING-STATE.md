@@ -1,9 +1,8 @@
-# Pipeline routing-state (Phase 10–11)
+# Pipeline routing-state (Phase 12)
 
 LLM **analyzer** writes a JSON snapshot. Deterministic **router** reads it
-through `populate_status` — no LLM in `build_dispatch`. Spec collectors stay
-until Phase 12. Live spec dispatch is still collectors. Live POC graph:
-`--pipeline routing-poc`. Phase 11 = dual-run parity, not cutover.
+through `populate_status` overlay — no LLM in `build_dispatch`. Spec live
+dispatch is routing-state only. Domain collectors are gone from the hot path.
 
 ```
 delegate → (missing/stale) analyze-routing → routing-analyzer
@@ -12,8 +11,8 @@ delegate → (missing/stale) analyze-routing → routing-analyzer
 ```
 
 Orchestrator runtime loop is unchanged: delegate → action → append_run_log →
-ingest → validate (`--pipeline <id>`). Analyzer is a graph step only on
-`routing-poc` (spec graph has no `analyze-routing` until Phase 12).
+ingest → validate (`--pipeline <id>`). Analyzer is a graph step on **spec**
+and `routing-poc`.
 
 ## Artifact
 
@@ -40,109 +39,118 @@ Schema version `1`. Analyzer fills `fields` only — never `next_step` /
 
 Helper: `scripts/pipeline_routing_state.py` (`load_routing_state`,
 `apply_routing_state_fields`, `overlay_collector`, `spec_overlay_collector`).
-Pack collector id: `routing_state`.
+Pack collector id: `routing_state`. Spec `status.yaml`: `collector_mode: routing_state`.
 
 ## Spec status fields the router uses
 
 Inventory from `pipelines/spec/status.yaml` + `predicates.py` (dispatch `when:`).
 Analyzer populates the same names so overlay is 1:1.
 
-| Field | Source today | Predicates / invariant |
-|-------|----------------|------------------------|
-| `has_context` | artifacts.context | `not_has_context` |
-| `has_spec` | artifacts.spec | `not_has_spec` |
-| `has_alignment` | artifacts.alignment | `alignment_limit_exhausted`, `alignment_missing_or_stale` |
-| `has_challenges` | artifacts.challenges | `open_challenges`, `no_challenges_file`, invariant |
-| `has_gaps_map` | artifacts.gaps_map | invariant `needs-check-feature` |
-| `has_challenges_map` | artifacts.challenges_map | invariant |
-| `has_decisions` | artifacts.decisions | display (not a `when:`) |
-| `decisions_needs_answer` | collectors.decisions_table | `needs_answer_*`, `ask_user` |
-| `decisions_pending_apply` | collectors.decisions_table | `pending_apply_*` |
-| `decisions_needs_answer_alignment` | collectors.decisions_table | `needs_answer_alignment_only` / `_challenges_only` |
-| `decisions_pending_apply_alignment` | collectors.decisions_table | `pending_apply_alignment_only` / `_challenges_only` |
-| `open_gaps` | collectors.spec_gaps | `open_gaps`, `*_with_gaps`, `*_challenges_only` |
-| `challenges.open` | collectors.challenges_table | `open_challenges` |
-| `verdict` | collectors.alignment_frontmatter | `alignment_pass`, `alignment_limit_exhausted` |
-| `alignment_iteration` | collectors.alignment_frontmatter | limit / mismatch / pending-apply alignment |
-| `critical_major_mismatch` | collectors.alignment_frontmatter | `critical_major_mismatch_resolvable` |
-| `alignment_stale` | alignment_stale rule | mismatch / pending-apply alignment |
-| `stale` | stale[] | `alignment_missing_or_stale` (`"alignment" in stale`) |
-| `needs_check_feature` + `_reason` | collectors.needs_check_feature | invariant `needs-check-feature` |
+| Field | Source | Predicates / invariant |
+|-------|--------|------------------------|
+| `has_context` | artifacts.context (exists) + JSON | `not_has_context` |
+| `has_spec` | artifacts.spec + JSON | `not_has_spec` |
+| `has_alignment` | artifacts.alignment + JSON | `alignment_limit_exhausted`, `alignment_missing_or_stale` |
+| `has_challenges` | artifacts.challenges + JSON | `open_challenges`, `no_challenges_file` |
+| `has_gaps_map` | artifacts.gaps_map + JSON | invariant `needs-check-feature` |
+| `has_challenges_map` | artifacts.challenges_map + JSON | invariant |
+| `has_decisions` | artifacts.decisions + JSON | display |
+| `decisions_needs_answer` | JSON | `needs_answer_*`, `ask_user` |
+| `decisions_pending_apply` | JSON | `pending_apply_*` |
+| `decisions_needs_answer_alignment` | JSON | `_alignment_only` / `_challenges_only` |
+| `decisions_pending_apply_alignment` | JSON | `_alignment_only` / `_challenges_only` |
+| `open_gaps` | JSON | `open_gaps`, `*_with_gaps`, `*_challenges_only` |
+| `challenges.open` | JSON | `open_challenges` |
+| `verdict` | JSON | `alignment_pass`, `alignment_limit_exhausted` |
+| `alignment_iteration` | JSON | limit / mismatch / pending-apply alignment |
+| `critical_major_mismatch` | JSON | `critical_major_mismatch_resolvable` |
+| `alignment_stale` | engine after overlay | mismatch / pending-apply alignment |
+| `stale` | engine stale[] | `alignment_missing_or_stale`; `routing_state` id → P5 |
+| `needs_check_feature` + `_reason` | JSON (analyzer / baseline) | invariant `needs-check-feature` |
 
 Not used by spec dispatch: `open_questions`, `spec_lines`, `context_lines`,
 other `challenges.*` counts (display). Engine still computes **mtime** `stale[]`
-and `alignment_stale` from `status.yaml` after the overlay.
+and `alignment_stale` from `status.yaml` after the overlay (`ENGINE_RECOMPUTED_FIELDS`).
 
-Full mapping: `pipelines/spec/routing_conditions.yaml` (shadow, not compiled).
-Parity table: [PIPELINE-PARITY.md](PIPELINE-PARITY.md).
+Full mapping: `pipelines/spec/routing_conditions.yaml` (SSOT for the skill).
+Parity / replay: [PIPELINE-PARITY.md](PIPELINE-PARITY.md).
 
 ## Stale / missing
 
-Treat as “run analyzer” (`when: routing_state_needs_refresh` on the POC pack):
+Treat as “run analyzer” (`when: routing_state_needs_refresh`, spec P5):
 
-1. File missing.
+1. File missing (or overlay load error).
 2. Invalid JSON or `schema_version` ≠ 1, or `fields` sets router-owned keys.
-3. `stale` rule `routing_state` older than `spec` (POC). Spec (Phase 11): older
-   than spec / context / decisions / challenges / alignment / gaps_map /
-   challenges_map (`stale_vs` in `routing_conditions.yaml`).
+3. `stale` rule `routing_state` older than spec / context / decisions /
+   challenges / alignment / gaps_map / challenges_map (`stale_vs`).
 4. After any step that mutates those artifacts (write/check/resolve/challenge/
-   alignment).
+   alignment / find-context).
 
-Validate ids (pack `extra_advice`, **warn**): `routing-state-missing`,
-`routing-state-stale`. Invalid JSON is reported as missing. Spec dispatch does
-**not** route to `analyze-routing` (not in spec graph). POC dispatch does.
+Validate ids (pack `extra_advice`, **block** on spec): `routing-state-missing`,
+`routing-state-stale`. Invalid JSON is reported as missing. Dispatch also
+routes to `analyze-routing`. POC validate stays **warn**.
 
 ## When to run the analyzer
 
 | Trigger | Who |
 |---------|-----|
-| No `ROUTING_STATE` / stale / invalid | POC router → step `analyze-routing` |
-| Orchestrator just finished a mutating step | next delegate; stale rule fires (POC) |
-| Manual `/analyze-routing <slug>` | human / dual-run |
+| No `ROUTING_STATE` / stale / invalid | spec (and POC) router → step `analyze-routing` |
+| Orchestrator just finished a mutating step | next delegate; stale rule fires |
+| Manual `/analyze-routing <slug>` | human |
 
 Do **not** call the analyzer from `pipeline_dispatch.py`.
+
+## needs_check_feature
+
+**Choice:** analyzer writes `needs_check_feature` + `needs_check_feature_reason`
+into JSON (same algorithm as Phase 11 collectors, including run-log). Engine
+does **not** re-parse SPEC on the hot path. Invariant
+`needs-check-feature` is a thin reader of those overlay fields.
+
+Golden cases `03-spec-needs-check`, `04-spec-newer-gaps-map`,
+`16-graph-gate-run-log`, `18-spec-newer-challenges-map` encode the outcome in
+`routing_state` (option B). Run-log is not in `stale_vs` — the JSON must
+already contain the invariant result. See
+[fixtures/dispatch_golden/spec/COVERAGE.md](fixtures/dispatch_golden/spec/COVERAGE.md).
 
 ## Packs
 
 | Pack | Role |
 |------|------|
-| `spec` | Collectors live. Overlay collector `routing_state` last, gated. `routing_conditions.yaml` is SSOT for skill + parity. |
-| `routing-poc` | Graph node `analyze-routing`, overlay collector, dispatch from JSON. |
+| `spec` | Overlay always on. Graph node `analyze-routing`. `routing_conditions.yaml` SSOT. |
+| `routing-poc` | Reference cutover (refresh → overlay `open_gaps`). Unchanged. |
 
-## Phase 11 parity
+## Phase 12 cutover checklist
 
-Dual-run: **A** = `populate_status` collectors (live default). **B** = same
-populate, overlay `fields` from JSON (`spec_overlay_collector`). Overlay-field
-collectors do not win over JSON (`routing_state` is last).
-
-When overlay applies:
-
-- parity B-mode only: `overlay_context(mode="on")` or `PIPELINE_ROUTING_STATE_OVERLAY=1`
-- otherwise collectors (Mode A / live). Golden spec 24 cases unchanged.
-
-JSON missing/stale is `extra_advice` (`routing-state-missing` / `routing-state-stale`),
-not a live overlay trigger. Live overlay-if-fresh would be Phase 12 cutover:
-`needs_check_feature` depends on run-log, which is not in `stale_vs`.
+1. Spec `graph.yaml` has `analyze-routing` + refresh edges after mutating steps
+   and from analyzer to every dispatch target.
+2. `dispatch.yaml` P5 `routing_state_needs_refresh` → `analyze-routing`;
+   existing P10–P140 `when:` → `next` mappings unchanged.
+3. Fallback when JSON is not ready → `analyze-routing`.
+4. `status.yaml` `collector_mode: routing_state`; collectors[] = `routing_state` only.
+5. Golden option B: `cases.json` `routing_state` key; runner writes JSON **after**
+   `touch_after` / run-log and utimes it newest.
+6. `pipeline_compile.py --apply` then `--check`.
 
 ```bash
-PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug>
-PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --json
-PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --strict
-PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> \
-  --replay scripts/fixtures/routing_state_replay/<slug>.json
+PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py --golden
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
+PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
+PYTHONPATH=scripts python3 scripts/routing_state_parity.py pipeline-viewer-smoke --strict
+python3 scripts/feature_status_test.py
 ```
 
-Replay fixtures are collector snapshots (no LLM):
-`scripts/routing_state_replay_from_collectors.py`.
+Replay fixtures are collector-equivalent snapshots (no LLM):
+`scripts/routing_state_baseline.py` via `routing_state_replay_from_collectors.py`.
 
-Phase 12: `analyze-routing` in spec `graph.yaml`, cutover dispatch to overlay,
-drop spec collectors. Phase 13: frontend codegen.
+Phase 13: `routing_conditions.yaml` → frontend edge-condition codegen.
 
 ## Tests
-
-Phase 10 **не** добавляет отдельный smoke-check на `routing-poc` — pack уже в
-`dispatch-golden N/N`, `pipeline-compile` и `golden-coverage:packs`. Phase 11
-smoke still does **not** add `dispatch:routing-poc` (optional).
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
@@ -151,15 +159,14 @@ PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
-PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --strict
 ```
 
 | Gate | Что закрывает |
 |------|----------------|
-| `pipeline_routing_state_test` | schema, overlay, spec gating, validate ids |
+| `pipeline_routing_state_test` | schema, overlay always-on, validate block ids |
 | `routing_state_parity_test` | replay identity / mismatch / fixture slugs |
 | `dispatch_golden` `routing-poc` | missing / stale / open_gaps → next_step |
-| `dispatch_golden` `spec` | эталон 24+ **без изменений** |
+| `dispatch_golden` `spec` | 24 cases; expect unchanged; JSON injected |
 | `golden-coverage:packs` | `routing-poc` не orphan |
-| smoke | aggregate golden + compile; **нет** `dispatch:routing-poc` |
-| `routing_state_parity.py --strict` | A vs B fields + dispatch |
+| smoke | aggregate golden + compile + `dispatch:spec-with-routing-state` |
+| `routing_state_parity.py --strict` | baseline vs overlay on `--replay` |

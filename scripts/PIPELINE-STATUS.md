@@ -2,7 +2,9 @@
 
 `pipelines/<id>/status.yaml` describes **what to read** for a task snapshot.
 `scripts/pipeline_status.py` **executes** that config. Pack-specific parsing
-lives in `pipelines/<id>/collectors.py`, not in the engine.
+lives in `pipelines/<id>/collectors.py`, not in the engine. Spec pack
+(`collector_mode: routing_state`) overlays JSON; domain parse is the analyzer
+skill + `scripts/routing_state_baseline.py` (CI).
 
 ```
 status.yaml → populate_status() → fields for predicates → router → next step
@@ -131,8 +133,9 @@ the engine only uses `setattr` / `getattr`.
 
 Spec reference pack: `pipelines/spec/status.yaml`.
 Calibration may keep an empty `artifacts: {}` pack.
-Routing-state overlay (Phase 11 dual-run): [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md),
-[PIPELINE-PARITY.md](PIPELINE-PARITY.md). Spec collectors stay until Phase 12.
+Routing-state overlay (Phase 12 live spec): [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md),
+[PIPELINE-PARITY.md](PIPELINE-PARITY.md). Spec `collector_mode: routing_state`;
+domain parse is `routing_state_baseline.py` (CI) + skill `analyze-routing`.
 
 ## Tests
 

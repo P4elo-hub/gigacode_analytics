@@ -61,7 +61,9 @@ find-context → write-feature
 ## Маршрутизация и петли
 
 **Next step** считает только `scripts/feature_status.py` (оркестратор вызывает
-`pipeline_delegate.py`, не пересчитывает вручную). Петли resolve → check,
+`pipeline_delegate.py`, не пересчитывает вручную). Если JSON
+`routing-state` нет или устарел — следующий шаг `analyze-routing` (refresh),
+затем снова delegate. Петли resolve → check,
 alignment ↔ code-audit, one-pass challenge — зашиты в скрипт и
 `scripts/pipeline_schema.json`.
 

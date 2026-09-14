@@ -2,7 +2,7 @@
 name: routing-analyzer
 description: >-
   Writes <slug>-routing-state.json for the deterministic router. Does not
-  choose the next pipeline step. Phase 11 spec-domain (graph still routing-poc).
+  choose the next pipeline step. Spec graph node (Phase 12).
 model: inherit
 approvalMode: auto-edit
 tools:

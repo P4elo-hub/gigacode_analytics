@@ -30,6 +30,7 @@ GOLDEN = SCRIPTS / "fixtures" / "predicate_golden" / "spec" / "cases.json"
 SPEC_NODES = {
     "find-context",
     "write-feature",
+    "analyze-routing",
     "check-feature",
     "resolve-gaps",
     "challenge-feature",

@@ -174,14 +174,36 @@ def _load_cases() -> list[dict]:
     return cases
 
 
+def _inject_routing_state(root: Path, case: dict) -> None:
+    """Option B: write case['routing_state'] after files/mtimes so JSON is newest."""
+    payload = case.get("routing_state")
+    if payload is None:
+        return
+    slug = case.get("slug") or SLUG
+    rel = f"Feature-writing/{slug}/{slug}-routing-state.json"
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(payload, (dict, list)):
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    else:
+        path.write_text(str(payload), encoding="utf-8")
+    newest = time.time() + 60
+    os.utime(path, (newest, newest))
+
+
+def _materialize_case(root: Path, case: dict) -> None:
+    _write_tree(root, case.get("files") or {})
+    _apply_post_setup(root, case)
+
+
 def run_case(case: dict) -> tuple[bool, str]:
     case_id = case.get("id") or "unnamed"
     slug = case.get("slug") or SLUG
     expect = case.get("expect") or {}
     tmp = Path(tempfile.mkdtemp(prefix="dispatch-golden-"))
     try:
-        _write_tree(tmp, case.get("files") or {})
-        _apply_post_setup(tmp, case)
+        _materialize_case(tmp, case)
+        _inject_routing_state(tmp, case)
         dispatch = build_dispatch(tmp, slug, case.get("pipeline_id") or DEFAULT_PIPELINE)
         actual = _dispatch_subset(dispatch)
         mismatches: list[str] = []

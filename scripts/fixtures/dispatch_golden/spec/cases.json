@@ -9,7 +9,42 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "контекста"
+    "expect_reason_contains": "контекста",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": false,
+        "has_spec": false,
+        "has_decisions": false,
+        "has_gaps_map": false,
+        "has_challenges": false,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "02-no-spec",
@@ -22,6 +57,41 @@
       "next_subagent": "",
       "orchestrator_mode": "write_feature_cycle",
       "must_continue": true
+    },
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": false,
+        "has_decisions": false,
+        "has_gaps_map": false,
+        "has_challenges": false,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
     }
   },
   {
@@ -37,7 +107,42 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "check-feature"
+    "expect_reason_contains": "check-feature",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": false,
+        "has_challenges": false,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [],
+        "needs_check_feature": true,
+        "needs_check_feature_reason": "spec не проходила check-feature"
+      }
+    }
   },
   {
     "id": "04-spec-newer-gaps-map",
@@ -47,7 +152,10 @@
       "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md", "Feature-writing/dispatch-golden/dispatch-golden.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md",
+        "Feature-writing/dispatch-golden/dispatch-golden.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -56,7 +164,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "GAPS_MAP"
+    "expect_reason_contains": "GAPS_MAP",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": false,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": true,
+        "needs_check_feature_reason": "SPEC новее GAPS_MAP — перепроверка после resolve-gaps"
+      }
+    }
   },
   {
     "id": "05-open-gaps",
@@ -67,8 +212,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | resolved |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -77,7 +228,46 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "незакрытые факты"
+    "expect_reason_contains": "незакрытые факты",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [
+          "GAP-GOLDEN-01"
+        ],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "06-needs-answer-gaps",
@@ -89,8 +279,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | Q-01 | gap topic | A) one | pick A | needs-answer | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -99,7 +295,46 @@
       "orchestrator_mode": "ask_user",
       "must_continue": false
     },
-    "expect_reason_contains": "needs-answer"
+    "expect_reason_contains": "needs-answer",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 1,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [
+          "GAP-GOLDEN-01"
+        ],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "07-pending-apply-gaps",
@@ -111,8 +346,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | Q-01 | gap topic | A) one | pick A | pending-apply | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -121,7 +362,46 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "pending-apply"
+    "expect_reason_contains": "pending-apply",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 1,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [
+          "GAP-GOLDEN-01"
+        ],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "08-needs-answer-challenges",
@@ -133,8 +413,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | Q-01 | ch topic | A) one | pick A | needs-answer | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -143,7 +429,44 @@
       "orchestrator_mode": "ask_user",
       "must_continue": false
     },
-    "expect_reason_contains": "needs-answer"
+    "expect_reason_contains": "needs-answer",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 1,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "09-open-challenges",
@@ -154,8 +477,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | open |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -164,7 +493,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "corner cases"
+    "expect_reason_contains": "corner cases",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 1,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 1
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "10-no-challenges-file",
@@ -174,7 +540,10 @@
       "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ]
     ],
     "run_log": [
       {
@@ -192,7 +561,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "критический разбор"
+    "expect_reason_contains": "критический разбор",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": false,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "11-no-alignment",
@@ -203,8 +609,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-01 | §1 | q | t | Major | resolved |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -213,7 +625,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "сверка с кодом"
+    "expect_reason_contains": "сверка с кодом",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "12-stale-alignment",
@@ -225,9 +674,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: PASS\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | CONFIRMED | Minor |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md", "Feature-writing/dispatch-golden/dispatch-golden.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md",
+        "Feature-writing/dispatch-golden/dispatch-golden.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -236,7 +694,45 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "устарела"
+    "expect_reason_contains": "устарела",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "PASS",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 0,
+        "alignment_stale": true,
+        "stale": [
+          "alignment",
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "13-alignment-pass",
@@ -248,9 +744,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: PASS\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | CONFIRMED | Minor |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": true,
@@ -258,6 +763,43 @@
       "next_subagent": "",
       "orchestrator_mode": "ready",
       "must_continue": false
+    },
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "PASS",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
     }
   },
   {
@@ -270,9 +812,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -281,7 +832,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "противоречит коду"
+    "expect_reason_contains": "противоречит коду",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 1,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "15-alignment-limit-stopped",
@@ -293,9 +881,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 3\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -304,7 +901,44 @@
       "orchestrator_mode": "stopped",
       "must_continue": false
     },
-    "expect_reason_contains": "лимит"
+    "expect_reason_contains": "лимит",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 3,
+        "critical_major_mismatch": 1,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "16-graph-gate-run-log",
@@ -328,7 +962,46 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "незакрытые факты"
+    "expect_reason_contains": "незакрытые факты",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": false,
+        "has_challenges": false,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [
+          "GAP-GOLDEN-01"
+        ],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "17-pending-apply-challenges",
@@ -340,8 +1013,14 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | Q-01 | ch topic | A) one | pick A | pending-apply | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -350,7 +1029,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "pending-apply"
+    "expect_reason_contains": "pending-apply",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 1,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "18-spec-newer-challenges-map",
@@ -361,7 +1077,10 @@
       "Feature-writing/dispatch-golden/dispatch-golden-challenges-resolved.md": "# CHALLENGES_MAP\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden-challenges-resolved.md", "Feature-writing/dispatch-golden/dispatch-golden.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges-resolved.md",
+        "Feature-writing/dispatch-golden/dispatch-golden.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -370,7 +1089,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "CHALLENGES_MAP"
+    "expect_reason_contains": "CHALLENGES_MAP",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": false,
+        "has_challenges_map": true,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": true,
+        "needs_check_feature_reason": "SPEC новее CHALLENGES_MAP — перепроверка после resolve-challenges"
+      }
+    }
   },
   {
     "id": "19-alignment-pass-with-gaps",
@@ -382,9 +1138,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: PASS WITH GAPS\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | CONFIRMED | Minor |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": true,
@@ -392,6 +1157,43 @@
       "next_subagent": "",
       "orchestrator_mode": "ready",
       "must_continue": false
+    },
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "PASS WITH GAPS",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
     }
   },
   {
@@ -404,9 +1206,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\nNo Critical/Major MISMATCH rows in this report.\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -415,7 +1226,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "alignment без PASS"
+    "expect_reason_contains": "alignment без PASS",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "21-alignment-stale-mismatch",
@@ -427,9 +1275,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n\n# alignment\n\n| a | b | c | d | MISMATCH | Critical |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md", "Feature-writing/dispatch-golden/dispatch-golden.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md",
+        "Feature-writing/dispatch-golden/dispatch-golden.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -438,7 +1295,45 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "устарела"
+    "expect_reason_contains": "устарела",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": false,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 1,
+        "alignment_stale": true,
+        "stale": [
+          "alignment",
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "22-needs-answer-alignment-only",
@@ -451,9 +1346,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | F-01 | alignment topic | A) one | pick A | needs-answer | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -462,7 +1366,44 @@
       "orchestrator_mode": "ask_user",
       "must_continue": false
     },
-    "expect_reason_contains": "ALIGNMENT"
+    "expect_reason_contains": "ALIGNMENT",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 1,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 1,
+        "decisions_pending_apply_alignment": 0,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 1,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "23-pending-apply-alignment-only",
@@ -475,9 +1416,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | F-01 | alignment fix | A) patch spec | pick A | pending-apply | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -486,7 +1436,44 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "ALIGNMENT"
+    "expect_reason_contains": "ALIGNMENT",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 1,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 1,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 1,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   },
   {
     "id": "24-mixed-pending-apply-align-ch",
@@ -499,9 +1486,18 @@
       "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | F-01 | alignment fix | A) patch | pick A | pending-apply | 2026-09-12 |\n| D-02 | CH-01 | ch fix | A) patch | pick A | pending-apply | 2026-09-12 |\n"
     },
     "touch_after": [
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"],
-      ["Feature-writing/dispatch-golden/dispatch-golden.md", "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"]
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-code-alignment.md"
+      ]
     ],
     "expect": {
       "ready": false,
@@ -510,6 +1506,43 @@
       "orchestrator_mode": "delegate",
       "must_continue": true
     },
-    "expect_reason_contains": "ALIGNMENT"
+    "expect_reason_contains": "ALIGNMENT",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": true,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 2,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 1,
+        "open_gaps": [],
+        "open_questions": [],
+        "challenges": {
+          "open": 0,
+          "deferred": 0,
+          "resolved": 1,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "FAIL",
+        "alignment_iteration": 1,
+        "critical_major_mismatch": 1,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   }
 ]

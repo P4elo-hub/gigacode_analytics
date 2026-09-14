@@ -1,7 +1,7 @@
 """Spec-pack extra validate rules (DECISIONS / challenge one-pass / check loop).
 
-Phase 11: add routing-state-missing / routing-state-stale (see
-scripts/PIPELINE-ROUTING-STATE.md). Spec collectors stay until Phase 12.
+Phase 12: routing-state-missing / routing-state-stale are block — dispatch
+already routes to analyze-routing (P5). See scripts/PIPELINE-ROUTING-STATE.md.
 """
 
 from __future__ import annotations
@@ -38,40 +38,38 @@ def extra_advice(root: Path, task_id: str, status, dispatch: dict, report, add) 
             ),
         )
 
-    from pipeline_pack import load_pack_module
     from pipeline_routing_state import SPEC_STALE_VS, add_routing_state_advice
     from pipeline_status import resolve_artifact_paths
 
     pid = getattr(status, "pipeline_id", None) or "spec"
     paths = resolve_artifact_paths(root, task_id, pid)
-    collectors = load_pack_module(pid, "collectors")
-    if collectors is not None:
-        check_needed, check_reason = collectors.needs_check_feature(root, task_id, status)
-        last_check_ts = last_successful_step_ts(root, task_id, "check-feature")
-        spec = paths.get("spec")
-        last = getattr(report, "_last_history", None)
-        if (
-            check_needed
-            and check_reason.startswith("SPEC новее GAPS_MAP")
-            and last_check_ts is not None
-            and spec is not None
-            and spec.is_file()
-            and last_check_ts >= spec.stat().st_mtime - 2
-            and last
-            and last.get("step") == "check-feature"
-            and last.get("result") == "ok"
-        ):
-            add(
-                report,
-                id="check-feature-redundant-loop",
-                severity="warn",
-                title="check-feature уже прошёл после правки SPEC",
-                detail="Dispatch снова просит check-feature из-за SPEC > GAPS_MAP",
-                fix=(
-                    "check-feature уже ok после правки SPEC — dispatch должен идти дальше "
-                    "(resolve-gaps / check-feature-code)."
-                ),
-            )
+    check_needed = bool(getattr(status, "needs_check_feature", False))
+    check_reason = str(getattr(status, "needs_check_feature_reason", "") or "")
+    last_check_ts = last_successful_step_ts(root, task_id, "check-feature")
+    spec = paths.get("spec")
+    last = getattr(report, "_last_history", None)
+    if (
+        check_needed
+        and check_reason.startswith("SPEC новее GAPS_MAP")
+        and last_check_ts is not None
+        and spec is not None
+        and spec.is_file()
+        and last_check_ts >= spec.stat().st_mtime - 2
+        and last
+        and last.get("step") == "check-feature"
+        and last.get("result") == "ok"
+    ):
+        add(
+            report,
+            id="check-feature-redundant-loop",
+            severity="warn",
+            title="check-feature уже прошёл после правки SPEC",
+            detail="Dispatch снова просит check-feature из-за SPEC > GAPS_MAP",
+            fix=(
+                "check-feature уже ok после правки SPEC — dispatch должен идти дальше "
+                "(resolve-gaps / check-feature-code)."
+            ),
+        )
 
     if status.has_challenges and report.next_step == "challenge-feature":
         add(
@@ -83,4 +81,12 @@ def extra_advice(root: Path, task_id: str, status, dispatch: dict, report, add) 
             fix="Dispatch → check-feature-code (или resolve-challenges, если CH open>0).",
         )
 
-    add_routing_state_advice(root, task_id, report, add, stale_vs=SPEC_STALE_VS, paths=paths)
+    add_routing_state_advice(
+        root,
+        task_id,
+        report,
+        add,
+        stale_vs=SPEC_STALE_VS,
+        paths=paths,
+        severity="block",
+    )

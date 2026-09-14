@@ -2,8 +2,8 @@
 name: analyze-routing
 description: >-
   Writes Feature-writing/<slug>/<slug>-routing-state.json — factual snapshot
-  for the deterministic router. Does not choose next_step. Phase 11 spec-domain;
-  live spec dispatch still uses collectors until Phase 12.
+  for the deterministic router. Does not choose next_step. Spec graph node
+  (Phase 12); also used by pack routing-poc.
 user-invocable: false
 ---
 
@@ -13,18 +13,22 @@ user-invocable: false
 `Feature-writing/<slug>/<slug>-routing-state.json`.
 
 Контракт: `scripts/PIPELINE-ROUTING-STATE.md`. Имена и семантика полей —
-`pipelines/spec/routing_conditions.yaml` (SSOT). Совпадает с
-`pipelines/spec/collectors.py`. `next_step` / `ready` / `orchestrator_mode`
-**не писать**.
+`pipelines/spec/routing_conditions.yaml` (SSOT). `collectors.py` больше не
+источник семантики. `next_step` / `ready` / `orchestrator_mode` **не писать**.
 
-Граф `analyze-routing` пока только в pack `routing-poc`. Для spec — ручной
-`/analyze-routing` и dual-run parity (Phase 11). Cutover в spec graph — Phase 12.
+Граф: node `analyze-routing` в `pipelines/spec/graph.yaml` (и `routing-poc`).
+После mutating step оркестратор снова delegate; если JSON missing/stale —
+router выбирает этот шаг.
 
 ## Когда
 
 Файл нет, JSON битый / schema_version ≠ 1 / router-owned ключи в `fields`,
 или mtime старше любого из: SPEC, CONTEXT_DOC, DECISIONS, CHALLENGES,
-ALIGNMENT, GAPS_MAP, CHALLENGES_MAP.
+ALIGNMENT, GAPS_MAP, CHALLENGES_MAP (`stale_vs`).
+
+После: write-feature, check-feature, resolve-gaps, resolve-challenges,
+challenge-feature, check-feature-code, resolve-code-alignment, find-context
+(если записал CONTEXT).
 
 ## Шаги
 
@@ -37,6 +41,7 @@ ALIGNMENT, GAPS_MAP, CHALLENGES_MAP.
    - `CHALLENGES` — `…/<slug>-challenges.md`
    - `CHALLENGES_MAP` — `…/<slug>-challenges-resolved.md`
    - `ALIGNMENT` — `…/<slug>-code-alignment.md`
+   - `AGENT_RUN_LOG` — нужен для `needs_check_feature` (последний ok check-feature vs SPEC mtime)
 3. Заполни `fields` по `routing_conditions.yaml`. Presence-флаги — существование
    файлов. Домен:
    - `open_gaps`: inline `[GAP-…]` + табличные GAP без «закрыт»/«closed»
@@ -45,7 +50,8 @@ ALIGNMENT, GAPS_MAP, CHALLENGES_MAP.
    - `challenges.*` из таблицы CH; dispatch смотрит `challenges.open`
    - ALIGNMENT frontmatter `verdict` / `alignment_iteration`; счётчик
      critical/major mismatch-строк
-   - `needs_check_feature` (+ reason) — тот же алгоритм, что collectors
+   - `needs_check_feature` (+ reason) — алгоритм из `routing_conditions.yaml`
+     (включая run-log; движок на hot path не пересчитывает)
    - `stale` / `alignment_stale` — mtime (движок всё равно пересчитает)
    Не выдумывай id. Не заполняй ключи роутера.
 4. Запиши JSON: `schema_version: 1`, `slug`, `generated_at` (UTC ISO), `fields`.

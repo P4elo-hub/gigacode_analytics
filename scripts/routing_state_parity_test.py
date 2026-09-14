@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 11: collectors vs routing-state overlay parity (replay, match/mismatch)."""
+"""Phase 12: baseline parse vs routing-state overlay parity (replay, match/mismatch)."""
 
 from __future__ import annotations
 

@@ -19,7 +19,7 @@ Feature-writing/<slug>/
   <slug>-gaps-resolved.md          ← GAPS_MAP
   <slug>-challenges.md             ← CHALLENGES
   <slug>-challenges-resolved.md    ← CHALLENGES_MAP
-  <slug>-routing-state.json        ← ROUTING_STATE (Phase 11 parity; cutover 12)
+  <slug>-routing-state.json        ← ROUTING_STATE (Phase 12 live overlay)
   <slug>.part-<block_id>.md        ← рабочий фрагмент write-feature
   <slug>.context.md                ← рабочий накопленный контекст блоков
 Feature-context/
@@ -36,7 +36,7 @@ agent-logs/
       telemetry-analysis.md        ← AGENT_TELEMETRY_ANALYSIS
 ```
 
-Сырые логи CLI (jsonl `~/.qwen/` / `~/.gigacode/`, SQLite OpenCode) ingest
+Сырые логи CLI (jsonl `~/.qwen/` / `~/.qwen/`, SQLite OpenCode) ingest
 копирует опционально в
 `runs/run-NNN/raw/`. Субагенты пайплайна логи **не** пишут — только
 `scripts/ingest_session_telemetry.py` и `append_run_log.py` (оркестратор).
@@ -53,7 +53,7 @@ agent-logs/
 | `GAPS_MAP` | `FEATURE_DIR<slug>-gaps-resolved.md` | `/resolve-gaps` | `/resolve-gaps` |
 | `CHALLENGES` | `FEATURE_DIR<slug>-challenges.md` | `/challenge-feature` | resolve-challenges (статусы) |
 | `CHALLENGES_MAP` | `FEATURE_DIR<slug>-challenges-resolved.md` | `/resolve-challenges` | `/resolve-challenges` |
-| `ROUTING_STATE` | `FEATURE_DIR<slug>-routing-state.json` | `/analyze-routing` (spec-domain; graph `routing-poc`) | `routing-analyzer` |
+| `ROUTING_STATE` | `FEATURE_DIR<slug>-routing-state.json` | `/analyze-routing` (spec graph) | `routing-analyzer` |
 | `AGENT_LOGS` | `agent-logs/<slug>/` | `/archive-session`, ingest | ingest, analyze-telemetry |
 | `AGENT_MANIFEST` | `AGENT_LOGS/manifest.json` | ingest | ingest |
 | `AGENT_EVENTS` | `AGENT_LOGS/runs/<run-id>/events.jsonl` | ingest | ingest |
@@ -88,9 +88,9 @@ agent-logs/
    `CONTEXT_DOC` подраздел «Актуализация после resolve» внутри § «Что учесть».
    Остальной current-state не переписывается.
 
-## DECISIONS (ответы для GigaCode)
+## DECISIONS (ответы для Qwen Code)
 
-Субагенты GigaCode **не умеют** `ask_user_question`. Ответы живут в `DECISIONS`,
+Субагенты Qwen Code **не умеют** `ask_user_question`. Ответы живут в `DECISIONS`,
 не в промпте и не в `SPEC`. Позже `resolve-gaps` / `resolve-challenges` /
 `resolve-code-alignment` читают тот же файл и **не переспрашивают** id из
 колонки Relates (`GAP-*`, `CH-*`, `Q-XX`).

@@ -39,19 +39,20 @@ Registry: [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
 `DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`, and registry steps not in the graph.
 `--from-json` validates the payload against `pipeline_pack_schema.json` before YAML write.
 
-## Routing-state (Phase 10–11)
+## Routing-state (Phase 12)
 
 Analyzer writes `ROUTING_STATE` JSON; router reads overlay via `populate_status`.
-Spec collectors stay until Phase 12. Contract:
+Spec live path is overlay-only. Contract:
 [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md),
 [PIPELINE-PARITY.md](PIPELINE-PARITY.md).
-Live pack graph: `pipelines/routing-poc/`. Spec pack: gated overlay collector +
-shadow `routing_conditions.yaml`.
+Live spec graph includes `analyze-routing`. Pack `routing-poc` remains as
+reference.
 
-**Phase 11 contract**
+**Phase 12 contract**
 
 1. **Smoke не добавляет `dispatch:routing-poc` / `pipeline-delegate:routing-poc`.**
    Pack покрыт `dispatch-golden` + `pipeline-compile` + `golden-coverage:packs`.
+   Optional smoke: `dispatch:spec-with-routing-state`.
 2. **Compile чеклист после правок overlay / pack YAML** (после `--apply`):
    ```bash
    PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
@@ -62,13 +63,14 @@ shadow `routing_conditions.yaml`.
    PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
    PYTHONPATH=scripts python3 scripts/routing_state_parity.py pipeline-viewer-smoke --strict
    ```
-   Spec golden ids не сокращать. `routing-poc` ≥ 3 cases.
-3. **Skill** заполняет `fields` по `pipelines/spec/routing_conditions.yaml`
-   (семантика = collectors). Phase 12: collectors снимают.
+   Spec golden ids не сокращать. `routing-poc` ≥ 3 cases. `expect` 24 spec cases
+   без изменений.
+3. **Skill** заполняет `fields` по `pipelines/spec/routing_conditions.yaml`.
+   Hot-path collectors не парсят домен.
 4. **Stale spec** — JSON vs spec / context / decisions / challenges / alignment /
    gaps_map / challenges_map. POC stale — только vs spec.
-5. **Live dispatch** collectors-first. Overlay только parity B-mode.
-   `analyze-routing` **не** в spec `graph.yaml`. JSON freshness = extra_advice.
+5. **Live dispatch** overlay always-on (`collector_mode: routing_state`).
+   `analyze-routing` **в** spec `graph.yaml`. JSON freshness = P5 + extra_advice block.
 
 ## Authoring (Phase 8)
 
@@ -119,10 +121,11 @@ rolls back `Calibration/<slug>/` only. Smoke only has `pipeline-registry:scoped`
 engine duplicate), spec extra_advice severity matrix, orchestrator runtime loop
 block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>`).
 
-`pipeline_routing_state_test.py`: overlay schema + spec gating + validate ids +
-fake JSON dispatch. `routing_state_parity_test.py`: A vs B replay. Not smoke
-rows — see **Routing-state (Phase 10–11)** checklist above.
-Smoke still does **not** call `pipeline_delegate --pipeline routing-poc`.
+`pipeline_routing_state_test.py`: overlay schema + spec always-on + validate
+block ids + fake JSON dispatch. `routing_state_parity_test.py`: baseline vs
+overlay replay. Not smoke rows — see **Routing-state (Phase 12)** checklist
+above. Smoke has `dispatch:spec-with-routing-state` and still does **not** call
+`pipeline_delegate --pipeline routing-poc`.
 
 ## Edit workflow
 

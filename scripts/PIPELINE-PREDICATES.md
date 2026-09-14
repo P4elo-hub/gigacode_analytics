@@ -117,9 +117,9 @@ rules:
 No edits to `pipeline_router.py` or `pipeline_predicates.py` unless you need a
 **new core builder** (rare).
 
-Phase 11: spec dual-run overlay (collectors live). See
+Phase 12: spec live overlay (`collector_mode: routing_state`). See
 [PIPELINE-ROUTING-STATE.md](PIPELINE-ROUTING-STATE.md) and
-[PIPELINE-PARITY.md](PIPELINE-PARITY.md). Spec collectors stay until Phase 12.
+[PIPELINE-PARITY.md](PIPELINE-PARITY.md). Domain collectors are off the hot path.
 
 ## Compile checks
 

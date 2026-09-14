@@ -1,7 +1,7 @@
 """Routing-state JSON: schema, load, overlay onto status (no LLM, no next_step).
 
-Analyzer writes the file; populate_status collectors call apply_routing_state.
-Router still reads status fields only. Spec collectors stay until Phase 12.
+Analyzer writes the file; populate_status overlay collector applies fields.
+Router still reads status fields only. Spec live path is overlay (Phase 12).
 """
 
 from __future__ import annotations
@@ -311,13 +311,25 @@ def _effective_routing_state_path(root: Path, task_id: str, paths: dict[str, Pat
 
 
 def spec_overlay_should_apply(root: Path, task_id: str, paths: dict[str, Path]) -> bool:
+    """Phase 12: overlay is the spec live default. mode=off is tests/baseline only."""
     del root, task_id, paths
     mode = _overlay_force or _env_overlay_mode()
-    return mode == "on"
+    if mode == "off":
+        return False
+    if mode == "on":
+        return True
+    try:
+        from pipeline_status import load_status_spec
+
+        spec = load_status_spec("spec")
+    except Exception:
+        return True
+    collector_mode = str(spec.get("collector_mode") or "routing_state")
+    return collector_mode == "routing_state"
 
 
 def spec_overlay_collector(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
-    """Spec dual-run overlay. Live default: collectors. Overlay only in B-mode."""
+    """Spec overlay. Live default: always apply JSON (collector_mode routing_state)."""
     if not spec_overlay_should_apply(root, task_id, paths):
         return
     path = _effective_routing_state_path(root, task_id, paths)
@@ -356,16 +368,18 @@ def add_routing_state_advice(
     *,
     stale_vs: tuple[str, ...] = SPEC_STALE_VS,
     paths: dict[str, Path] | None = None,
+    severity: str = "warn",
 ) -> None:
     path = routing_state_path(root, task_id)
+    fix = "Delegate → task на routing-analyzer (step analyze-routing)."
     if not path.is_file():
         add(
             report,
             id="routing-state-missing",
-            severity="warn",
+            severity=severity,
             title="Нет routing-state.json",
             detail=f"Ожидался {path.as_posix()}",
-            fix="Запусти /analyze-routing — extra_advice, dispatch не блокируется.",
+            fix=fix,
         )
         return
     _payload, error = load_routing_state(path, slug=task_id)
@@ -373,7 +387,7 @@ def add_routing_state_advice(
         add(
             report,
             id="routing-state-missing",
-            severity="warn",
+            severity=severity,
             title="routing-state.json нечитаем",
             detail=error,
             fix="Перезапусти analyze-routing — JSON должен соответствовать schema_version 1.",
@@ -388,8 +402,8 @@ def add_routing_state_advice(
         add(
             report,
             id="routing-state-stale",
-            severity="warn",
+            severity=severity,
             title="routing-state.json устарел",
             detail=f"mtime routing-state старше {compared}",
-            fix="Запусти /analyze-routing — extra_advice, dispatch не блокируется.",
+            fix=fix,
         )

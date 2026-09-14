@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Compare spec collectors (A) vs routing-state overlay (B).
+"""Compare spec baseline parse (A) vs routing-state overlay (B).
 
-Live dispatch stays collectors. Mode B overlays JSON (replay or live file).
+Live spec dispatch is overlay (Phase 12). Mode A collectors are gone.
+`--replay` remains the CI drift check vs scripts/routing_state_baseline.py.
 
   PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug>
   PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug> --json
@@ -14,21 +15,26 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 from artifact_paths import resolve_slug, workspace_root  # noqa: E402
-from feature_status import build_status_fields  # noqa: E402
+from feature_status import FeatureStatus  # noqa: E402
 from pipeline_dispatch import build_dispatch  # noqa: E402
 from pipeline_routing_state import (  # noqa: E402
     CHALLENGES_KEYS,
+    SCHEMA_VERSION,
     STATUS_OVERLAY_FIELDS,
     default_replay_path,
     overlay_context,
     routing_state_path,
+    serialize_status_fields,
 )
+from pipeline_status import populate_status  # noqa: E402
+from routing_state_baseline import apply_baseline_domain  # noqa: E402
 
 DISPATCH_KEYS = (
     "next_step",
@@ -69,14 +75,40 @@ def _resolve_replay(root: Path, slug: str, replay: Path | None) -> Path | None:
     return None
 
 
+def _baseline_status(root: Path, slug: str):
+    status = FeatureStatus(slug=slug, pipeline_id="spec")
+    with overlay_context(mode="off"):
+        populate_status(status, root, slug, "spec")
+    apply_baseline_domain(status, root, slug)
+    return status
+
+
+def _dispatch_from_payload(root: Path, slug: str, payload: dict) -> dict:
+    tmp = Path(tempfile.mkdtemp(prefix="rs-parity-"))
+    path = tmp / "replay.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    try:
+        with overlay_context(mode="on", replay=path):
+            return build_dispatch(root, slug, "spec")
+    finally:
+        path.unlink(missing_ok=True)
+        tmp.rmdir()
+
+
 def compare(root: Path, slug: str, *, replay: Path | None = None) -> dict:
     analyzer_path = _resolve_replay(root, slug, replay)
-    with overlay_context(mode="off"):
-        status_a = build_status_fields(root, slug, "spec")
-        dispatch_a = build_dispatch(root, slug, "spec")
+    status_a = _baseline_status(root, slug)
+    payload_a = {
+        "schema_version": SCHEMA_VERSION,
+        "slug": slug,
+        "fields": serialize_status_fields(status_a),
+    }
+    dispatch_a = _dispatch_from_payload(root, slug, payload_a)
+
     if analyzer_path is not None and analyzer_path.is_file():
         with overlay_context(mode="on", replay=analyzer_path):
-            status_b = build_status_fields(root, slug, "spec")
+            status_b = FeatureStatus(slug=slug, pipeline_id="spec")
+            populate_status(status_b, root, slug, "spec")
             dispatch_b = build_dispatch(root, slug, "spec")
         load_error = None
     else:
@@ -137,7 +169,7 @@ def format_report(report: dict) -> str:
         lines.append("")
     col = report["collector_dispatch"]
     ana = report.get("analyzer_dispatch") or {}
-    lines.append("dispatch A (collectors) vs B (overlay):")
+    lines.append("dispatch A (baseline parse) vs B (overlay):")
     for key in DISPATCH_KEYS:
         mark = "ok" if key not in report["dispatch_diff"] else "DIFF"
         right = ana.get(key, "—") if ana else "—"

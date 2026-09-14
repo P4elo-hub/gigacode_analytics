@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -307,9 +309,62 @@ def check_ts_sort_node_state(report: Report) -> None:
     report.add("ts-sort:check-feature", ok, f"state={node_states.get('check-feature')}")
 
 
+def check_spec_routing_state_overlay(report: Report) -> None:
+    """Phase 12: spec dispatch reads overlay JSON, not domain collectors."""
+    from pipeline_routing_state import example_payload, routing_state_path
+
+    tmp = Path(tempfile.mkdtemp(prefix="smoke-rs-"))
+    slug = "overlay-smoke"
+    try:
+        ctx = tmp / "Feature-context"
+        fw = tmp / "Feature-writing" / slug
+        ctx.mkdir(parents=True)
+        fw.mkdir(parents=True)
+        (ctx / f"{slug}.md").write_text("# ctx\n\nVerified.\n", encoding="utf-8")
+        spec = fw / f"{slug}.md"
+        spec.write_text("# spec\n\nNo inline gap in the file.\n", encoding="utf-8")
+        (fw / f"{slug}-gaps-resolved.md").write_text("# GAPS_MAP\n", encoding="utf-8")
+        (fw / f"{slug}-challenges.md").write_text(
+            "# CH\n\n| ID | § | Q | type | severity | status |\n"
+            "|----|---|----|-----|----------|--------|\n"
+            "| CH-01 | §1 | q | t | Major | resolved |\n",
+            encoding="utf-8",
+        )
+        payload = example_payload(slug, open_gaps=["GAP-JSON"])
+        payload["fields"].update(
+            {
+                "has_context": True,
+                "has_spec": True,
+                "has_gaps_map": True,
+                "has_challenges": True,
+                "needs_check_feature": False,
+            }
+        )
+        path = routing_state_path(tmp, slug)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        now = time.time()
+        for rel in (
+            spec,
+            fw / f"{slug}-gaps-resolved.md",
+            fw / f"{slug}-challenges.md",
+        ):
+            os.utime(rel, (now - 120, now - 120))
+        os.utime(path, (now, now))
+        d = build_dispatch(tmp, slug, "spec")
+        ok = d.get("next_step") == "resolve-gaps"
+        report.add(
+            "dispatch:spec-with-routing-state",
+            ok,
+            f"next={d.get('next_step')} (JSON GAP-JSON, file has no GAP)",
+        )
+    except Exception as exc:
+        report.add("dispatch:spec-with-routing-state", False, str(exc))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def check_graph_order_gate(report: Report, slug: str) -> None:
     """After write-feature, dispatch must not skip check-feature for graph branches."""
-    from pipeline_pack import load_pack_module
     from feature_status import build_status
 
     try:
@@ -317,8 +372,10 @@ def check_graph_order_gate(report: Report, slug: str) -> None:
         if not status.has_spec:
             report.add(f"graph-order-gate:{slug}", True, "no spec — skip")
             return
-        collectors = load_pack_module("spec", "collectors")
-        need, _ = collectors.needs_check_feature(ROOT, slug, status)
+        if not status.has_routing_state or "routing_state" in (status.stale or []):
+            report.add(f"graph-order-gate:{slug}", True, "routing-state refresh first — skip")
+            return
+        need = bool(status.needs_check_feature)
         if not need:
             report.add(f"graph-order-gate:{slug}", True, "check-feature done — skip")
             return
@@ -676,6 +733,7 @@ def main() -> int:
     check_cli_settings(report)
     check_dispatch(report, SMOKE_SLUG)
     check_dispatch(report, PRIMARY_SLUG)
+    check_spec_routing_state_overlay(report)
     check_dispatch_calibration(report, SMOKE_SLUG)
     check_resolve_pipeline_from_active_task(report)
     check_validate_calibration(report, SMOKE_SLUG)

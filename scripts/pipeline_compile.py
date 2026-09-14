@@ -362,6 +362,7 @@ def compile_outputs(data: dict) -> tuple[str, str]:
 
 _REFERENCE_STEP_TO_SUBAGENT = {
     "find-context": "context-researcher",
+    "analyze-routing": "routing-analyzer",
     "check-feature": "spec-reviewer",
     "resolve-gaps": "gap-resolver",
     "challenge-feature": "spec-challenger",
@@ -372,6 +373,7 @@ _REFERENCE_STEP_TO_SUBAGENT = {
 _REFERENCE_ORCHESTRATOR_OWNED = frozenset({"write-feature"})
 _REFERENCE_GATED = {
     "context-researcher",
+    "routing-analyzer",
     "spec-writer",
     "spec-reviewer",
     "gap-resolver",
@@ -383,6 +385,7 @@ _REFERENCE_GATED = {
 _REFERENCE_RESTART = (
     "find-context",
     "write-feature",
+    "analyze-routing",
     "check-feature",
     "resolve-gaps",
     "challenge-feature",
@@ -392,23 +395,41 @@ _REFERENCE_RESTART = (
 )
 _REFERENCE_SPEC_EDGES = {
     ("spec-orchestrator", "find-context"),
+    ("spec-orchestrator", "analyze-routing"),
     ("find-context", "write-feature"),
+    ("find-context", "analyze-routing"),
     ("write-feature", "check-feature"),
+    ("write-feature", "analyze-routing"),
     ("check-feature", "resolve-gaps"),
     ("check-feature", "resolve-challenges"),
     ("check-feature", "resolve-code-alignment"),
     ("check-feature", "challenge-feature"),
+    ("check-feature", "analyze-routing"),
     ("resolve-gaps", "check-feature"),
     ("resolve-gaps", "resolve-challenges"),
     ("resolve-gaps", "resolve-code-alignment"),
+    ("resolve-gaps", "analyze-routing"),
     ("check-feature", "check-feature-code"),
     ("challenge-feature", "resolve-challenges"),
+    ("challenge-feature", "analyze-routing"),
     ("resolve-challenges", "check-feature"),
+    ("resolve-challenges", "analyze-routing"),
     ("check-feature-code", "check-feature"),
     ("check-feature-code", "resolve-gaps"),
     ("check-feature-code", "resolve-code-alignment"),
+    ("check-feature-code", "analyze-routing"),
     ("resolve-code-alignment", "check-feature-code"),
     ("resolve-code-alignment", "check-feature"),
+    ("resolve-code-alignment", "analyze-routing"),
+    ("analyze-routing", "find-context"),
+    ("analyze-routing", "write-feature"),
+    ("analyze-routing", "check-feature"),
+    ("analyze-routing", "resolve-gaps"),
+    ("analyze-routing", "challenge-feature"),
+    ("analyze-routing", "resolve-challenges"),
+    ("analyze-routing", "check-feature-code"),
+    ("analyze-routing", "resolve-code-alignment"),
+    ("analyze-routing", "done"),
     ("check-feature-code", "done"),
 }
 

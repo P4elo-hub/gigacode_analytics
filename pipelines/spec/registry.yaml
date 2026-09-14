@@ -1,5 +1,6 @@
 step_to_subagent:
   find-context: context-researcher
+  analyze-routing: routing-analyzer
   check-feature: spec-reviewer
   resolve-gaps: gap-resolver
   challenge-feature: spec-challenger
@@ -10,6 +11,7 @@ orchestrator_owned:
   - write-feature
 gated_subagents:
   - context-researcher
+  - routing-analyzer
   - spec-writer
   - spec-reviewer
   - gap-resolver
@@ -20,6 +22,7 @@ gated_subagents:
 restartable_steps:
   - find-context
   - write-feature
+  - analyze-routing
   - check-feature
   - resolve-gaps
   - challenge-feature

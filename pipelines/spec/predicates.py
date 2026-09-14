@@ -10,6 +10,8 @@ from pipeline_pack import load_pack
 PIPELINE_ID = "spec"
 DOMAIN_PREDICATE_NAMES = frozenset(
     {
+        "routing_state_needs_refresh",
+        "routing_state_ready",
         "alignment_limit_exhausted",
         "needs_answer_with_gaps",
         "needs_answer_alignment_only",
@@ -51,6 +53,24 @@ def _verdict_pass() -> set[str]:
 
 def _verdict_fail() -> str:
     return str(_constants().get("verdict_fail", "FAIL"))
+
+
+def _routing_state_needs_refresh(_root: Path, _task_id: str, status) -> bool:
+    from pipeline_routing_state import STALE_ID
+
+    if getattr(status, "routing_state_invalid", False):
+        return True
+    if not getattr(status, "has_routing_state", False):
+        if getattr(status, "routing_state_error", None) != "":
+            return True
+    stale = getattr(status, "stale", None) or []
+    return STALE_ID in stale
+
+
+def _routing_state_ready(root: Path, task_id: str, status) -> bool:
+    return not _routing_state_needs_refresh(root, task_id, status) and not _open_gaps(
+        root, task_id, status
+    )
 
 
 def _alignment_limit_exhausted(_root: Path, _slug: str, status) -> bool:
@@ -129,6 +149,8 @@ def _alignment_fail_reaudit(_root: Path, _slug: str, status) -> bool:
 
 
 PREDICATES = {
+    "routing_state_needs_refresh": _routing_state_needs_refresh,
+    "routing_state_ready": _routing_state_ready,
     "alignment_limit_exhausted": _alignment_limit_exhausted,
     "needs_answer_with_gaps": _needs_answer_with_gaps,
     "needs_answer_alignment_only": _needs_answer_alignment_only,
@@ -147,6 +169,17 @@ PREDICATES = {
 
 
 def reason_for_predicate(when: str, status) -> str:
+    if when == "routing_state_needs_refresh":
+        from pipeline_routing_state import STALE_ID
+
+        error = getattr(status, "routing_state_error", "") or ""
+        if error and error != "missing":
+            return f"routing-state невалиден ({error}) — нужен analyze-routing"
+        if STALE_ID in (getattr(status, "stale", None) or []):
+            return "routing-state.json устарел — нужен analyze-routing"
+        return "нет routing-state.json — нужен analyze-routing"
+    if when == "routing_state_ready":
+        return "routing-state актуален"
     if when == "alignment_limit_exhausted":
         return (
             f"лимит цикла alignment исчерпан ({_max_iter()}), "

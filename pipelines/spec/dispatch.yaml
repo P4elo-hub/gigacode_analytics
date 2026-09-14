@@ -4,9 +4,12 @@ invariants:
   - id: needs-check-feature
     step: check-feature
 fallback:
-  next: check-feature-code
-  reason: alignment без PASS / PASS WITH GAPS
+  next: analyze-routing
+  reason: routing-state не готов
 rules:
+  - priority: 5
+    when: routing_state_needs_refresh
+    next: analyze-routing
   - priority: 10
     when: alignment_limit_exhausted
     next: null
