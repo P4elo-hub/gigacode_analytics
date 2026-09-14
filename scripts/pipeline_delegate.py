@@ -14,7 +14,7 @@ from pathlib import Path
 
 from artifact_paths import resolve_slug, workspace_root
 from pipeline_active_task import save_active_task
-from pipeline_common import subagent_for_step
+from pipeline_common import subagent_for_step, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
 from pipeline_runtime import (
@@ -68,7 +68,7 @@ def build_delegate(
         return payload
 
     if mode == "orchestrator_only":
-        last = last_ok_pipeline_step(root, slug)
+        last = last_ok_pipeline_step(root, slug, pipe_id)
         origin = from_step or (last.get("step") if last else schema.get("orchestrator"))
         payload["action"] = "orchestrator_only"
         payload["instruction"] = (
@@ -103,21 +103,30 @@ def build_delegate(
         return payload
 
     if mode == "write_feature_cycle":
+        cycle = write_cycle_config(pipe_id)
+        cycle_step = cycle.get("step") or ""
+        cycle_subagent = cycle.get("subagent") or ""
         active = save_active_task(
             root,
             slug=slug,
-            step="write-feature",
-            subagent="spec-writer",
+            step=cycle_step,
+            subagent=cycle_subagent,
             cli=cli,
             pipeline=pipe_id,
-            persistent=True,
+            persistent=bool(cycle.get("persistent")),
         )
         payload["action"] = "write_feature_cycle"
         payload["active_task"] = active
+        follow_step = ""
+        for edge in schema.get("edges") or []:
+            if edge.get("from") == cycle_step and (edge.get("kind") or "main") == "main":
+                follow_step = str(edge.get("to") or "")
+                break
+        follow_agent = subagent_for_step(follow_step, pipe_id) if follow_step else ""
         payload["instruction"] = (
-            "Цикл write-feature (spec-writer по блокам). Не делегируй resolve/check/code "
-            "пока assemble + check-feature не завершены. После assemble — снова "
-            "`pipeline_delegate.py` → `task spec-reviewer`."
+            f"Цикл {cycle_step} ({cycle_subagent} по блокам). Не делегируй resolve/check/code "
+            "пока assemble не завершён. После assemble — снова `pipeline_delegate.py` → "
+            f"`task {follow_agent or follow_step}`."
         )
         return payload
 
@@ -127,7 +136,7 @@ def build_delegate(
         payload["instruction"] = f"Неизвестный режим orchestrator: {mode!r}"
         return payload
 
-    last = last_ok_pipeline_step(root, slug)
+    last = last_ok_pipeline_step(root, slug, pipe_id)
     origin = from_step or (last.get("step") if last else schema.get("orchestrator"))
     if origin and next_step and not is_allowed_transition(schema, origin, next_step):
         payload["ok"] = False

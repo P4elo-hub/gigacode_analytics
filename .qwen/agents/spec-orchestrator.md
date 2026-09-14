@@ -154,8 +154,10 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя>
 
 **Не выбирай шаг/субагента сам.** Маршрутизация — только в
 `scripts/feature_status.py` → `pipeline_delegate.py`. Ты вызываешь delegate и
-исполняешь JSON. Карта step→subagent: `scripts/pipeline_common.py`
-(`STEP_TO_SUBAGENT`). PreToolUse hook блокирует `task` с неверным subagent.
+исполняешь JSON. Карта step→subagent — registry **активного** pipeline:
+`pipelines/<id>/registry.yaml` → `registry_for(pipeline_id)` (`--pipeline` или
+`pipeline` в `.pipeline-active-task.json`). Не `STEP_TO_SUBAGENT`.
+PreToolUse hook блокирует `task` с неверным subagent.
 
 Исключение вне spec-pipeline: `doc-reviewer` (ревью правок артефактов).
 

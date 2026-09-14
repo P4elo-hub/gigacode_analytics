@@ -23,11 +23,10 @@ from pipeline_divergence import (
     finalize_divergence,
 )
 from pipeline_active_task import feature_active_task_path, load_active_task_for_slug
-from pipeline_common import subagent_for_step
+from pipeline_common import pipeline_step_order, subagent_for_step
 from pipeline_dispatch import build_dispatch
-from pipeline_runtime import dispatch_supported
+from pipeline_runtime import DEFAULT_PIPELINE_ID, dispatch_supported
 from pipeline_restart import (
-    STEP_ORDER,
     build_cli_commands,
     clear_restart_marker_if_ready,
     format_cli_block,
@@ -619,12 +618,13 @@ def log_spine_next_step(log_history: list[dict]) -> str | None:
 def resolve_display_next(
     log_history: list[dict],
     dispatch_snapshot: dict | None,
+    pipeline_id: str = DEFAULT_PIPELINE_ID,
 ) -> tuple[str, str, str]:
     """Viewer next step: run-log spine first, then dispatch for branches."""
     spine = log_spine_next_step(log_history)
     dispatch = dispatch_snapshot or {}
     if spine:
-        return spine, subagent_for_step(spine), "run-log"
+        return spine, subagent_for_step(spine, pipeline_id), "run-log"
     step = dispatch.get("next_step") or ""
     sub = dispatch.get("next_subagent") or ""
     return step, sub, "dispatch"
@@ -680,6 +680,7 @@ def apply_restart_state(
     node_states: dict[str, str],
     timeline: list[dict],
     terminal_id: str,
+    pipeline_id: str = DEFAULT_PIPELINE_ID,
 ) -> dict | None:
     """Mark rolled-back steps as redo on graph; old telemetry passes as stale."""
     if not marker:
@@ -688,7 +689,8 @@ def apply_restart_state(
         return None
 
     from_step = marker.get("from_step") or ""
-    redo_steps = set(redo_steps_from(from_step))
+    redo_steps = set(redo_steps_from(from_step, pipeline_id))
+    step_order = pipeline_step_order(pipeline_id)
     if not redo_steps:
         for row in timeline:
             row["display_state"] = row.get("result") or STATE_OK
@@ -767,9 +769,9 @@ def apply_restart_state(
         "next_subagent": marker.get("next_subagent"),
         "cli_commands": cli_commands,
         "cli_block": cli_block,
-        "redo_steps": sorted(redo_steps, key=lambda s: STEP_ORDER.get(s, 999)),
-        "completed_after_restart": sorted(completed_after, key=lambda s: STEP_ORDER.get(s, 999)),
-        "pending_redo": sorted(pending_redo, key=lambda s: STEP_ORDER.get(s, 999)),
+        "redo_steps": sorted(redo_steps, key=lambda s: step_order.get(s, 999)),
+        "completed_after_restart": sorted(completed_after, key=lambda s: step_order.get(s, 999)),
+        "pending_redo": sorted(pending_redo, key=lambda s: step_order.get(s, 999)),
     }
 
 
@@ -981,6 +983,7 @@ def build_graph(
         display_next_step, display_next_subagent, display_next_source = resolve_display_next(
             log_history,
             dispatch_snapshot,
+            pipe_name,
         )
 
     terminal_id = "done" if pipe_name == "spec" else "cal-done"
@@ -1015,12 +1018,13 @@ def build_graph(
             restart_info = None
             marker = None
         else:
-            marker = load_restart_marker(root, slug)
+            marker = load_restart_marker(root, slug, "spec")
             restart_info = apply_restart_state(
                 marker,
                 node_states=node_states,
                 timeline=timeline,
                 terminal_id=terminal_id,
+                pipeline_id=pipe_name,
             )
         fs = build_status(root, slug)
         feature_verdict = fs.verdict or ""
@@ -1038,9 +1042,14 @@ def build_graph(
             ):
                 node_states["resolve-code-alignment"] = STATE_SKIPPED
     else:
-        for row in timeline:
-            row["display_state"] = row.get("result") or STATE_OK
-        restart_info = None
+        marker = load_restart_marker(root, slug, pipe_name)
+        restart_info = apply_restart_state(
+            marker,
+            node_states=node_states,
+            timeline=timeline,
+            terminal_id=terminal_id,
+            pipeline_id=pipe_name,
+        )
 
     mark_superseded_passes(timeline)
 

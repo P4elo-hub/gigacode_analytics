@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pipeline_common import STEP_TO_SUBAGENT, read_run_log, subagent_for_step
+from pipeline_common import pipeline_step_to_subagent, read_run_log, subagent_for_step
 from pipeline_dispatch import build_dispatch
 from pipeline_runtime import DEFAULT_PIPELINE_ID, dispatch_supported
 
@@ -37,7 +37,7 @@ KIND_META: dict[str, dict[str, str]] = {
             "Для pipeline-шага есть канонический субагент (см. таблицу в spec-orchestrator), "
             "но в events/run-log зафиксирован другой."
         ),
-        "hint": "Проверьте mapping шаг → субагент в `.gigacode/agents/spec-orchestrator.md`.",
+        "hint": "Проверьте mapping шаг → субагент в `pipelines/<id>/registry.yaml` (`registry_for(pipeline_id)`).",
     },
     "order_violation": {
         "title": "Нестандартный порядок шагов",
@@ -324,11 +324,11 @@ def _build_summary_message(
     return f"Обнаружено: {headline}.{next_bit}"
 
 
-def _schema_step_subagent(schema: dict, step: str) -> str | None:
+def _schema_step_subagent(schema: dict, step: str, pipeline_id: str = DEFAULT_PIPELINE_ID) -> str | None:
     for node in schema.get("nodes", []):
         if node.get("id") == step:
             return node.get("subagent")
-    return subagent_for_step(step)
+    return subagent_for_step(step, pipeline_id)
 
 
 def _allowed_targets(schema: dict, from_step: str) -> set[str]:
@@ -365,7 +365,7 @@ def run_log_has_ok(root: Path, slug: str, step: str) -> bool:
     return False
 
 
-def last_ok_pipeline_step(root: Path, slug: str) -> dict | None:
+def last_ok_pipeline_step(root: Path, slug: str, pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict | None:
     """Last run-log row with result ok and a pipeline step.
 
     Orchestrator-owned steps (write-feature) are not subagent calls, so they have no
@@ -373,14 +373,16 @@ def last_ok_pipeline_step(root: Path, slug: str) -> dict | None:
     closed ok pass, it becomes the transition origin — otherwise the guard would
     compare an older step (find-context) against the step that follows it.
     """
-    from pipeline_common import ORCHESTRATOR_OWNED_STEPS
+    from pipeline_common import pipeline_orchestrator_owned
+
+    owned = pipeline_orchestrator_owned(pipeline_id)
 
     fallback: dict | None = None
     for entry in reversed(read_run_log(root, slug)):
         step = entry.get("step") or ""
         if entry.get("result") != "ok":
             continue
-        if step and step in ORCHESTRATOR_OWNED_STEPS:
+        if step and step in owned:
             if run_log_has_ok(root, slug, step):
                 return entry
             continue
@@ -524,7 +526,7 @@ def analyze_divergence(
                     "severity": SEVERITY_WARN,
                     "ts": None,
                     "expected_step": log_next_step,
-                    "expected_subagent": subagent_for_step(log_next_step),
+                    "expected_subagent": subagent_for_step(log_next_step, pipeline),
                     "actual_step": expected_step,
                     "actual_subagent": expected_subagent,
                     "message": (
@@ -570,7 +572,7 @@ def analyze_divergence(
         if not step:
             continue
 
-        canonical_sub = _schema_step_subagent(schema, step)
+        canonical_sub = _schema_step_subagent(schema, step, pipeline)
         if subagent and canonical_sub and subagent != canonical_sub:
             items.append(
                 _enrich_item(
@@ -647,7 +649,7 @@ def analyze_divergence(
             "orchestrator_mode": dispatch.get("orchestrator_mode"),
             "dispatch_reason": dispatch.get("next_reason"),
         },
-        "step_to_subagent": STEP_TO_SUBAGENT,
+        "step_to_subagent": pipeline_step_to_subagent(pipeline),
         "fingerprint": _dispatch_fingerprint(root, slug),
     }
 

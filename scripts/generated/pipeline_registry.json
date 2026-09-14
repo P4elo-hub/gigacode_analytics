@@ -1,46 +1,4 @@
 {
-  "step_to_subagent": {
-    "find-context": "context-researcher",
-    "check-feature": "spec-reviewer",
-    "resolve-gaps": "gap-resolver",
-    "challenge-feature": "spec-challenger",
-    "resolve-challenges": "challenge-resolver",
-    "check-feature-code": "code-auditor",
-    "resolve-code-alignment": "alignment-resolver"
-  },
-  "orchestrator_owned": [
-    "write-feature"
-  ],
-  "gated_subagents": [
-    "context-researcher",
-    "spec-writer",
-    "spec-reviewer",
-    "gap-resolver",
-    "spec-challenger",
-    "challenge-resolver",
-    "code-auditor",
-    "alignment-resolver"
-  ],
-  "restartable_steps": [
-    "find-context",
-    "write-feature",
-    "check-feature",
-    "resolve-gaps",
-    "challenge-feature",
-    "resolve-challenges",
-    "check-feature-code",
-    "resolve-code-alignment"
-  ],
-  "step_order": {
-    "find-context": 0,
-    "write-feature": 1,
-    "check-feature": 2,
-    "resolve-gaps": 3,
-    "challenge-feature": 4,
-    "resolve-challenges": 5,
-    "check-feature-code": 6,
-    "resolve-code-alignment": 7
-  },
   "nodes": {
     "calibration": [
       {

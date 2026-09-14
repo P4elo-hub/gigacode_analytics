@@ -68,5 +68,6 @@ Fail субагента → `append_run_log` → **`pipeline_delegate.py`** → 
 
 ## Карта шаг → субагент
 
-Канон: `scripts/pipeline_common.py` (`STEP_TO_SUBAGENT`). Граф viewer:
-`scripts/pipeline_schema.json`.
+Канон: `pipelines/<id>/registry.yaml` **активного** pipeline
+(`--pipeline` / `.pipeline-active-task.json` → `registry_for(pipeline_id)`).
+Не `STEP_TO_SUBAGENT`. Граф viewer: `scripts/pipeline_schema.json`.

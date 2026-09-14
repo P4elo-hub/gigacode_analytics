@@ -129,8 +129,8 @@ No edits to `pipeline_router.py` or `pipeline_predicates.py` unless you need a
 
 ## Tests
 
-Predicate catalog has its **own** suite. It is **not** in smoke (optional in
-Phase 5; smoke stays 30/30).
+Predicate catalog has its **own** suite. It is **not** in smoke (smoke is 31/31
+including a thin registry check).
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py

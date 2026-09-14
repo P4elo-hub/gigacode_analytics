@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Predicate catalog: core/domain names, reasons, compile typo, golden stubs.
 
-Not part of pipeline_smoke_test.py (Phase 5: keep smoke 30/30).
+Not part of pipeline_smoke_test.py (full catalog suite; smoke stays 31/31).
 """
 
 from __future__ import annotations

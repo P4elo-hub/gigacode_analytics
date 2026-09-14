@@ -25,6 +25,10 @@ tools:
 Оркестратор **калибровки процесса**, не spec-пайплайна. Не смешивай с
 `spec-orchestrator`.
 
+Карта шаг→субагент: `pipelines/calibration/registry.yaml` →
+`registry_for("calibration")` (delegate: `--pipeline calibration`).
+Не spec `STEP_TO_SUBAGENT`.
+
 # Цепочка `/calibrate <slug>`
 
 1. Нет baseline → `python3 scripts/snapshot_baseline.py <slug> --new-run`

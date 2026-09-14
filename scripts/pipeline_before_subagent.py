@@ -11,12 +11,10 @@ from pathlib import Path
 from artifact_paths import list_feature_slugs, workspace_root
 from build_pipeline_graph import subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_for_slug, load_active_task_latest
-from pipeline_common import pipeline_gated_subagents
+from pipeline_common import delegate_mode_for_subagent, pipeline_gated_subagents, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
 from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
-
-PIPELINE_GATED_SUBAGENTS = pipeline_gated_subagents()
 
 DELEGATE_CMD = "python3 scripts/pipeline_delegate.py <slug> --cli qwen"
 
@@ -64,12 +62,17 @@ def deny_output(reason: str) -> dict:
     }
 
 
-def write_feature_allowed(root: Path, slug: str, active: dict | None) -> bool:
-    if active and active.get("step") == "write-feature" and active.get("subagent") == "spec-writer":
+def write_feature_allowed(root: Path, slug: str, active: dict | None, pipeline_id: str) -> bool:
+    cycle = write_cycle_config(pipeline_id)
+    if not cycle:
+        return False
+    step = cycle.get("step")
+    subagent = cycle.get("subagent")
+    if active and active.get("step") == step and active.get("subagent") == subagent:
         return True
     if not slug:
         return False
-    dispatch = build_dispatch(root, slug)
+    dispatch = build_dispatch(root, slug, pipeline_id=pipeline_id)
     return dispatch.get("orchestrator_mode") == "write_feature_cycle"
 
 
@@ -86,17 +89,21 @@ def validate_task(
     if proposed in SKIP_SUBAGENTS:
         return allow_output(f"subagent {proposed} вне spec-pipeline gate")
 
-    if proposed not in PIPELINE_GATED_SUBAGENTS:
-        return allow_output(f"subagent {proposed} не требует pipeline delegate")
-
     active = load_active_task_latest(root)
     slug = (active or {}).get("slug") or slug_hint
+    pipeline_id = resolve_pipeline_id(pipeline_arg, active, default=DEFAULT_PIPELINE_ID)
+    gated = pipeline_gated_subagents(pipeline_id)
 
-    if proposed == "spec-writer":
-        if write_feature_allowed(root, slug, active):
-            return allow_output("write-feature: spec-writer разрешён в write_feature_cycle")
+    if proposed not in gated:
+        return allow_output(f"subagent {proposed} не требует pipeline delegate")
+
+    cycle_mode = delegate_mode_for_subagent(pipeline_id, proposed)
+    if cycle_mode:
+        mode_name, _block = cycle_mode
+        if write_feature_allowed(root, slug, active, pipeline_id):
+            return allow_output(f"{mode_name}: {proposed} разрешён в write_feature_cycle")
         return deny_output(
-            "spec-writer только внутри write_feature_cycle. "
+            f"{proposed} только внутри {mode_name}. "
             f"Сначала {DELEGATE_CMD.replace('<slug>', slug or '<slug>')}."
         )
 
@@ -106,7 +113,6 @@ def validate_task(
             f"Сначала {DELEGATE_CMD.replace('<slug>', slug or '<slug>')}."
         )
 
-    pipeline_id = resolve_pipeline_id(pipeline_arg, active, default=DEFAULT_PIPELINE_ID)
     schema = load_pipeline_schema(pipeline_id)
     proposed_step = subagent_to_step(schema, proposed) or ""
     if proposed_step and slug:
@@ -122,7 +128,7 @@ def validate_task(
                     active, slug = task, candidate
                     break
 
-        last = last_ok_pipeline_step(root, slug)
+        last = last_ok_pipeline_step(root, slug, pipeline_id)
         from_step = (last.get("step") if last else None) or schema.get("orchestrator")
         if not is_allowed_transition(schema, from_step, proposed_step):
             allowed = [
@@ -148,14 +154,14 @@ def validate_task(
     return allow_output(f"subagent `{proposed}` совпадает с active-task delegate")
 
 
-def before_subagent_hook(root: Path, hook_input: dict) -> dict:
+def before_subagent_hook(root: Path, hook_input: dict, pipeline_arg: str | None = None) -> dict:
     tool_name = str(hook_input.get("tool_name") or "").strip()
     tool_input = hook_input.get("tool_input")
     if not isinstance(tool_input, dict):
         tool_input = {}
 
     proposed = extract_proposed_subagent(tool_name, tool_input)
-    return validate_task(root, proposed)
+    return validate_task(root, proposed, pipeline_arg=pipeline_arg)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -190,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raw = sys.stdin.read()
 
-    payload = before_subagent_hook(root, parse_hook_input(raw))
+    payload = before_subagent_hook(root, parse_hook_input(raw), pipeline_arg=args.pipeline)
     print(json.dumps(payload, ensure_ascii=False))
     return 0
 

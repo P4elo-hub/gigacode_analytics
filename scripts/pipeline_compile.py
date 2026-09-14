@@ -91,6 +91,68 @@ def validate_dispatch(pipeline_id: str, spec: dict, restartable_steps: list[str]
     return errors
 
 
+def _known_agent_names() -> set[str]:
+    return set(build_catalog()["agents"])
+
+
+def _validate_pack_registry(
+    pipeline_id: str,
+    reg: dict,
+    node_ids: set,
+    known_agents: set[str],
+) -> list[str]:
+    errors: list[str] = []
+    for field in ("step_to_subagent", "orchestrator_owned", "gated_subagents", "restartable_steps"):
+        if field not in reg:
+            errors.append(f"registry.{pipeline_id}.{field} required")
+    node_ids_clean = {sid for sid in node_ids if sid}
+    step_map = reg.get("step_to_subagent") or {}
+    orch_owned = set(reg.get("orchestrator_owned") or [])
+    if not isinstance(step_map, dict):
+        errors.append(f"{pipeline_id}: step_to_subagent must be a mapping")
+        step_map = {}
+    for step, subagent in step_map.items():
+        if step in orch_owned:
+            errors.append(f"{pipeline_id}: step {step} is both orchestrator_owned and mapped")
+        if step not in node_ids_clean:
+            errors.append(f"{pipeline_id}: registry step {step} not in graph nodes")
+        if subagent and known_agents and subagent not in known_agents:
+            errors.append(f"{pipeline_id}: registry subagent {subagent} not in agent catalog")
+    for step in orch_owned:
+        if step not in node_ids_clean:
+            errors.append(f"{pipeline_id}: orchestrator_owned step {step} not in graph nodes")
+    for subagent in reg.get("gated_subagents") or []:
+        if subagent and known_agents and subagent not in known_agents:
+            errors.append(f"{pipeline_id}: gated subagent {subagent} not in agent catalog")
+    for step in reg.get("restartable_steps") or []:
+        if step not in node_ids_clean:
+            errors.append(f"{pipeline_id}: restartable step {step} not in graph nodes")
+    return errors
+
+
+def collect_compile_warnings(data: dict) -> list[str]:
+    """Informational: same step id mapping to different subagents across packs is OK."""
+    warnings: list[str] = []
+    registries = data.get("registries") or {}
+    by_step: dict[str, dict[str, str]] = {}
+    for pipe_id, reg in registries.items():
+        if not isinstance(reg, dict):
+            continue
+        step_map = reg.get("step_to_subagent") or {}
+        if not isinstance(step_map, dict):
+            continue
+        for step, subagent in step_map.items():
+            if not step or not subagent:
+                continue
+            by_step.setdefault(str(step), {})[str(pipe_id)] = str(subagent)
+    for step, pipes in sorted(by_step.items()):
+        subagents = set(pipes.values())
+        if len(pipes) > 1 and len(subagents) > 1:
+            detail = ", ".join(f"{pid}→{sub}" for pid, sub in sorted(pipes.items()))
+            warnings.append(f"warn: step {step} maps to different subagents ({detail})")
+    return warnings
+
+
 def validate_source(data: dict) -> list[str]:
     errors: list[str] = []
     pipelines = data.get("pipelines")
@@ -99,7 +161,7 @@ def validate_source(data: dict) -> list[str]:
         errors.append("no pipeline packs found under pipelines/")
         return errors
 
-    seen_steps_global: dict[str, str] = {}
+    known_agents = _known_agent_names()
     for pipe_id, pipe in pipelines.items():
         if not isinstance(pipe, dict):
             errors.append(f"pipelines.{pipe_id} must be a mapping")
@@ -119,20 +181,7 @@ def validate_source(data: dict) -> list[str]:
                     errors.append(f"pipelines.{pipe_id} edge {edge.get('id')} unknown {end}={target}")
 
         reg = registries.get(pipe_id) or {}
-        for field in ("step_to_subagent", "orchestrator_owned", "gated_subagents", "restartable_steps"):
-            if field not in reg:
-                errors.append(f"registry.{pipe_id}.{field} required")
-        step_map = reg.get("step_to_subagent") or {}
-        orch_owned = set(reg.get("orchestrator_owned") or [])
-        for step, _sub in step_map.items():
-            if step in orch_owned:
-                errors.append(f"{pipe_id}: step {step} is both orchestrator_owned and mapped")
-            prev = seen_steps_global.get(step)
-            if prev and prev != pipe_id:
-                pass  # uniqueness is per-pipeline; namespace is pipeline_id:step
-        for step in node_ids:
-            if step:
-                seen_steps_global.setdefault(step, pipe_id)
+        errors.extend(_validate_pack_registry(pipe_id, reg, node_ids, known_agents))
 
         dispatch = (data.get("dispatch") or {}).get(pipe_id)
         # Option A: pipeline without rules/invariants is valid (no compiled router).
@@ -258,7 +307,6 @@ def build_registry(data: dict) -> dict:
             else {},
         }
 
-    spec_reg = per_pipeline.get(DEFAULT_PIPELINE_ID) or next(iter(per_pipeline.values()), {})
     dispatch = {}
     for pid, spec in (data.get("dispatch") or {}).items():
         if not isinstance(spec, dict):
@@ -269,12 +317,8 @@ def build_registry(data: dict) -> dict:
         dispatch[pid] = normalized
     from pipeline_predicates import catalog_names
 
+    # Mapping lives only under pipelines.<id>. Do not copy spec to top-level.
     payload = {
-        "step_to_subagent": dict(spec_reg.get("step_to_subagent") or {}),
-        "orchestrator_owned": list(spec_reg.get("orchestrator_owned") or []),
-        "gated_subagents": list(spec_reg.get("gated_subagents") or []),
-        "restartable_steps": list(spec_reg.get("restartable_steps") or []),
-        "step_order": dict(spec_reg.get("step_order") or {}),
         "nodes": nodes_meta,
         "dispatch": dispatch,
         "status": dict(data.get("status") or {}),
@@ -400,6 +444,7 @@ def run_check(data: dict) -> tuple[bool, list[str]]:
     else:
         messages.append("pipeline_registry.json: missing (would be created by --apply)")
     messages.extend(check_parity_against_legacy(data))
+    messages.extend(collect_compile_warnings(data))
     ok = not any(
         msg.endswith("differs") or msg.startswith("validation:") or msg.startswith("parity:")
         for msg in messages
@@ -462,6 +507,8 @@ def main(argv: list[str] | None = None) -> int:
     for msg in messages:
         if msg.startswith("parity:") or "differs (" in msg or msg.startswith("validation:"):
             print(f"[FAIL] {msg}")
+        elif msg.startswith("warn:"):
+            print(f"[WARN] {msg}")
         else:
             print(f"[OK]   {msg}")
     print("-" * 40)

@@ -363,8 +363,9 @@ pipeline_dispatch / pipeline_delegate / validate
 |------|---------|------|
 | **Status** | `pipelines/<id>/status.yaml` + `pipeline_status.py` | снимок задачи для predicates |
 | **Routing** | `pipeline_dispatch.py`, `pipeline_router.py` | next step; `feature_status.py` — CLI spec |
-| **Enforcement** | `pipeline_delegate.py`, hooks, `pipeline_validate.py` | рёбра графа, `--pipeline` |
+| **Enforcement** | `pipeline_delegate.py`, hooks, `pipeline_validate.py` | рёбра графа, registry активного `pipeline_id` |
 | **Topology** | `pipelines/<id>/` → `pipeline_compile.py` | граф, registry, status, predicates |
+| **Registry** | `pipelines/<id>/registry.yaml` | step → subagent активного `pipeline_id`; `registry_for(id)` |
 | **Predicates** | `pipeline_predicates.py` + pack `predicates.py` | `when:` names: core from status.yaml + domain |
 
 `--pipeline spec` — полный declarative dispatch (эталон, 24+ golden).
@@ -382,7 +383,8 @@ pipeline_dispatch / pipeline_delegate / validate
 [scripts/PIPELINE-PREDICATES.md](scripts/PIPELINE-PREDICATES.md),
 [scripts/PIPELINE-COMPILE.md](scripts/PIPELINE-COMPILE.md),
 [scripts/PIPELINE-RUNTIME.md](scripts/PIPELINE-RUNTIME.md),
-[scripts/PIPELINE-STATUS.md](scripts/PIPELINE-STATUS.md).
+[scripts/PIPELINE-STATUS.md](scripts/PIPELINE-STATUS.md),
+[scripts/PIPELINE-REGISTRY.md](scripts/PIPELINE-REGISTRY.md).
 Golden: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.
@@ -443,6 +445,7 @@ python3 scripts/write_feature.py "<бриф>" --mode assemble --name <slug> \
 python3 scripts/feature_status.py <slug>
 python3 scripts/pipeline_dispatch.py <slug> --json   # next step (default --pipeline spec)
 python3 scripts/pipeline_dispatch.py <slug> --pipeline calibration --json
+python3 scripts/pipeline_restart.py <slug> --from-step capture-review --pipeline calibration
 python3 scripts/quality_gates.py <slug>
 
 # pipeline infra (после правок pipelines/<id>/)

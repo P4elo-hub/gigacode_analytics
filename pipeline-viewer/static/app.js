@@ -65,6 +65,13 @@ const RESTARTABLE_STEPS = new Set([
   "check-feature-code",
   "resolve-code-alignment",
 ]);
+let restartableByPipeline = {};
+
+function restartableStepsFor(pipeline) {
+  const list = restartableByPipeline[pipeline];
+  if (Array.isArray(list) && list.length) return new Set(list);
+  return pipeline === "spec" ? RESTARTABLE_STEPS : new Set();
+}
 
 function noticeBody(id) {
   return document.getElementById(id)?.querySelector(".notice-body") || null;
@@ -479,7 +486,7 @@ function clearNodePanel() {
 
 function updateRestartActions(stepId) {
   const wrap = document.getElementById("restart-actions");
-  if (!stepId || state.pipeline !== "spec" || !RESTARTABLE_STEPS.has(stepId)) {
+  if (!stepId || !restartableStepsFor(state.pipeline).has(stepId)) {
     wrap.classList.add("hidden");
     return;
   }
@@ -525,6 +532,7 @@ async function openRestartModal() {
   const params = new URLSearchParams({
     slug: state.slug,
     from_step: selectedNodeId,
+    pipeline: state.pipeline,
   });
   if (selectedTimelineSeq) params.set("from_seq", String(selectedTimelineSeq));
 
@@ -581,6 +589,7 @@ async function confirmRestart() {
         slug: state.slug,
         from_step: pendingRestartPlan.from_step,
         from_seq: pendingRestartPlan.from_seq,
+        pipeline: state.pipeline,
         confirm: true,
       }),
     });
@@ -1913,9 +1922,15 @@ async function init() {
       });
     });
 
+    if (config.restartable_steps_by_pipeline && typeof config.restartable_steps_by_pipeline === "object") {
+      restartableByPipeline = config.restartable_steps_by_pipeline;
+    }
     if (config.restartable_steps?.length) {
       RESTARTABLE_STEPS.clear();
       for (const step of config.restartable_steps) RESTARTABLE_STEPS.add(step);
+      if (!Array.isArray(restartableByPipeline.spec) || !restartableByPipeline.spec.length) {
+        restartableByPipeline = { ...restartableByPipeline, spec: [...config.restartable_steps] };
+      }
     }
 
     initNoticeDismissHandlers();
@@ -1935,6 +1950,7 @@ async function init() {
       btn.addEventListener("click", () => {
         state.pipeline = btn.dataset.pipeline;
         setActiveTab(state.pipeline);
+        updateRestartActions(selectedNodeId);
         connectStream();
       });
     });

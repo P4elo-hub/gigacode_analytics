@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -11,6 +12,7 @@ from agent_logs import load_manifest, run_log_path
 from pipeline_pack import DEFAULT_PIPELINE_ID
 
 REGISTRY_PATH = Path(__file__).resolve().parent / "generated" / "pipeline_registry.json"
+WRITE_FEATURE_CYCLE_MODE = "write_feature_cycle"
 
 
 @lru_cache(maxsize=1)
@@ -37,33 +39,20 @@ def known_pipeline_ids() -> tuple[str, ...]:
 
 
 def registry_for(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
+    """Canonical pack registry: ``pipelines.<id>`` only (not the top-level spec copy)."""
     data = load_pipeline_registry()
     pipes = data.get("pipelines") or {}
     if isinstance(pipes, dict) and pipeline_id in pipes:
         block = pipes[pipeline_id]
         if isinstance(block, dict) and "step_to_subagent" in block:
             return block
-    if pipeline_id == DEFAULT_PIPELINE_ID:
-        return data
     raise KeyError(f"unknown pipeline registry: {pipeline_id}")
 
 
 def pipeline_gated_subagents(pipeline_id: str | None = None) -> frozenset[str]:
-    data = load_pipeline_registry()
-    pipes = data.get("pipelines") or {}
-    if pipeline_id:
-        try:
-            return frozenset(registry_for(pipeline_id).get("gated_subagents") or [])
-        except KeyError:
-            pass
-    gated: set[str] = set()
-    if isinstance(pipes, dict):
-        for block in pipes.values():
-            if isinstance(block, dict) and "gated_subagents" in block:
-                gated.update(block.get("gated_subagents") or [])
-    if not gated:
-        gated.update(data.get("gated_subagents") or [])
-    return frozenset(gated)
+    """Gated subagents for one pipeline. ``None`` → spec (never a union of packs)."""
+    pipe_id = pipeline_id or DEFAULT_PIPELINE_ID
+    return frozenset(registry_for(pipe_id).get("gated_subagents") or [])
 
 
 def pipeline_restartable_steps(pipeline_id: str = DEFAULT_PIPELINE_ID) -> tuple[str, ...]:
@@ -91,18 +80,16 @@ def pipeline_delegate_modes(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
     return dict(registry_for(pipeline_id).get("delegate_modes") or {})
 
 
-# Backward-compat aliases: spec pack (legacy imports).
-_spec = load_pipeline_registry()
-STEP_TO_SUBAGENT: dict[str, str] = dict(
-    (_spec.get("pipelines") or {}).get(DEFAULT_PIPELINE_ID, {}).get("step_to_subagent")
-    or _spec.get("step_to_subagent")
-    or {}
-)
-ORCHESTRATOR_OWNED_STEPS = frozenset(
-    (_spec.get("pipelines") or {}).get(DEFAULT_PIPELINE_ID, {}).get("orchestrator_owned")
-    or _spec.get("orchestrator_owned")
-    or []
-)
+def write_cycle_config(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
+    block = pipeline_delegate_modes(pipeline_id).get(WRITE_FEATURE_CYCLE_MODE)
+    return dict(block) if isinstance(block, dict) else {}
+
+
+def delegate_mode_for_subagent(pipeline_id: str, subagent: str) -> tuple[str, dict] | None:
+    for name, block in pipeline_delegate_modes(pipeline_id).items():
+        if isinstance(block, dict) and block.get("subagent") == subagent:
+            return name, dict(block)
+    return None
 
 
 def command_to_step(command: str) -> str:
@@ -163,3 +150,22 @@ def last_successful_step_ts(
         except ValueError:
             continue
     return None
+
+
+def __getattr__(name: str):
+    """Deprecated spec-pack snapshots. Prefer ``registry_for(pipeline_id)``."""
+    if name == "STEP_TO_SUBAGENT":
+        warnings.warn(
+            "STEP_TO_SUBAGENT is a spec-pack snapshot; use pipeline_step_to_subagent(pipeline_id)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return pipeline_step_to_subagent(DEFAULT_PIPELINE_ID)
+    if name == "ORCHESTRATOR_OWNED_STEPS":
+        warnings.warn(
+            "ORCHESTRATOR_OWNED_STEPS is a spec-pack snapshot; use pipeline_orchestrator_owned(pipeline_id)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return pipeline_orchestrator_owned(DEFAULT_PIPELINE_ID)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -27,4 +27,6 @@ Apply a pack JSON from a frontend: `pipeline_compile.py --from-json pack.json`.
 Runtime contract: `scripts/PIPELINE-RUNTIME.md`.
 Status contract: `scripts/PIPELINE-STATUS.md`.
 Predicate catalog: `scripts/PIPELINE-PREDICATES.md`.
+Registry (step → subagent, gated, restart): `scripts/PIPELINE-REGISTRY.md`.
+Compiled mapping is only `pipelines.<id>` in `pipeline_registry.json`.
 Spec remains the reference pack (24+ golden cases).

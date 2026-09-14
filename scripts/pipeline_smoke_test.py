@@ -538,6 +538,34 @@ def check_pipeline_before_subagent(report: Report, slug: str) -> None:
     )
 
 
+def check_pipeline_registry_scoped(report: Report) -> None:
+    """Thin check: runtime mapping is per pipeline, not a union/global spec copy."""
+    from pipeline_common import (
+        pipeline_gated_subagents,
+        pipeline_step_to_subagent,
+        registry_for,
+        subagent_for_step,
+    )
+
+    spec_map = pipeline_step_to_subagent("spec")
+    cal_map = pipeline_step_to_subagent("calibration")
+    spec_gated = pipeline_gated_subagents("spec")
+    cal_gated = pipeline_gated_subagents("calibration")
+    ok = (
+        spec_map != cal_map
+        and registry_for("calibration")["step_to_subagent"] == cal_map
+        and subagent_for_step("capture-review", "spec") == ""
+        and subagent_for_step("capture-review", "calibration") == "review-capturer"
+        and "review-capturer" not in spec_gated
+        and "review-capturer" in cal_gated
+    )
+    report.add(
+        "pipeline-registry:scoped",
+        ok,
+        f"spec_steps={len(spec_map)} cal_steps={len(cal_map)}",
+    )
+
+
 def check_pipeline_compile(report: Report) -> None:
     """All packs compile; spec parity vs legacy mapping."""
     import pipeline_compile as compile_mod
@@ -608,6 +636,7 @@ def main() -> int:
 
     check_dispatch_golden(report)
     check_pipeline_compile(report)
+    check_pipeline_registry_scoped(report)
     check_viewer_health(report)
     check_cli_settings(report)
     check_dispatch(report, SMOKE_SLUG)

@@ -19,8 +19,9 @@ sys.path.insert(0, str(SCRIPTS))
 from artifact_paths import list_feature_slugs, workspace_root  # noqa: E402
 from build_pipeline_graph import build_graph  # noqa: E402
 from sync_pipeline_session import sync_session  # noqa: E402
+from pipeline_common import known_pipeline_ids, pipeline_restartable_steps  # noqa: E402
+from pipeline_pack import DEFAULT_PIPELINE_ID  # noqa: E402
 from pipeline_restart import (  # noqa: E402
-    RESTARTABLE_STEPS,
     apply_restart_plan,
     build_restart_plan,
     plan_to_dict,
@@ -31,6 +32,13 @@ DEFAULT_PORT = 8765
 API_VERSION = 5
 POLL_INTERVAL = 1.0
 PIPELINES = ("spec", "calibration")
+
+
+def _normalize_pipeline(raw: str | None) -> str:
+    pipeline = raw or DEFAULT_PIPELINE_ID
+    if pipeline not in known_pipeline_ids():
+        return DEFAULT_PIPELINE_ID
+    return pipeline
 
 
 @dataclass
@@ -214,7 +222,10 @@ def make_handler(workspace: Path, defaults: Defaults):
                             {"id": "spec", "label": "Spec pipeline"},
                             {"id": "calibration", "label": "Calibration"},
                         ],
-                        "restartable_steps": list(RESTARTABLE_STEPS),
+                        "restartable_steps": list(pipeline_restartable_steps(DEFAULT_PIPELINE_ID)),
+                        "restartable_steps_by_pipeline": {
+                            pid: list(pipeline_restartable_steps(pid)) for pid in known_pipeline_ids()
+                        },
                     }
                 )
                 return
@@ -270,11 +281,18 @@ def make_handler(workspace: Path, defaults: Defaults):
                 from_step = (qs.get("from_step") or [""])[0]
                 from_seq_raw = (qs.get("from_seq") or [""])[0]
                 from_seq = int(from_seq_raw) if from_seq_raw.isdigit() else None
+                pipeline = _normalize_pipeline((qs.get("pipeline") or [DEFAULT_PIPELINE_ID])[0])
                 if not slug or not from_step:
                     self._send_json({"error": "slug and from_step required"}, status=400)
                     return
                 try:
-                    plan = build_restart_plan(workspace, slug, from_step, from_seq=from_seq)
+                    plan = build_restart_plan(
+                        workspace,
+                        slug,
+                        from_step,
+                        from_seq=from_seq,
+                        pipeline_id=pipeline,
+                    )
                     self._send_json(plan_to_dict(plan))
                 except ValueError as exc:
                     self._send_json({"error": str(exc)}, status=400)
@@ -306,6 +324,7 @@ def make_handler(workspace: Path, defaults: Defaults):
             slug = payload.get("slug", "")
             from_step = payload.get("from_step", "")
             from_seq = payload.get("from_seq")
+            pipeline = _normalize_pipeline(payload.get("pipeline"))
             confirm = payload.get("confirm") is True
             if not confirm:
                 self._send_json({"error": "confirm: true required"}, status=400)
@@ -314,7 +333,13 @@ def make_handler(workspace: Path, defaults: Defaults):
                 self._send_json({"error": "slug and from_step required"}, status=400)
                 return
             try:
-                plan = build_restart_plan(workspace, slug, from_step, from_seq=from_seq)
+                plan = build_restart_plan(
+                    workspace,
+                    slug,
+                    from_step,
+                    from_seq=from_seq,
+                    pipeline_id=pipeline,
+                )
                 result = apply_restart_plan(workspace, plan)
                 self._send_json({"plan": plan_to_dict(plan), "result": result})
             except ValueError as exc:
