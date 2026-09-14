@@ -1,0 +1,70 @@
+label: Calibration pipeline
+orchestrator: calibration-orchestrator
+nodes:
+  - id: calibration-orchestrator
+    label: calibration-orchestrator
+    kind: orchestrator
+  - id: snapshot-baseline
+    label: snapshot-baseline
+    subagent: null
+    kind: step
+  - id: capture-review
+    label: capture-review
+    subagent: review-capturer
+    kind: step
+  - id: analyze-delta
+    label: analyze-delta
+    subagent: regression-analyst
+    kind: step
+  - id: analyze-telemetry
+    label: analyze-telemetry
+    subagent: session-telemetry-analyst
+    kind: step
+  - id: propose-calibration
+    label: propose-calibration
+    subagent: calibration-proposer
+    kind: step
+  - id: apply-calibration
+    label: apply-calibration
+    subagent: calibration-applier
+    kind: step
+  - id: benchmark-rerun
+    label: benchmark-rerun
+    subagent: benchmark-runner
+    kind: step
+  - id: cal-done
+    label: Scorecard
+    kind: terminal
+edges:
+  - id: c-start
+    from: calibration-orchestrator
+    to: snapshot-baseline
+    kind: main
+  - id: c-sb-cr
+    from: snapshot-baseline
+    to: capture-review
+    kind: main
+  - id: c-cr-ad
+    from: capture-review
+    to: analyze-delta
+    kind: main
+  - id: c-ad-at
+    from: analyze-delta
+    to: analyze-telemetry
+    kind: main
+  - id: c-at-pc
+    from: analyze-telemetry
+    to: propose-calibration
+    kind: main
+  - id: c-pc-ac
+    from: propose-calibration
+    to: apply-calibration
+    kind: main
+  - id: c-ac-br
+    from: apply-calibration
+    to: benchmark-rerun
+    kind: main
+  - id: c-br-done
+    from: benchmark-rerun
+    to: cal-done
+    kind: main

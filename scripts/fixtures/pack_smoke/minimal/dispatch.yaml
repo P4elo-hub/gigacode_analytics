@@ -1,0 +1,4 @@
+# Option A: no router — compile skips dispatch block for this pack.
+invariant_after_priority: 0
+invariants:
+rules:

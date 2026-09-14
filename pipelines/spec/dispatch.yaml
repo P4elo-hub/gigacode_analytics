@@ -1,0 +1,59 @@
+# Named when: values must be in the spec predicate catalog (core + pack).
+invariant_after_priority: 30
+invariants:
+  - id: needs-check-feature
+    step: check-feature
+fallback:
+  next: check-feature-code
+  reason: alignment без PASS / PASS WITH GAPS
+rules:
+  - priority: 10
+    when: alignment_limit_exhausted
+    next: null
+    outcome: stopped
+  - priority: 20
+    when: not_has_context
+    next: find-context
+  - priority: 30
+    when: not_has_spec
+    next: write-feature
+  - priority: 40
+    when: needs_answer_with_gaps
+    next: resolve-gaps
+  - priority: 45
+    when: needs_answer_alignment_only
+    next: resolve-code-alignment
+  - priority: 50
+    when: needs_answer_challenges_only
+    next: resolve-challenges
+  - priority: 60
+    when: pending_apply_with_gaps
+    next: resolve-gaps
+  - priority: 65
+    when: pending_apply_alignment_only
+    next: resolve-code-alignment
+  - priority: 70
+    when: pending_apply_challenges_only
+    next: resolve-challenges
+  - priority: 80
+    when: critical_major_mismatch_resolvable
+    next: resolve-code-alignment
+  - priority: 90
+    when: open_gaps
+    next: resolve-gaps
+  - priority: 100
+    when: open_challenges
+    next: resolve-challenges
+  - priority: 110
+    when: no_challenges_file
+    next: challenge-feature
+  - priority: 120
+    when: alignment_missing_or_stale
+    next: check-feature-code
+  - priority: 130
+    when: alignment_pass
+    next: null
+    outcome: ready
+  - priority: 140
+    when: alignment_fail_reaudit
+    next: check-feature-code

@@ -22,6 +22,7 @@ from pipeline_dispatch import build_dispatch  # noqa: E402
 
 FIXTURES_DIR = SCRIPTS / "fixtures" / "dispatch_golden"
 SLUG = "dispatch-golden"
+DEFAULT_PIPELINE = "spec"
 
 DISPATCH_KEYS = (
     "ready",
@@ -29,6 +30,10 @@ DISPATCH_KEYS = (
     "next_subagent",
     "orchestrator_mode",
     "must_continue",
+)
+OPTIONAL_EXPECT_KEYS = (
+    "dispatch_supported",
+    "pipeline_id",
 )
 
 
@@ -52,7 +57,7 @@ class Report:
 
     def print_report(self) -> None:
         print("=" * 60)
-        print("Pipeline dispatch golden tests (compiled router)")
+        print("Pipeline dispatch golden tests (per-pipeline packs)")
         print("=" * 60)
         for c in self.checks:
             mark = "PASS" if c.ok else "FAIL"
@@ -142,13 +147,25 @@ def _load_cases() -> list[dict]:
     cases: list[dict] = []
     if not FIXTURES_DIR.is_dir():
         return cases
-    for path in sorted(FIXTURES_DIR.glob("*.json")):
+    for pipe_dir in sorted(p for p in FIXTURES_DIR.iterdir() if p.is_dir()):
+        path = pipe_dir / "cases.json"
+        if not path.is_file():
+            continue
         data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, list):
-            cases.extend(data)
-        else:
-            data.setdefault("id", path.stem)
-            cases.append(data)
+        rows = data if isinstance(data, list) else [data]
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row.setdefault("pipeline_id", pipe_dir.name)
+            cases.append(row)
+    legacy = FIXTURES_DIR / "cases.json"
+    if legacy.is_file():
+        data = json.loads(legacy.read_text(encoding="utf-8"))
+        rows = data if isinstance(data, list) else [data]
+        for row in rows:
+            if isinstance(row, dict):
+                row.setdefault("pipeline_id", DEFAULT_PIPELINE)
+                cases.append(row)
     return cases
 
 
@@ -160,14 +177,16 @@ def run_case(case: dict) -> tuple[bool, str]:
     try:
         _write_tree(tmp, case.get("files") or {})
         _apply_post_setup(tmp, case)
-        dispatch = build_dispatch(tmp, slug)
+        dispatch = build_dispatch(tmp, slug, case.get("pipeline_id") or DEFAULT_PIPELINE)
         actual = _dispatch_subset(dispatch)
         mismatches: list[str] = []
         for key, expected in expect.items():
-            if key not in DISPATCH_KEYS:
-                continue
-            if actual.get(key) != expected:
-                mismatches.append(f"{key}: expected {expected!r}, got {actual.get(key)!r}")
+            if key in DISPATCH_KEYS:
+                if actual.get(key) != expected:
+                    mismatches.append(f"{key}: expected {expected!r}, got {actual.get(key)!r}")
+            elif key in OPTIONAL_EXPECT_KEYS:
+                if dispatch.get(key) != expected:
+                    mismatches.append(f"{key}: expected {expected!r}, got {dispatch.get(key)!r}")
         if case.get("expect_reason_contains"):
             reason = dispatch.get("next_reason") or ""
             needle = case["expect_reason_contains"]

@@ -1,0 +1,23 @@
+step_to_subagent:
+  capture-review: review-capturer
+  analyze-delta: regression-analyst
+  analyze-telemetry: session-telemetry-analyst
+  propose-calibration: calibration-proposer
+  apply-calibration: calibration-applier
+  benchmark-rerun: benchmark-runner
+orchestrator_owned:
+  - snapshot-baseline
+gated_subagents:
+  - review-capturer
+  - regression-analyst
+  - calibration-proposer
+  - calibration-applier
+  - benchmark-runner
+restartable_steps:
+  - snapshot-baseline
+  - capture-review
+  - analyze-delta
+  - analyze-telemetry
+  - propose-calibration
+  - apply-calibration
+  - benchmark-rerun

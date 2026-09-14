@@ -346,23 +346,36 @@ Spec должен оставаться **чистым**: журналы реше
 
 ### 8.1. Dispatch: как выбирается следующий шаг
 
-После cutover (phase 2) routing — **только** через compiled router:
+Routing — compiled router по pack `pipelines/<id>/`. Phase 3+ делает
+`pipeline_id` явной сущностью: один движок, несколько графов.
 
 ```
-pipeline.yaml (dispatch.spec) → pipeline_router.py → feature_status.choose_next_step()
+--pipeline <id>  (default spec)
+    ↓
+pipelines/<id>/{graph,dispatch,status,registry}.yaml
+    ↓
+pipeline_status.load_status_spec(id) + predicate catalog
+    ↓
+pipeline_dispatch / pipeline_delegate / validate
 ```
-
-Три слоя инфраструктуры:
 
 | Слой | Скрипты | Роль |
 |------|---------|------|
-| **Routing** | `feature_status.py`, `pipeline_dispatch.py` | next step для оркестратора |
-| **Enforcement** | `pipeline_delegate.py`, `pipeline_before_subagent.py`, `pipeline_divergence.py` | illegal transition, graph gate |
-| **Topology** | `pipeline.yaml` → `pipeline_compile.py` → `generated/pipeline_registry.json` | граф шагов и рёбер |
+| **Routing** | `pipeline_status.py`, `pipeline_dispatch.py` | next step; `feature_status.py` — wrapper spec |
+| **Enforcement** | `pipeline_delegate.py`, hooks, `pipeline_validate.py` | рёбра графа, `--pipeline` |
+| **Topology** | `pipelines/<id>/` → `pipeline_compile.py` | граф, registry, status, predicates |
+
+`--pipeline spec` — полный declarative dispatch (эталон, 24+ golden).
+`--pipeline calibration` — граф и проверка рёбер; правил dispatch нет
+(`orchestrator_mode: orchestrator_only`).
+
+`.pipeline-active-task.json` хранит `"pipeline"`. Hooks читают его,
+если `--pipeline` не задан.
 
 Подробнее: [scripts/PIPELINE-ROUTER.md](scripts/PIPELINE-ROUTER.md),
-[scripts/PIPELINE-COMPILE.md](scripts/PIPELINE-COMPILE.md).
-Golden contract (24 кейса): [scripts/fixtures/dispatch_golden/COVERAGE.md](scripts/fixtures/dispatch_golden/COVERAGE.md).
+[scripts/PIPELINE-COMPILE.md](scripts/PIPELINE-COMPILE.md),
+[scripts/PIPELINE-RUNTIME.md](scripts/PIPELINE-RUNTIME.md).
+Golden: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.
 
@@ -420,10 +433,11 @@ python3 scripts/write_feature.py "<бриф>" --mode assemble --name <slug> \
   --part-dir Feature-writing/<slug> --out Feature-writing/<slug>/<slug>.md
 
 python3 scripts/feature_status.py <slug>
-python3 scripts/pipeline_dispatch.py <slug> --json   # next step для оркестратора
+python3 scripts/pipeline_dispatch.py <slug> --json   # next step (default --pipeline spec)
+python3 scripts/pipeline_dispatch.py <slug> --pipeline calibration --json
 python3 scripts/quality_gates.py <slug>
 
-# pipeline infra (после правок pipeline.yaml)
+# pipeline infra (после правок pipelines/<id>/)
 python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py

@@ -1,4 +1,4 @@
-"""Shared pipeline step mapping and run-log helpers."""
+"""Shared pipeline registry helpers — scoped to the active pipeline pack."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from agent_logs import load_manifest, run_log_path
+from pipeline_pack import DEFAULT_PIPELINE_ID
 
 REGISTRY_PATH = Path(__file__).resolve().parent / "generated" / "pipeline_registry.json"
 
@@ -24,27 +25,87 @@ def load_pipeline_registry() -> dict:
     return payload
 
 
-def pipeline_gated_subagents() -> frozenset[str]:
-    return frozenset(load_pipeline_registry()["gated_subagents"])
+def known_pipeline_ids() -> tuple[str, ...]:
+    data = load_pipeline_registry()
+    pipes = data.get("pipelines")
+    if isinstance(pipes, dict) and any(isinstance(v, dict) and "step_to_subagent" in v for v in pipes.values()):
+        return tuple(pipes.keys())
+    nodes = data.get("nodes") or {}
+    if isinstance(nodes, dict) and nodes:
+        return tuple(nodes.keys())
+    return (DEFAULT_PIPELINE_ID,)
 
 
-def pipeline_restartable_steps() -> tuple[str, ...]:
-    return tuple(load_pipeline_registry()["restartable_steps"])
+def registry_for(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
+    data = load_pipeline_registry()
+    pipes = data.get("pipelines") or {}
+    if isinstance(pipes, dict) and pipeline_id in pipes:
+        block = pipes[pipeline_id]
+        if isinstance(block, dict) and "step_to_subagent" in block:
+            return block
+    if pipeline_id == DEFAULT_PIPELINE_ID:
+        return data
+    raise KeyError(f"unknown pipeline registry: {pipeline_id}")
 
 
-def pipeline_step_order() -> dict[str, int]:
-    return dict(load_pipeline_registry()["step_order"])
+def pipeline_gated_subagents(pipeline_id: str | None = None) -> frozenset[str]:
+    data = load_pipeline_registry()
+    pipes = data.get("pipelines") or {}
+    if pipeline_id:
+        try:
+            return frozenset(registry_for(pipeline_id).get("gated_subagents") or [])
+        except KeyError:
+            pass
+    gated: set[str] = set()
+    if isinstance(pipes, dict):
+        for block in pipes.values():
+            if isinstance(block, dict) and "gated_subagents" in block:
+                gated.update(block.get("gated_subagents") or [])
+    if not gated:
+        gated.update(data.get("gated_subagents") or [])
+    return frozenset(gated)
 
 
-_registry = load_pipeline_registry()
-STEP_TO_SUBAGENT: dict[str, str] = dict(_registry["step_to_subagent"])
+def pipeline_restartable_steps(pipeline_id: str = DEFAULT_PIPELINE_ID) -> tuple[str, ...]:
+    return tuple(registry_for(pipeline_id).get("restartable_steps") or [])
 
-# write-feature is orchestrator-owned (spec-writer loop), not a single subagent task.
-ORCHESTRATOR_OWNED_STEPS = frozenset(_registry["orchestrator_owned"])
+
+def pipeline_step_order(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict[str, int]:
+    reg = registry_for(pipeline_id)
+    order = reg.get("step_order")
+    if isinstance(order, dict) and order:
+        return {str(k): int(v) for k, v in order.items()}
+    steps = pipeline_restartable_steps(pipeline_id)
+    return {name: index for index, name in enumerate(steps)}
+
+
+def pipeline_step_to_subagent(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict[str, str]:
+    return dict(registry_for(pipeline_id).get("step_to_subagent") or {})
+
+
+def pipeline_orchestrator_owned(pipeline_id: str = DEFAULT_PIPELINE_ID) -> frozenset[str]:
+    return frozenset(registry_for(pipeline_id).get("orchestrator_owned") or [])
+
+
+def pipeline_delegate_modes(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
+    return dict(registry_for(pipeline_id).get("delegate_modes") or {})
+
+
+# Backward-compat aliases: spec pack (legacy imports).
+_spec = load_pipeline_registry()
+STEP_TO_SUBAGENT: dict[str, str] = dict(
+    (_spec.get("pipelines") or {}).get(DEFAULT_PIPELINE_ID, {}).get("step_to_subagent")
+    or _spec.get("step_to_subagent")
+    or {}
+)
+ORCHESTRATOR_OWNED_STEPS = frozenset(
+    (_spec.get("pipelines") or {}).get(DEFAULT_PIPELINE_ID, {}).get("orchestrator_owned")
+    or _spec.get("orchestrator_owned")
+    or []
+)
 
 
 def command_to_step(command: str) -> str:
-    """`/check-feature slug` → `check-feature`."""
     token = command.strip().split()[0] if command.strip() else ""
     return token.lstrip("/") if token.startswith("/") else token
 
@@ -53,10 +114,10 @@ def step_to_command(step: str, slug: str) -> str:
     return f"/{step} {slug}"
 
 
-def subagent_for_step(step: str) -> str:
-    if step in ORCHESTRATOR_OWNED_STEPS:
+def subagent_for_step(step: str, pipeline_id: str = DEFAULT_PIPELINE_ID) -> str:
+    if step in pipeline_orchestrator_owned(pipeline_id):
         return ""
-    return STEP_TO_SUBAGENT.get(step, "")
+    return pipeline_step_to_subagent(pipeline_id).get(step, "")
 
 
 def parse_run_log_ts(ts: str) -> float:

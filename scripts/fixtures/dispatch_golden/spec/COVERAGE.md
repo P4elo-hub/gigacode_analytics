@@ -2,8 +2,10 @@
 
 Maps `choose_next_step()` / `needs_check_feature()` branches to fixture ids.
 
-Phase 2 (cutover complete): branches are declared in `pipeline.yaml` → `dispatch.spec` and
-evaluated by `pipeline_router.py` via `build_dispatch()`. Golden fixtures are the routing contract.
+Branches are declared in `pipelines/spec/dispatch.yaml` and evaluated by
+`pipeline_router.py` via `build_dispatch(..., pipeline_id="spec")`.
+Golden fixtures are the spec routing contract. Calibration has no dispatch rules
+(`orchestrator_only`).
 
 ## Invariant (after P10–P30, before P40+)
 
@@ -49,6 +51,6 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Calibration pipeline graph | `graph:*:calibration` |
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
-Phase 1+ (registry compile) must keep **dispatch-golden** green (currently 24 cases, compiled router only).
+Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 24 cases + calibration 1 orchestrator_only).
 
 Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`.

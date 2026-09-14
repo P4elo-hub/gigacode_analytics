@@ -1,0 +1,18 @@
+[
+  {
+    "id": "01-orchestrator-only",
+    "slug": "dispatch-golden",
+    "pipeline_id": "calibration",
+    "files": {},
+    "expect": {
+      "ready": false,
+      "next_step": "",
+      "next_subagent": "",
+      "orchestrator_mode": "orchestrator_only",
+      "must_continue": false,
+      "dispatch_supported": false,
+      "pipeline_id": "calibration"
+    },
+    "expect_reason_contains": "dispatch not configured"
+  }
+]

@@ -8,6 +8,7 @@ from typing import Any
 
 from pipeline_common import STEP_TO_SUBAGENT, read_run_log, subagent_for_step
 from pipeline_dispatch import build_dispatch
+from pipeline_runtime import DEFAULT_PIPELINE_ID, dispatch_supported
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARN = "warn"
@@ -258,7 +259,12 @@ def filter_divergence_for_restart(
 
 def finalize_divergence(divergence: dict[str, Any]) -> None:
     """Recompute summary and by_step after filtering items in-place."""
+    prev = divergence.get("summary") or {}
     items = divergence.get("items") or []
+    if prev.get("status") == "n/a" and divergence.get("dispatch") is None:
+        divergence["items"] = items
+        divergence["by_step"] = index_divergence_by_step(items)
+        return
     dispatch = divergence.get("dispatch") or {}
     status = "ok"
     if any(item.get("severity") == SEVERITY_ERROR for item in items):
@@ -266,7 +272,6 @@ def finalize_divergence(divergence: dict[str, Any]) -> None:
     elif items:
         status = "warn"
 
-    prev = divergence.get("summary") or {}
     divergence["items"] = items
     divergence["by_step"] = index_divergence_by_step(items)
     divergence["summary"] = {
@@ -441,14 +446,18 @@ def analyze_divergence(
     log_next_step: str = "",
 ) -> dict[str, Any]:
     """Return dispatch snapshot + list of divergence records for the viewer."""
-    if pipeline != "spec":
+    if not dispatch_supported(pipeline):
         return {
             "dispatch": None,
             "items": [],
-            "summary": {"status": "n/a", "count": 0, "message": "Dispatch только для spec pipeline"},
+            "summary": {
+                "status": "n/a",
+                "count": 0,
+                "message": f"Dispatch не настроен для pipeline {pipeline}",
+            },
         }
 
-    dispatch = build_dispatch(root, slug)
+    dispatch = build_dispatch(root, slug, pipeline_id=pipeline)
     items: list[dict[str, Any]] = []
 
     expected_step = dispatch.get("next_step") or ""
@@ -648,14 +657,20 @@ def main() -> None:
     import json
 
     from artifact_paths import resolve_slug, workspace_root
-    from build_pipeline_graph import load_schema, merge_history, read_jsonl, resolve_viewer_run_id
+    from build_pipeline_graph import merge_history, read_jsonl, resolve_viewer_run_id
     from agent_logs import events_path, run_log_path
     from build_pipeline_graph import collect_spawn_steps, infer_active_subagent, is_session_live
+    from pipeline_runtime import DEFAULT_PIPELINE_ID, known_pipeline_ids, load_pipeline_schema, normalize_pipeline_id
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("slug")
     parser.add_argument("--run-id", default="auto")
     parser.add_argument("--root", default=".", type=Path)
+    parser.add_argument(
+        "--pipeline",
+        default=DEFAULT_PIPELINE_ID,
+        help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
+    )
     args = parser.parse_args()
 
     root = workspace_root(args.root)
@@ -664,7 +679,8 @@ def main() -> None:
         raise SystemExit("slug not found")
 
     rid = resolve_viewer_run_id(root, slug, args.run_id)
-    schema = load_schema()["pipelines"]["spec"]
+    pipeline = normalize_pipeline_id(args.pipeline)
+    schema = load_pipeline_schema(pipeline)
     events = read_jsonl(events_path(root, slug, rid))
     run_log = read_jsonl(run_log_path(root, slug, rid))
     _, spawn_rows = collect_spawn_steps(events, schema)
@@ -690,7 +706,7 @@ def main() -> None:
         history=history,
         current=current,
         live=live,
-        pipeline="spec",
+        pipeline=pipeline,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

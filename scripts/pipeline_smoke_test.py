@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -130,7 +132,7 @@ def ensure_smoke_fixtures() -> None:
 def check_dispatch(report: Report, slug: str) -> None:
     try:
         d = build_dispatch(ROOT, slug)
-        ok = bool(d.get("slug")) and "next_step" in d
+        ok = bool(d.get("slug")) and "next_step" in d and d.get("pipeline_id") == "spec"
         report.add(
             f"dispatch:{slug}",
             ok,
@@ -139,6 +141,106 @@ def check_dispatch(report: Report, slug: str) -> None:
         )
     except Exception as exc:
         report.add(f"dispatch:{slug}", False, str(exc))
+
+
+def check_resolve_pipeline_from_active_task(report: Report) -> None:
+    """CLI --pipeline wins; else active-task.pipeline."""
+    from pipeline_active_task import clear_active_task, load_active_task, save_active_task
+    from pipeline_runtime import resolve_pipeline_id
+
+    root_task = ROOT / ".pipeline-active-task.json"
+    backup = root_task.read_text(encoding="utf-8") if root_task.is_file() else None
+    try:
+        save_active_task(
+            ROOT,
+            slug=SMOKE_SLUG,
+            step="capture-review",
+            subagent="review-capturer",
+            pipeline="calibration",
+        )
+        resolved = resolve_pipeline_id(None, load_active_task(ROOT))
+        cli_override = resolve_pipeline_id("spec", load_active_task(ROOT))
+        ok = resolved == "calibration" and cli_override == "spec"
+        report.add(
+            "resolve-pipeline-id:active-task",
+            ok,
+            f"from_task={resolved} cli_override={cli_override}",
+        )
+    except Exception as exc:
+        report.add("resolve-pipeline-id:active-task", False, str(exc))
+    finally:
+        clear_active_task(ROOT, SMOKE_SLUG)
+        if backup is not None:
+            root_task.write_text(backup, encoding="utf-8")
+        elif root_task.is_file():
+            root_task.unlink()
+
+
+def check_validate_calibration(report: Report, slug: str) -> None:
+    """pipeline_validate for calibration must ok with dispatch-not-configured advice."""
+    from pipeline_validate import validate_slug
+
+    try:
+        result = validate_slug(ROOT, slug, pipeline="calibration")
+        advice_ids = [a.id for a in result.advice]
+        ok = result.ok and "dispatch-not-configured" in advice_ids
+        report.add(
+            f"validate:calibration:{slug}",
+            ok,
+            f"ok={result.ok} advice={advice_ids}",
+        )
+    except Exception as exc:
+        report.add(f"validate:calibration:{slug}", False, str(exc))
+
+
+def check_pack_smoke_minimal(report: Report) -> None:
+    """Minimal pack fixture compiles in isolation (Phase 8 template)."""
+    from pipeline_compile import compile_outputs, validate_source
+    from pipeline_pack import merge_compiled_source
+
+    fixture = SCRIPTS / "fixtures" / "pack_smoke" / "minimal"
+    try:
+        with tempfile.TemporaryDirectory(prefix="pack-smoke-") as tmp:
+            root = Path(tmp)
+            pack_dir = root / "pipelines" / "smoke-minimal"
+            pack_dir.mkdir(parents=True)
+            for name in ("graph.yaml", "dispatch.yaml", "status.yaml", "registry.yaml"):
+                shutil.copy(fixture / name, pack_dir / name)
+            data = merge_compiled_source(root)
+            errors = validate_source(data)
+            schema_text, registry_text = compile_outputs(data)
+            registry = json.loads(registry_text)
+            compiled_dispatch = (registry.get("dispatch") or {}).keys()
+            ok = (
+                not errors
+                and "smoke-minimal" in schema_text
+                and "smoke-minimal" in registry_text
+                and "smoke-minimal" not in compiled_dispatch
+            )
+            detail = "compile ok, no dispatch router" if ok else "; ".join(errors[:3]) or "missing pack id"
+            report.add("pack-smoke:minimal", ok, detail)
+    except Exception as exc:
+        report.add("pack-smoke:minimal", False, str(exc))
+
+
+def check_dispatch_calibration(report: Report, slug: str) -> None:
+    """Phase 3 Option A: calibration has no dispatch rules."""
+    try:
+        d = build_dispatch(ROOT, slug, pipeline_id="calibration")
+        ok = (
+            d.get("pipeline_id") == "calibration"
+            and d.get("dispatch") is None
+            and d.get("dispatch_supported") is False
+            and d.get("next_step") == ""
+            and d.get("orchestrator_mode") == "orchestrator_only"
+        )
+        report.add(
+            f"dispatch:calibration:{slug}",
+            ok,
+            f"mode={d.get('orchestrator_mode')} supported={d.get('dispatch_supported')}",
+        )
+    except Exception as exc:
+        report.add(f"dispatch:calibration:{slug}", False, str(exc))
 
 
 def check_step_timings(report: Report, slug: str) -> None:
@@ -314,6 +416,42 @@ def check_viewer_health(report: Report) -> None:
     report.add("viewer-health", ok, json.dumps(data, ensure_ascii=False))
 
 
+def check_pipeline_delegate_calibration(report: Report, slug: str) -> None:
+    """Phase 3: delegate edge check uses the calibration graph, not spec."""
+    from pipeline_delegate import build_delegate
+
+    try:
+        allowed = build_delegate(
+            ROOT,
+            slug,
+            cli="qwen",
+            pipeline_id="calibration",
+            from_step="snapshot-baseline",
+            to_step="capture-review",
+        )
+        denied = build_delegate(
+            ROOT,
+            slug,
+            cli="qwen",
+            pipeline_id="calibration",
+            from_step="snapshot-baseline",
+            to_step="cal-done",
+        )
+        schema_ok = allowed.get("pipeline_id") == "calibration"
+        edge_ok = (
+            allowed.get("ok") is True
+            and (allowed.get("transition") or {}).get("allowed_by_schema") is True
+        )
+        deny_ok = denied.get("ok") is False and denied.get("action") == "error"
+        report.add(
+            f"pipeline-delegate:calibration:{slug}",
+            schema_ok and edge_ok and deny_ok,
+            f"allow={allowed.get('action')} deny={denied.get('action')}",
+        )
+    except Exception as exc:
+        report.add(f"pipeline-delegate:calibration:{slug}", False, str(exc))
+
+
 def check_pipeline_delegate(report: Report, slug: str) -> None:
     from pipeline_delegate import build_delegate
 
@@ -399,15 +537,17 @@ def check_pipeline_before_subagent(report: Report, slug: str) -> None:
 
 
 def check_pipeline_compile(report: Report) -> None:
-    """Phase 1: compiled schema/registry match pipeline.yaml and legacy mapping."""
+    """All packs compile; spec parity vs legacy mapping."""
     import pipeline_compile as compile_mod
+    from pipeline_pack import discover_pipeline_ids, merge_compiled_source, repo_root
 
     try:
-        data = compile_mod.load_yaml(compile_mod.YAML_PATH)
+        ids = discover_pipeline_ids(repo_root())
+        data = merge_compiled_source(repo_root())
         ok, messages = compile_mod.run_check(data)
-        failed = [m for m in messages if m.startswith("parity:") or "differs (" in m]
-        detail = "; ".join(failed[:2]) if failed else "schema + registry parity ok"
-        report.add("pipeline-compile", ok and not failed, detail)
+        failed = [m for m in messages if m.startswith("parity:") or "differs (" in m or m.startswith("validation:")]
+        detail = "; ".join(failed[:2]) if failed else f"packs={','.join(ids)} schema + registry ok"
+        report.add("pipeline-compile", ok and not failed and set(ids) >= {"spec", "calibration"}, detail)
     except Exception as exc:
         report.add("pipeline-compile", False, str(exc))
 
@@ -470,8 +610,13 @@ def main() -> int:
     check_cli_settings(report)
     check_dispatch(report, SMOKE_SLUG)
     check_dispatch(report, PRIMARY_SLUG)
+    check_dispatch_calibration(report, SMOKE_SLUG)
+    check_resolve_pipeline_from_active_task(report)
+    check_validate_calibration(report, SMOKE_SLUG)
+    check_pack_smoke_minimal(report)
     check_pipeline_delegate(report, SMOKE_SLUG)
     check_pipeline_delegate(report, PRIMARY_SLUG)
+    check_pipeline_delegate_calibration(report, SMOKE_SLUG)
     check_pipeline_before_subagent(report, SMOKE_SLUG)
     check_challenge_one_pass(report, PRIMARY_SLUG)
     check_run_until_done_policy(report, PRIMARY_SLUG)

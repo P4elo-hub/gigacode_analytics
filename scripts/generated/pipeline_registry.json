@@ -42,6 +42,62 @@
     "resolve-code-alignment": 7
   },
   "nodes": {
+    "calibration": [
+      {
+        "id": "calibration-orchestrator",
+        "label": "calibration-orchestrator",
+        "kind": "orchestrator",
+        "subagent": null
+      },
+      {
+        "id": "snapshot-baseline",
+        "label": "snapshot-baseline",
+        "kind": "step",
+        "subagent": null
+      },
+      {
+        "id": "capture-review",
+        "label": "capture-review",
+        "kind": "step",
+        "subagent": "review-capturer"
+      },
+      {
+        "id": "analyze-delta",
+        "label": "analyze-delta",
+        "kind": "step",
+        "subagent": "regression-analyst"
+      },
+      {
+        "id": "analyze-telemetry",
+        "label": "analyze-telemetry",
+        "kind": "step",
+        "subagent": "session-telemetry-analyst"
+      },
+      {
+        "id": "propose-calibration",
+        "label": "propose-calibration",
+        "kind": "step",
+        "subagent": "calibration-proposer"
+      },
+      {
+        "id": "apply-calibration",
+        "label": "apply-calibration",
+        "kind": "step",
+        "subagent": "calibration-applier"
+      },
+      {
+        "id": "benchmark-rerun",
+        "label": "benchmark-rerun",
+        "kind": "step",
+        "subagent": "benchmark-runner"
+      },
+      {
+        "id": "cal-done",
+        "label": "Scorecard",
+        "kind": "terminal",
+        "subagent": null
+      }
+    ],
     "spec": [
       {
         "id": "spec-orchestrator",
@@ -109,156 +165,354 @@
         "kind": "terminal",
         "subagent": null
       }
-    ],
-    "calibration": [
-      {
-        "id": "calibration-orchestrator",
-        "label": "calibration-orchestrator",
-        "kind": "orchestrator",
-        "subagent": null
-      },
-      {
-        "id": "snapshot-baseline",
-        "label": "snapshot-baseline",
-        "kind": "step",
-        "subagent": null
-      },
-      {
-        "id": "capture-review",
-        "label": "capture-review",
-        "kind": "step",
-        "subagent": "review-capturer"
-      },
-      {
-        "id": "analyze-delta",
-        "label": "analyze-delta",
-        "kind": "step",
-        "subagent": "regression-analyst"
-      },
-      {
-        "id": "analyze-telemetry",
-        "label": "analyze-telemetry",
-        "kind": "step",
-        "subagent": "session-telemetry-analyst"
-      },
-      {
-        "id": "propose-calibration",
-        "label": "propose-calibration",
-        "kind": "step",
-        "subagent": "calibration-proposer"
-      },
-      {
-        "id": "apply-calibration",
-        "label": "apply-calibration",
-        "kind": "step",
-        "subagent": "calibration-applier"
-      },
-      {
-        "id": "benchmark-rerun",
-        "label": "benchmark-rerun",
-        "kind": "step",
-        "subagent": "benchmark-runner"
-      },
-      {
-        "id": "cal-done",
-        "label": "Scorecard",
-        "kind": "terminal",
-        "subagent": null
-      }
     ]
   },
   "dispatch": {
     "spec": {
+      "invariant_after_priority": 30,
       "invariants": [
         {
           "id": "needs-check-feature",
           "step": "check-feature"
         }
       ],
+      "fallback": {
+        "next": "check-feature-code",
+        "reason": "alignment без PASS / PASS WITH GAPS"
+      },
       "rules": [
         {
-          "priority": "10",
+          "priority": 10,
           "when": "alignment_limit_exhausted",
           "next": null,
           "outcome": "stopped"
         },
         {
-          "priority": "20",
+          "priority": 20,
           "when": "not_has_context",
           "next": "find-context"
         },
         {
-          "priority": "30",
+          "priority": 30,
           "when": "not_has_spec",
           "next": "write-feature"
         },
         {
-          "priority": "40",
+          "priority": 40,
           "when": "needs_answer_with_gaps",
           "next": "resolve-gaps"
         },
         {
-          "priority": "45",
+          "priority": 45,
           "when": "needs_answer_alignment_only",
           "next": "resolve-code-alignment"
         },
         {
-          "priority": "50",
+          "priority": 50,
           "when": "needs_answer_challenges_only",
           "next": "resolve-challenges"
         },
         {
-          "priority": "60",
+          "priority": 60,
           "when": "pending_apply_with_gaps",
           "next": "resolve-gaps"
         },
         {
-          "priority": "65",
+          "priority": 65,
           "when": "pending_apply_alignment_only",
           "next": "resolve-code-alignment"
         },
         {
-          "priority": "70",
+          "priority": 70,
           "when": "pending_apply_challenges_only",
           "next": "resolve-challenges"
         },
         {
-          "priority": "80",
+          "priority": 80,
           "when": "critical_major_mismatch_resolvable",
           "next": "resolve-code-alignment"
         },
         {
-          "priority": "90",
+          "priority": 90,
           "when": "open_gaps",
           "next": "resolve-gaps"
         },
         {
-          "priority": "100",
+          "priority": 100,
           "when": "open_challenges",
           "next": "resolve-challenges"
         },
         {
-          "priority": "110",
+          "priority": 110,
           "when": "no_challenges_file",
           "next": "challenge-feature"
         },
         {
-          "priority": "120",
+          "priority": 120,
           "when": "alignment_missing_or_stale",
           "next": "check-feature-code"
         },
         {
-          "priority": "130",
+          "priority": 130,
           "when": "alignment_pass",
           "next": null,
           "outcome": "ready"
         },
         {
-          "priority": "140",
+          "priority": 140,
           "when": "alignment_fail_reaudit",
           "next": "check-feature-code"
         }
       ]
     }
+  },
+  "status": {
+    "calibration": {
+      "task_kind": "slug",
+      "artifacts": {},
+      "collectors": [],
+      "stale": [],
+      "orchestrator": {},
+      "messages": {
+        "ready": "Calibration pack has no dispatch rules.",
+        "stopped": "Calibration пайплайн остановлен."
+      }
+    },
+    "spec": {
+      "task_kind": "slug",
+      "artifacts": {
+        "context": {
+          "path": "Feature-context/{task_id}.md",
+          "exists_as": "has_context",
+          "lines_as": "context_lines"
+        },
+        "spec": {
+          "path": "Feature-writing/{task_id}/{task_id}.md",
+          "exists_as": "has_spec",
+          "lines_as": "spec_lines"
+        },
+        "decisions": {
+          "path": "Feature-writing/{task_id}/{task_id}-decisions.md",
+          "exists_as": "has_decisions"
+        },
+        "gaps_map": {
+          "path": "Feature-writing/{task_id}/{task_id}-gaps-resolved.md",
+          "exists_as": "has_gaps_map"
+        },
+        "challenges": {
+          "path": "Feature-writing/{task_id}/{task_id}-challenges.md",
+          "exists_as": "has_challenges"
+        },
+        "challenges_map": {
+          "path": "Feature-writing/{task_id}/{task_id}-challenges-resolved.md",
+          "exists_as": "has_challenges_map"
+        },
+        "alignment": {
+          "path": "Feature-writing/{task_id}/{task_id}-code-alignment.md",
+          "exists_as": "has_alignment"
+        }
+      },
+      "collectors": [
+        {
+          "id": "decisions_table",
+          "source": "decisions"
+        },
+        {
+          "id": "spec_gaps",
+          "source": "spec"
+        },
+        {
+          "id": "context_questions",
+          "source": "context"
+        },
+        {
+          "id": "challenges_table",
+          "source": "challenges"
+        },
+        {
+          "id": "alignment_frontmatter",
+          "source": "alignment"
+        }
+      ],
+      "stale": [
+        {
+          "id": "alignment",
+          "when": "artifact_older_than",
+          "left": "alignment",
+          "right": "spec"
+        },
+        {
+          "id": "challenges",
+          "when": "artifact_older_than",
+          "left": "challenges",
+          "right": "spec"
+        },
+        {
+          "id": "context-newer-than-spec",
+          "when": "artifact_newer_than",
+          "left": "context",
+          "right": "spec"
+        }
+      ],
+      "alignment_stale": {
+        "when": "artifact_older_than",
+        "left": "alignment",
+        "right": "spec",
+        "require_left": true
+      },
+      "orchestrator": {
+        "write_cycle_step": "write-feature",
+        "ask_user_when": "decisions_needs_answer"
+      },
+      "messages": {
+        "ready": "Spec готов — финальный ответ пользователю.",
+        "stopped": "Пайплайн остановлен.",
+        "ask_user": "НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.",
+        "write_cycle": "Цикл write-feature (spec-writer по блокам)."
+      }
+    }
+  },
+  "pipelines": {
+    "calibration": {
+      "step_to_subagent": {
+        "capture-review": "review-capturer",
+        "analyze-delta": "regression-analyst",
+        "analyze-telemetry": "session-telemetry-analyst",
+        "propose-calibration": "calibration-proposer",
+        "apply-calibration": "calibration-applier",
+        "benchmark-rerun": "benchmark-runner"
+      },
+      "orchestrator_owned": [
+        "snapshot-baseline"
+      ],
+      "gated_subagents": [
+        "review-capturer",
+        "regression-analyst",
+        "calibration-proposer",
+        "calibration-applier",
+        "benchmark-runner"
+      ],
+      "restartable_steps": [
+        "snapshot-baseline",
+        "capture-review",
+        "analyze-delta",
+        "analyze-telemetry",
+        "propose-calibration",
+        "apply-calibration",
+        "benchmark-rerun"
+      ],
+      "step_order": {
+        "snapshot-baseline": 0,
+        "capture-review": 1,
+        "analyze-delta": 2,
+        "analyze-telemetry": 3,
+        "propose-calibration": 4,
+        "apply-calibration": 5,
+        "benchmark-rerun": 6
+      },
+      "delegate_modes": {}
+    },
+    "spec": {
+      "step_to_subagent": {
+        "find-context": "context-researcher",
+        "check-feature": "spec-reviewer",
+        "resolve-gaps": "gap-resolver",
+        "challenge-feature": "spec-challenger",
+        "resolve-challenges": "challenge-resolver",
+        "check-feature-code": "code-auditor",
+        "resolve-code-alignment": "alignment-resolver"
+      },
+      "orchestrator_owned": [
+        "write-feature"
+      ],
+      "gated_subagents": [
+        "context-researcher",
+        "spec-writer",
+        "spec-reviewer",
+        "gap-resolver",
+        "spec-challenger",
+        "challenge-resolver",
+        "code-auditor",
+        "alignment-resolver"
+      ],
+      "restartable_steps": [
+        "find-context",
+        "write-feature",
+        "check-feature",
+        "resolve-gaps",
+        "challenge-feature",
+        "resolve-challenges",
+        "check-feature-code",
+        "resolve-code-alignment"
+      ],
+      "step_order": {
+        "find-context": 0,
+        "write-feature": 1,
+        "check-feature": 2,
+        "resolve-gaps": 3,
+        "challenge-feature": 4,
+        "resolve-challenges": 5,
+        "check-feature-code": 6,
+        "resolve-code-alignment": 7
+      },
+      "delegate_modes": {
+        "write_feature_cycle": {
+          "step": "write-feature",
+          "subagent": "spec-writer",
+          "persistent": true
+        }
+      }
+    }
+  },
+  "predicates": {
+    "calibration": [
+      "field_gt",
+      "file_missing",
+      "has_context",
+      "has_spec",
+      "not_has_context",
+      "not_has_spec",
+      "pending_apply"
+    ],
+    "spec": [
+      "alignment_fail_reaudit",
+      "alignment_limit_exhausted",
+      "alignment_missing_or_stale",
+      "alignment_pass",
+      "critical_major_mismatch_resolvable",
+      "field_gt",
+      "file_missing",
+      "file_missing_alignment",
+      "file_missing_challenges",
+      "file_missing_challenges_map",
+      "file_missing_context",
+      "file_missing_decisions",
+      "file_missing_gaps_map",
+      "file_missing_spec",
+      "has_alignment",
+      "has_challenges",
+      "has_challenges_map",
+      "has_context",
+      "has_decisions",
+      "has_gaps_map",
+      "has_spec",
+      "needs_answer_alignment_only",
+      "needs_answer_challenges_only",
+      "needs_answer_with_gaps",
+      "no_challenges_file",
+      "not_has_alignment",
+      "not_has_challenges",
+      "not_has_challenges_map",
+      "not_has_context",
+      "not_has_decisions",
+      "not_has_gaps_map",
+      "not_has_spec",
+      "open_challenges",
+      "open_gaps",
+      "pending_apply",
+      "pending_apply_alignment_only",
+      "pending_apply_challenges_only",
+      "pending_apply_with_gaps"
+    ]
   }
 }

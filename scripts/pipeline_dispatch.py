@@ -9,13 +9,49 @@ from pathlib import Path
 
 from artifact_paths import resolve_slug, workspace_root
 from feature_status import build_status
-from pipeline_common import STEP_TO_SUBAGENT, subagent_for_step
+from pipeline_common import pipeline_step_to_subagent, subagent_for_step
+from pipeline_runtime import (
+    DEFAULT_PIPELINE_ID,
+    dispatch_supported,
+    known_pipeline_ids,
+    normalize_pipeline_id,
+)
 
 
-def build_dispatch(root: Path, slug: str) -> dict:
-    status = build_status(root, slug)
+def _unsupported_dispatch(slug: str, pipeline_id: str) -> dict:
+    return {
+        "pipeline_id": pipeline_id,
+        "slug": slug,
+        "dispatch": None,
+        "dispatch_supported": False,
+        "ready": False,
+        "next_step": "",
+        "next_command": "",
+        "next_subagent": "",
+        "next_reason": "dispatch not configured; orchestrator follows markdown/graph order",
+        "orchestrator_mode": "orchestrator_only",
+        "must_continue": False,
+        "exit_policy": {
+            "stop_when": ["orchestrator_only"],
+            "continue_on_subagent_fail": True,
+            "continue_on_pending_apply": True,
+        },
+        "allowed_subagents": [],
+        "step_to_subagent": {},
+    }
+
+
+def build_dispatch(root: Path, slug: str, pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
+    pipe_id = normalize_pipeline_id(pipeline_id)
+    if not dispatch_supported(pipe_id):
+        return _unsupported_dispatch(slug, pipe_id)
+
+    status = build_status(root, slug, pipe_id)
+    step_map = pipeline_step_to_subagent(pipe_id)
     payload = {
+        "pipeline_id": pipe_id,
         "slug": status.slug,
+        "dispatch_supported": True,
         "ready": status.ready,
         "next_step": status.next_step,
         "next_command": status.next_command,
@@ -32,8 +68,8 @@ def build_dispatch(root: Path, slug: str) -> dict:
             "continue_on_subagent_fail": True,
             "continue_on_pending_apply": True,
         },
-        "allowed_subagents": sorted(set(STEP_TO_SUBAGENT.values())),
-        "step_to_subagent": STEP_TO_SUBAGENT,
+        "allowed_subagents": sorted(set(step_map.values())),
+        "step_to_subagent": step_map,
     }
     if status.orchestrator_mode == "delegate" and status.next_subagent:
         payload["task"] = {
@@ -44,8 +80,14 @@ def build_dispatch(root: Path, slug: str) -> dict:
     return payload
 
 
-def validate_step(root: Path, slug: str, proposed_step: str) -> tuple[bool, dict]:
-    dispatch = build_dispatch(root, slug)
+def validate_step(
+    root: Path,
+    slug: str,
+    proposed_step: str,
+    *,
+    pipeline_id: str = DEFAULT_PIPELINE_ID,
+) -> tuple[bool, dict]:
+    dispatch = build_dispatch(root, slug, pipeline_id=pipeline_id)
     expected = dispatch["next_step"]
     ok = expected == proposed_step
     return ok, {
@@ -53,7 +95,7 @@ def validate_step(root: Path, slug: str, proposed_step: str) -> tuple[bool, dict
         "expected_step": expected,
         "expected_subagent": dispatch.get("next_subagent", ""),
         "proposed_step": proposed_step,
-        "proposed_subagent": subagent_for_step(proposed_step),
+        "proposed_subagent": subagent_for_step(proposed_step, pipeline_id),
         "reason": dispatch.get("next_reason", ""),
     }
 
@@ -73,6 +115,11 @@ def main(argv: list[str] | None = None) -> int:
         metavar="SUBAGENT",
         help="Exit 0 only if SUBAGENT matches the canonical next subagent",
     )
+    parser.add_argument(
+        "--pipeline",
+        default=DEFAULT_PIPELINE_ID,
+        help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
+    )
     args = parser.parse_args(argv)
     root = workspace_root(args.root)
     if not args.slug:
@@ -80,13 +127,17 @@ def main(argv: list[str] | None = None) -> int:
     slug = resolve_slug(args.slug, root)
     if slug is None:
         parser.error("не удалось определить slug")
+    try:
+        pipeline_id = normalize_pipeline_id(args.pipeline)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.validate:
-        ok, detail = validate_step(root, slug, args.validate)
+        ok, detail = validate_step(root, slug, args.validate, pipeline_id=pipeline_id)
         print(json.dumps(detail, ensure_ascii=False, indent=2))
         return 0 if ok else 1
 
-    dispatch = build_dispatch(root, slug)
+    dispatch = build_dispatch(root, slug, pipeline_id=pipeline_id)
     if args.validate_subagent:
         expected = dispatch.get("next_subagent", "")
         ok = expected == args.validate_subagent

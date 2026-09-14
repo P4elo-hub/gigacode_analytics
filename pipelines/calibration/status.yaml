@@ -1,0 +1,8 @@
+task_kind: slug
+artifacts: {}
+collectors: []
+stale: []
+orchestrator: {}
+messages:
+  ready: Calibration pack has no dispatch rules.
+  stopped: Calibration пайплайн остановлен.

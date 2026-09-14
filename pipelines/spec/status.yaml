@@ -1,0 +1,63 @@
+# Status contract for the spec pack. Engine reads this; collectors live in collectors.py.
+task_kind: slug
+artifacts:
+  context:
+    path: Feature-context/{task_id}.md
+    exists_as: has_context
+    lines_as: context_lines
+  spec:
+    path: Feature-writing/{task_id}/{task_id}.md
+    exists_as: has_spec
+    lines_as: spec_lines
+  decisions:
+    path: Feature-writing/{task_id}/{task_id}-decisions.md
+    exists_as: has_decisions
+  gaps_map:
+    path: Feature-writing/{task_id}/{task_id}-gaps-resolved.md
+    exists_as: has_gaps_map
+  challenges:
+    path: Feature-writing/{task_id}/{task_id}-challenges.md
+    exists_as: has_challenges
+  challenges_map:
+    path: Feature-writing/{task_id}/{task_id}-challenges-resolved.md
+    exists_as: has_challenges_map
+  alignment:
+    path: Feature-writing/{task_id}/{task_id}-code-alignment.md
+    exists_as: has_alignment
+collectors:
+  - id: decisions_table
+    source: decisions
+  - id: spec_gaps
+    source: spec
+  - id: context_questions
+    source: context
+  - id: challenges_table
+    source: challenges
+  - id: alignment_frontmatter
+    source: alignment
+stale:
+  - id: alignment
+    when: artifact_older_than
+    left: alignment
+    right: spec
+  - id: challenges
+    when: artifact_older_than
+    left: challenges
+    right: spec
+  - id: context-newer-than-spec
+    when: artifact_newer_than
+    left: context
+    right: spec
+alignment_stale:
+  when: artifact_older_than
+  left: alignment
+  right: spec
+  require_left: true
+orchestrator:
+  write_cycle_step: write-feature
+  ask_user_when: decisions_needs_answer
+messages:
+  ready: Spec готов — финальный ответ пользователю.
+  stopped: Пайплайн остановлен.
+  ask_user: НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.
+  write_cycle: Цикл write-feature (spec-writer по блокам).

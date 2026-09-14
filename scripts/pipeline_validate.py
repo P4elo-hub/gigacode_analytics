@@ -11,23 +11,29 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_logs import events_path, load_manifest, run_log_path
-from artifact_paths import resolve_slug, spec_path, workspace_root
+from artifact_paths import resolve_slug, workspace_root
 from build_pipeline_graph import (
     collect_spawn_steps,
     history_closed_in_run_log,
     history_sort_key,
     is_session_live,
     latest_run_log_result,
-    load_schema,
     merge_history,
     parse_iso_ts,
     read_jsonl,
 )
-from pipeline_active_task import load_active_task_for_slug
-from feature_status import build_status, needs_check_feature
-from pipeline_common import last_successful_step_ts
+from pipeline_active_task import load_active_task, load_active_task_for_slug
+from feature_status import build_status
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import SEVERITY_ERROR, analyze_divergence, finalize_divergence
+from pipeline_runtime import (
+    DEFAULT_PIPELINE_ID,
+    dispatch_supported,
+    known_pipeline_ids,
+    load_pipeline_schema,
+    normalize_pipeline_id,
+    resolve_pipeline_id,
+)
 
 SEVERITY_BLOCK = "block"
 SEVERITY_WARN = "warn"
@@ -76,9 +82,9 @@ def _add(report: ValidationReport, *, id: str, severity: str, title: str, detail
         report.ok = False
 
 
-def validate_slug(root: Path, slug: str, *, pipeline: str = "spec") -> ValidationReport:
-    dispatch = build_dispatch(root, slug)
-    status = build_status(root, slug)
+def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID) -> ValidationReport:
+    pipe_id = normalize_pipeline_id(pipeline)
+    dispatch = build_dispatch(root, slug, pipeline_id=pipe_id)
     report = ValidationReport(
         slug=slug,
         ok=True,
@@ -87,6 +93,19 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = "spec") -> Validatio
         next_step=dispatch.get("next_step") or "",
         next_subagent=dispatch.get("next_subagent") or "",
     )
+
+    if not dispatch_supported(pipe_id):
+        _add(
+            report,
+            id="dispatch-not-configured",
+            severity=SEVERITY_OK,
+            title="Dispatch не настроен",
+            detail=dispatch.get("next_reason") or f"pipeline {pipe_id} has no dispatch rules",
+            fix="Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
+        )
+        return report
+
+    status = build_status(root, slug, pipe_id)
 
     if report.ready:
         _add(
@@ -104,7 +123,7 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = "spec") -> Validatio
     run_log = read_jsonl(run_log_path(root, slug, rid))
     events = read_jsonl(events_path(root, slug, rid))
     live = is_session_live(events)
-    schema = load_schema()["pipelines"]["spec"]
+    schema = load_pipeline_schema(pipe_id)
     _, spawn_rows = collect_spawn_steps(events, schema)
     history = merge_history(run_log, spawn_rows)
     log_history = history_closed_in_run_log(history)
@@ -172,73 +191,12 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = "spec") -> Validatio
             ),
         )
 
-    if (
-        status.decisions_pending_apply
-        and dispatch.get("orchestrator_mode") == "ask_user"
-    ):
-        _add(
-            report,
-            id="pending-apply-paused",
-            severity=SEVERITY_BLOCK,
-            title="pending-apply не должен ставить паузу",
-            detail=f"В DECISIONS есть pending-apply ({status.decisions_pending_apply})",
-            fix="Сразу `task` на gap/challenge/alignment-resolver для apply — без ask_user.",
-        )
+    report._last_history = last  # type: ignore[attr-defined]
+    from pipeline_pack import load_pack_module
 
-    if status.decisions_needs_answer and dispatch.get("orchestrator_mode") != "ask_user":
-        _add(
-            report,
-            id="needs-answer-not-asked",
-            severity=SEVERITY_BLOCK,
-            title="Есть needs-answer в DECISIONS — нужен ask_user",
-            detail=f"Строк: {status.decisions_needs_answer}",
-            fix=(
-                "`pipeline_delegate.py` → action ask_user. НЕ `task`. "
-                "Опроси DECISIONS → pending-apply → delegate снова."
-            ),
-        )
-
-    check_needed, check_reason = needs_check_feature(root, slug=slug, status=status)
-    last_check_ts = last_successful_step_ts(root, slug, "check-feature")
-    spec = spec_path(root, slug)
-    if (
-        check_needed
-        and check_reason.startswith("SPEC новее GAPS_MAP")
-        and last_check_ts is not None
-        and spec.is_file()
-        and last_check_ts >= spec.stat().st_mtime - 2
-        and last
-        and last.get("step") == "check-feature"
-        and last.get("result") == "ok"
-    ):
-        _add(
-            report,
-            id="check-feature-redundant-loop",
-            severity=SEVERITY_WARN,
-            title="check-feature уже прошёл после правки SPEC",
-            detail="Dispatch снова просит check-feature из-за SPEC > GAPS_MAP",
-            fix=(
-                "check-feature уже ok после правки SPEC — dispatch должен идти дальше "
-                "(resolve-gaps / check-feature-code). Если SPEC не менялся — обнови GAPS_MAP "
-                "или перезапусти dispatch после ingest."
-            ),
-        )
-
-    if status.has_challenges and report.next_step == "challenge-feature":
-        _add(
-            report,
-            id="challenge-repeat-blocked",
-            severity=SEVERITY_BLOCK,
-            title="Повторный challenge-feature запрещён",
-            detail=(
-                "Файл CHALLENGES уже существует — автоматический re-challenge после apply "
-                "не допускается."
-            ),
-            fix=(
-                "Dispatch → check-feature-code (или resolve-challenges, если CH open>0). "
-                "Повторный `/challenge-feature` — только по явной команде пользователя."
-            ),
-        )
+    extra = load_pack_module(pipe_id, "validate")
+    if extra is not None and hasattr(extra, "extra_advice"):
+        extra.extra_advice(root, slug, status, dispatch, report, _add)
 
     divergence = analyze_divergence(
         root=root,
@@ -247,7 +205,7 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = "spec") -> Validatio
         history=history,
         current={"step": last.get("step"), "subagent": last.get("subagent")} if last else None,
         live=live,
-        pipeline="spec",
+        pipeline=pipe_id,
     )
     finalize_divergence(divergence)
     for item in divergence.get("items") or []:
@@ -300,6 +258,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("slug", nargs="?")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--root", type=Path, default=Path("."))
+    parser.add_argument(
+        "--pipeline",
+        default=None,
+        help=f"Pipeline id (default: active-task or {DEFAULT_PIPELINE_ID}). "
+        f"Known: {', '.join(known_pipeline_ids())}",
+    )
     args = parser.parse_args(argv)
     root = workspace_root(args.root)
     if not args.slug:
@@ -307,8 +271,12 @@ def main(argv: list[str] | None = None) -> int:
     slug = resolve_slug(args.slug, root)
     if slug is None:
         parser.error("cannot resolve slug")
+    try:
+        pipeline = resolve_pipeline_id(args.pipeline, load_active_task(root))
+    except ValueError as exc:
+        parser.error(str(exc))
 
-    report = validate_slug(root, slug)
+    report = validate_slug(root, slug, pipeline=pipeline)
     if args.json:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
     else:

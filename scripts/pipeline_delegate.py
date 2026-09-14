@@ -13,22 +13,47 @@ import sys
 from pathlib import Path
 
 from artifact_paths import resolve_slug, workspace_root
-from build_pipeline_graph import load_schema
 from pipeline_active_task import save_active_task
 from pipeline_common import subagent_for_step
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
+from pipeline_runtime import (
+    DEFAULT_PIPELINE_ID,
+    known_pipeline_ids,
+    load_pipeline_schema,
+    normalize_pipeline_id,
+)
 
 
-def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
-    dispatch = build_dispatch(root, slug)
+def _edge_error(schema: dict, from_step: str, next_step: str) -> str:
+    allowed = [e.get("to") for e in schema.get("edges", []) if e.get("from") == from_step]
+    return (
+        f"Запрещённый переход `{from_step}` → `{next_step}` — нет ребра в pipeline_schema.json. "
+        f"Допустимо из `{from_step}`: {', '.join(allowed) or '—'}. "
+        "Вызови только `next_step` из dispatch после `pipeline_delegate.py`."
+    )
+
+
+def build_delegate(
+    root: Path,
+    slug: str,
+    *,
+    cli: str = "qwen",
+    pipeline_id: str = DEFAULT_PIPELINE_ID,
+    from_step: str | None = None,
+    to_step: str | None = None,
+) -> dict:
+    pipe_id = normalize_pipeline_id(pipeline_id)
+    dispatch = build_dispatch(root, slug, pipeline_id=pipe_id)
+    schema = load_pipeline_schema(pipe_id)
     mode = dispatch.get("orchestrator_mode") or ""
-    next_step = dispatch.get("next_step") or ""
+    next_step = to_step or dispatch.get("next_step") or ""
     next_subagent = dispatch.get("next_subagent") or ""
 
     payload: dict = {
         "ok": True,
         "slug": slug,
+        "pipeline_id": pipe_id,
         "action": "none",
         "dispatch": dispatch,
         "task": None,
@@ -40,6 +65,27 @@ def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
     if dispatch.get("ready"):
         payload["action"] = "ready"
         payload["instruction"] = dispatch.get("next_reason") or "Spec готов — финальный ответ пользователю."
+        return payload
+
+    if mode == "orchestrator_only":
+        last = last_ok_pipeline_step(root, slug)
+        origin = from_step or (last.get("step") if last else schema.get("orchestrator"))
+        payload["action"] = "orchestrator_only"
+        payload["instruction"] = (
+            "Dispatch не настроен для этого pipeline — оркестратор ведёт шаги по markdown. "
+            "Рёбра графа проверяются через `--from-step` / `--to-step`."
+        )
+        if next_step:
+            if origin and not is_allowed_transition(schema, origin, next_step):
+                payload["ok"] = False
+                payload["action"] = "error"
+                payload["instruction"] = _edge_error(schema, origin, next_step)
+                return payload
+            payload["transition"] = {
+                "from_step": origin,
+                "to_step": next_step,
+                "allowed_by_schema": True,
+            }
         return payload
 
     if mode == "stopped" or not next_step:
@@ -63,7 +109,7 @@ def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
             step="write-feature",
             subagent="spec-writer",
             cli=cli,
-            pipeline="spec",
+            pipeline=pipe_id,
             persistent=True,
         )
         payload["action"] = "write_feature_cycle"
@@ -81,25 +127,15 @@ def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
         payload["instruction"] = f"Неизвестный режим orchestrator: {mode!r}"
         return payload
 
-    schema = load_schema()["pipelines"]["spec"]
     last = last_ok_pipeline_step(root, slug)
-    from_step = last.get("step") if last else schema.get("orchestrator")
-    if from_step and next_step and not is_allowed_transition(schema, from_step, next_step):
-        allowed = [
-            e.get("to")
-            for e in schema.get("edges", [])
-            if e.get("from") == from_step
-        ]
+    origin = from_step or (last.get("step") if last else schema.get("orchestrator"))
+    if origin and next_step and not is_allowed_transition(schema, origin, next_step):
         payload["ok"] = False
         payload["action"] = "error"
-        payload["instruction"] = (
-            f"Запрещённый переход `{from_step}` → `{next_step}` — нет ребра в pipeline_schema.json. "
-            f"Допустимо из `{from_step}`: {', '.join(allowed) or '—'}. "
-            "Вызови только `next_step` из dispatch после `pipeline_delegate.py`."
-        )
+        payload["instruction"] = _edge_error(schema, origin, next_step)
         return payload
 
-    canonical = subagent_for_step(next_step)
+    canonical = subagent_for_step(next_step, pipe_id)
     if canonical and next_subagent != canonical:
         payload["ok"] = False
         payload["action"] = "error"
@@ -115,7 +151,7 @@ def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
         step=next_step,
         subagent=next_subagent,
         cli=cli,
-        pipeline="spec",
+        pipeline=pipe_id,
     )
 
     payload["action"] = "task"
@@ -126,7 +162,7 @@ def build_delegate(root: Path, slug: str, *, cli: str = "qwen") -> dict:
     }
     payload["active_task"] = active
     payload["transition"] = {
-        "from_step": from_step,
+        "from_step": origin,
         "to_step": next_step,
         "allowed_by_schema": True,
     }
@@ -144,6 +180,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=".")
     parser.add_argument("--cli", choices=("qwen", "gigacode", "opencode"), default="qwen")
     parser.add_argument(
+        "--pipeline",
+        default=DEFAULT_PIPELINE_ID,
+        help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
+    )
+    parser.add_argument("--from-step", default=None, help="Explicit graph origin for edge check")
+    parser.add_argument("--to-step", default=None, help="Explicit graph target for edge check")
+    parser.add_argument(
         "--assert-subagent",
         metavar="SUBAGENT",
         help="Exit 1 if canonical next_subagent differs (orchestrator preflight)",
@@ -156,7 +199,20 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": False, "error": f"unknown slug: {args.slug}"}), ensure_ascii=False)
         return 1
 
-    result = build_delegate(root, slug, cli=args.cli)
+    try:
+        pipeline_id = normalize_pipeline_id(args.pipeline)
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}), ensure_ascii=False)
+        return 1
+
+    result = build_delegate(
+        root,
+        slug,
+        cli=args.cli,
+        pipeline_id=pipeline_id,
+        from_step=args.from_step,
+        to_step=args.to_step,
+    )
 
     if args.assert_subagent:
         task = result.get("task") or {}
@@ -182,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if result.get("action") == "ask_user":
         return 2
-    if result.get("action") in ("ready", "stopped", "write_feature_cycle"):
+    if result.get("action") in ("ready", "stopped", "write_feature_cycle", "orchestrator_only"):
         return 0
     if result.get("action") == "task":
         return 0

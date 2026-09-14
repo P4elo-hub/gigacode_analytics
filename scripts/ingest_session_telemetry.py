@@ -47,6 +47,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="OpenCode: session.directory to match (default: workspace root)",
     )
+    parser.add_argument("--pipeline", default="", help="Active pipeline id (recorded on ingest)")
     return parser.parse_args()
 
 
@@ -261,7 +262,13 @@ def main() -> None:
 
     print(
         json.dumps(
-            {"slug": slug, "run_id": run_id, "session_id": session_id, "metrics": metrics["counts"]},
+            {
+                "slug": slug,
+                "run_id": run_id,
+                "session_id": session_id,
+                "pipeline": args.pipeline or None,
+                "metrics": metrics["counts"],
+            },
             ensure_ascii=False,
             indent=2,
         )

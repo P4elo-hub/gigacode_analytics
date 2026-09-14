@@ -107,5 +107,36 @@ class DecisionsParsingTest(unittest.TestCase):
             self.assertEqual(status.decisions_pending_apply_alignment, 1)
 
 
+class PipelineRuntimeTest(unittest.TestCase):
+    def test_load_dispatch_spec_present(self) -> None:
+        from pipeline_router import load_dispatch
+        from pipeline_runtime import dispatch_supported, load_pipeline_dispatch
+
+        spec = load_dispatch("spec")
+        self.assertIsInstance(spec, dict)
+        self.assertIn("rules", spec)
+        self.assertEqual(load_pipeline_dispatch("spec"), spec)
+        self.assertTrue(dispatch_supported("spec"))
+
+    def test_load_status_spec_parameterized(self) -> None:
+        from pipeline_status import load_status_spec
+
+        spec = load_status_spec("spec")
+        self.assertIn("artifacts", spec)
+        self.assertIn("spec", spec["artifacts"])
+        cal = load_status_spec("calibration")
+        self.assertIsInstance(cal.get("artifacts"), dict)
+
+    def test_load_dispatch_unknown_and_calibration(self) -> None:
+        from pipeline_router import load_dispatch
+        from pipeline_runtime import dispatch_supported, normalize_pipeline_id
+
+        self.assertIsNone(load_dispatch("no-such-pipeline"))
+        self.assertIsNone(load_dispatch("calibration"))
+        self.assertFalse(dispatch_supported("calibration"))
+        with self.assertRaises(ValueError):
+            normalize_pipeline_id("no-such-pipeline")
+
+
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

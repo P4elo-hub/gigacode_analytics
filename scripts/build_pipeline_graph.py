@@ -25,6 +25,7 @@ from pipeline_divergence import (
 from pipeline_active_task import feature_active_task_path, load_active_task_for_slug
 from pipeline_common import subagent_for_step
 from pipeline_dispatch import build_dispatch
+from pipeline_runtime import dispatch_supported
 from pipeline_restart import (
     STEP_ORDER,
     build_cli_commands,
@@ -973,8 +974,8 @@ def build_graph(
     display_next_step = ""
     display_next_subagent = ""
     display_next_source = ""
-    if pipe_name == "spec":
-        dispatch_snapshot = build_dispatch(root, slug)
+    if dispatch_supported(pipe_name):
+        dispatch_snapshot = build_dispatch(root, slug, pipeline_id=pipe_name)
         dispatch_next_step = dispatch_snapshot.get("next_step") or ""
         task_for_slug = load_active_task_for_slug(root, slug)
         display_next_step, display_next_subagent, display_next_source = resolve_display_next(
@@ -1233,7 +1234,7 @@ def build_graph(
         try:
             from pipeline_validate import validate_slug
 
-            validation = validate_slug(root, slug).to_dict()
+            validation = validate_slug(root, slug, pipeline=pipe_name).to_dict()
         except Exception as exc:  # noqa: BLE001 — viewer must not fail on validate
             validation = {"ok": False, "error": str(exc), "advice": []}
         try:

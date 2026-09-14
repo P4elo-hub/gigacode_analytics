@@ -13,9 +13,10 @@ from pathlib import Path
 
 from agent_logs import load_manifest, manifest_path, run_log_path
 from artifact_paths import workspace_root
-from build_pipeline_graph import load_schema, subagent_to_step
+from build_pipeline_graph import subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, clear_active_task, load_active_task_latest
 from pipeline_dispatch import build_dispatch
+from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
 from pipeline_validate import SEVERITY_BLOCK, SEVERITY_WARN, ValidationReport, validate_slug
 
 FAIL_HINTS = re.compile(
@@ -159,6 +160,7 @@ def after_subagent(
     *,
     cli: str,
     dry_run: bool = False,
+    pipeline_arg: str | None = None,
 ) -> dict:
     agent_type = str(hook_input.get("agent_type") or "").strip()
     if not agent_type:
@@ -175,7 +177,8 @@ def after_subagent(
     if subagent != agent_type and not step:
         subagent = agent_type
 
-    schema = load_schema()["pipelines"]["spec"]
+    pipeline_id = resolve_pipeline_id(pipeline_arg, active, default=DEFAULT_PIPELINE_ID)
+    schema = load_pipeline_schema(pipeline_id)
     step = resolve_step(schema, step=step or None, subagent=subagent) or step or subagent
 
     if not slug:
@@ -190,7 +193,7 @@ def after_subagent(
     run_log = run_log_path(root, slug, load_manifest(root, slug).get("current_run") or "run-001")
 
     if dry_run:
-        report = validate_slug(root, slug)
+        report = validate_slug(root, slug, pipeline=pipeline_id)
         return {
             "dry_run": True,
             "slug": slug,
@@ -213,6 +216,8 @@ def after_subagent(
         ]
         if note:
             args.extend(["--note", note])
+        if pipeline_id:
+            args.extend(["--pipeline", pipeline_id])
         code, out = run_script(root, "append_run_log.py", *args)
         if code != 0:
             return hook_output(f"append_run_log failed ({code}): {out[:500]}")
@@ -222,7 +227,17 @@ def after_subagent(
         from sync_pipeline_session import sync_session
 
         if not manifest_exists:
-            run_script(root, "ingest_session_telemetry.py", slug, "--cli", cli, "--new-run", "--copy-raw")
+            run_script(
+                root,
+                "ingest_session_telemetry.py",
+                slug,
+                "--cli",
+                cli,
+                "--new-run",
+                "--copy-raw",
+                "--pipeline",
+                pipeline_id,
+            )
         sync_result = sync_session(root, slug, cli=cli)
         parts = []
         if sync_result.get("ingested"):
@@ -236,13 +251,16 @@ def after_subagent(
     except Exception as exc:  # noqa: BLE001 — hook must not crash orchestrator
         sync_note = f" sync warn: {exc!s}"[:200]
 
-    report = validate_slug(root, slug)
+    report = validate_slug(root, slug, pipeline=pipeline_id)
     save_validation(root, slug, report)
 
     keep_active = False
     if active and active.get("persistent") and active.get("step") == "write-feature":
         try:
-            keep_active = build_dispatch(root, slug).get("orchestrator_mode") == "write_feature_cycle"
+            keep_active = (
+                build_dispatch(root, slug, pipeline_id=pipeline_id).get("orchestrator_mode")
+                == "write_feature_cycle"
+            )
         except Exception:
             keep_active = True
     if not keep_active:
@@ -257,6 +275,11 @@ def after_subagent(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cli", choices=("qwen", "gigacode", "opencode"), default="qwen")
+    parser.add_argument(
+        "--pipeline",
+        default=None,
+        help="Override pipeline id (default: value from .pipeline-active-task.json)",
+    )
     parser.add_argument("--workspace", type=Path, default=None)
     parser.add_argument("--dry-run", action="store_true", help="No writes; JSON report to stdout")
     parser.add_argument("--stdin-file", type=Path, help="Hook input file (default: stdin)")
@@ -269,7 +292,13 @@ def main(argv: list[str] | None = None) -> int:
         raw = sys.stdin.read()
 
     hook_input = parse_hook_input(raw)
-    payload = after_subagent(root, hook_input, cli=args.cli, dry_run=args.dry_run)
+    payload = after_subagent(
+        root,
+        hook_input,
+        cli=args.cli,
+        dry_run=args.dry_run,
+        pipeline_arg=args.pipeline,
+    )
 
     if args.dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

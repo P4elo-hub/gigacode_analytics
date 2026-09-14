@@ -1,0 +1,137 @@
+# Spec pipeline topology (SIHIST). Compile: scripts/pipeline_compile.py
+label: Spec pipeline (SIHIST)
+orchestrator: spec-orchestrator
+nodes:
+  - id: spec-orchestrator
+    label: spec-orchestrator
+    kind: orchestrator
+  - id: find-context
+    label: find-context
+    subagent: context-researcher
+    kind: step
+  - id: write-feature
+    label: write-feature
+    subagent: spec-writer
+    kind: step
+  - id: check-feature
+    label: check-feature
+    subagent: spec-reviewer
+    kind: step
+  - id: resolve-gaps
+    label: resolve-gaps
+    subagent: gap-resolver
+    kind: step
+  - id: challenge-feature
+    label: challenge-feature
+    subagent: spec-challenger
+    kind: step
+  - id: resolve-challenges
+    label: resolve-challenges
+    subagent: challenge-resolver
+    kind: step
+  - id: check-feature-code
+    label: check-feature-code
+    subagent: code-auditor
+    kind: step
+  - id: resolve-code-alignment
+    label: resolve-code-alignment
+    subagent: alignment-resolver
+    kind: step
+  - id: archive-session
+    label: archive-session
+    subagent: null
+    kind: meta
+  - id: done
+    label: PASS
+    kind: terminal
+edges:
+  - id: e-start
+    from: spec-orchestrator
+    to: find-context
+    kind: main
+  - id: e-fc-wf
+    from: find-context
+    to: write-feature
+    kind: main
+  - id: e-wf-cf
+    from: write-feature
+    to: check-feature
+    kind: main
+  - id: e-cf-rg
+    from: check-feature
+    to: resolve-gaps
+    kind: branch
+    label: gaps open
+  - id: e-cf-rc
+    from: check-feature
+    to: resolve-challenges
+    kind: branch
+    label: DECISIONS CH pending
+  - id: e-cf-ra
+    from: check-feature
+    to: resolve-code-alignment
+    kind: branch
+    label: alignment findings
+  - id: e-cf-ch
+    from: check-feature
+    to: challenge-feature
+    kind: branch
+    label: no CHALLENGES yet
+  - id: e-rg-cf
+    from: resolve-gaps
+    to: check-feature
+    kind: loop
+    label: re-check
+  - id: e-rg-rc
+    from: resolve-gaps
+    to: resolve-challenges
+    kind: branch
+    label: DECISIONS CH batch
+  - id: e-rg-ra
+    from: resolve-gaps
+    to: resolve-code-alignment
+    kind: branch
+    label: alignment after gaps
+  - id: e-cf-cc
+    from: check-feature
+    to: check-feature-code
+    kind: main
+    label: after gaps/ch
+  - id: e-ch-rc
+    from: challenge-feature
+    to: resolve-challenges
+    kind: main
+  - id: e-rc-cf
+    from: resolve-challenges
+    to: check-feature
+    kind: loop
+  - id: e-cc-cf
+    from: check-feature-code
+    to: check-feature
+    kind: loop
+    label: spec edited after audit
+  - id: e-cc-rg
+    from: check-feature-code
+    to: resolve-gaps
+    kind: branch
+    label: new GAP after audit
+  - id: e-cc-ra
+    from: check-feature-code
+    to: resolve-code-alignment
+    kind: branch
+    label: alignment gaps
+  - id: e-ra-cc
+    from: resolve-code-alignment
+    to: check-feature-code
+    kind: loop
+    label: re-audit
+  - id: e-ra-cf
+    from: resolve-code-alignment
+    to: check-feature
+    kind: loop
+    label: SPEC edited per alignment
+  - id: e-cc-done
+    from: check-feature-code
+    to: done
+    kind: main
+    label: PASS

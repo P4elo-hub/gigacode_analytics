@@ -253,6 +253,12 @@ def make_handler(workspace: Path, defaults: Defaults):
                     self._send_sse({"error": str(exc), "slug": slug})
                 return
 
+            if path == "/api/catalog":
+                from pipeline_pack import build_catalog
+
+                self._send_json(build_catalog(workspace))
+                return
+
             if path == "/api/health":
                 self._send_json(
                     {"ok": True, "version": API_VERSION, "viewer": "pipeline-viewer"}

@@ -1,41 +1,38 @@
-# Pipeline compile (phase 1–2)
+# Pipeline compile (packs)
 
-Single source of truth: `scripts/pipeline.yaml`.
+Source of truth: `pipelines/<id>/{graph,dispatch,status,registry}.yaml`.
 
 Generated artifacts:
 
 | Output | Purpose |
 |--------|---------|
 | `scripts/pipeline_schema.json` | Graph topology for viewer, hooks, delegate |
-| `scripts/generated/pipeline_registry.json` | Step→subagent mapping, gated subagents, restart order, **dispatch.spec** |
+| `scripts/generated/pipeline_registry.json` | Per-pipeline mapping, dispatch, status, predicates |
 
 ## Commands
 
 ```bash
-# Validate YAML + diff against generated files (no writes)
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
-
-# Regenerate schema + registry after editing pipeline.yaml
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --catalog
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --from-json pack.json
 ```
 
-After `--apply`, run the invariant suite:
+After `--apply`:
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py   # router via build_dispatch
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py             # golden + compile + hooks
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 PYTHONPATH=scripts python3 scripts/feature_status_test.py
 ```
 
-Smoke includes `pipeline-compile` parity check and `dispatch-golden`.
-
 ## Edit workflow
 
-1. Change topology, mapping, or **dispatch rules** in `pipeline.yaml` only.
-2. `--check` → review diff report (includes dispatch schema validation).
+1. Change the pack under `pipelines/<id>/` (not `scripts/pipeline.yaml`).
+2. `--check` → review validation + diff.
 3. `--apply` → commit YAML + generated JSON together.
-4. Golden + smoke must stay green before merge.
+4. Golden (`fixtures/dispatch_golden/<id>/cases.json`) + smoke must stay green.
 
-**Phase 2 (cutover complete):** declarative routing in `dispatch.spec` — see `PIPELINE-ROUTER.md`. Production uses `pipeline_router` only.
+Spec pack is the reference (24+ dispatch cases). New packs need their own golden folder.
 
-**Not in scope:** viewer edit UI, calibration dispatch.
+See `pipelines/README.md` and `PIPELINE-RUNTIME.md`.

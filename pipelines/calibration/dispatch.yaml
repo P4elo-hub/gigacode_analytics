@@ -1,0 +1,11 @@
+# Phase 3 Option A: no compiled dispatch. Orchestrator is linear by markdown.
+# Graph + delegate edge checks still apply (pipelines/calibration/graph.yaml).
+# Empty rules/invariants → compile skips this block; dispatch API returns
+# dispatch_supported: false, orchestrator_mode: orchestrator_only.
+invariant_after_priority: 0
+invariants: []
+fallback:
+  next: null
+  outcome: ready
+  reason: calibration graph only — dispatch not configured
+rules: []

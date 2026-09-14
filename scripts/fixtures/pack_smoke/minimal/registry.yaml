@@ -1,0 +1,6 @@
+step_to_subagent:
+orchestrator_owned:
+  - only-step
+gated_subagents:
+restartable_steps:
+  - only-step

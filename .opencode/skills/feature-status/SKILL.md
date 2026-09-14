@@ -109,7 +109,7 @@ JSON для оркестратора: `python3 scripts/feature_status.py <slug> 
 
 Таблица приоритетов P10–P140 — [reference.md](reference.md).
 Golden fixtures (24 кейса) —
-[COVERAGE.md](../../../scripts/fixtures/dispatch_golden/COVERAGE.md).
+[COVERAGE.md](../../../scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Ключевые ветки (первое совпадение): context → spec → **`needs-check-feature`**
 → DECISIONS (`needs-answer` / `pending-apply`) → alignment mismatch → gaps →

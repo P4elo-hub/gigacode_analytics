@@ -9,11 +9,12 @@ import sys
 from pathlib import Path
 
 from artifact_paths import list_feature_slugs, workspace_root
-from build_pipeline_graph import load_schema, subagent_to_step
+from build_pipeline_graph import subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_for_slug, load_active_task_latest
 from pipeline_common import pipeline_gated_subagents
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
+from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
 
 PIPELINE_GATED_SUBAGENTS = pipeline_gated_subagents()
 
@@ -77,6 +78,7 @@ def validate_task(
     proposed: str,
     *,
     slug_hint: str = "",
+    pipeline_arg: str | None = None,
 ) -> dict:
     if not proposed:
         return deny_output("task без subagent_type — укажи subagent_type из pipeline_delegate JSON.")
@@ -104,7 +106,8 @@ def validate_task(
             f"Сначала {DELEGATE_CMD.replace('<slug>', slug or '<slug>')}."
         )
 
-    schema = load_schema()["pipelines"]["spec"]
+    pipeline_id = resolve_pipeline_id(pipeline_arg, active, default=DEFAULT_PIPELINE_ID)
+    schema = load_pipeline_schema(pipeline_id)
     proposed_step = subagent_to_step(schema, proposed) or ""
     if proposed_step and slug:
         # Unlike delegate, the hook has no slug argument: `slug` comes from the
@@ -158,6 +161,11 @@ def before_subagent_hook(root: Path, hook_input: dict) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cli", choices=("qwen", "gigacode", "opencode"), default="qwen")
+    parser.add_argument(
+        "--pipeline",
+        default=None,
+        help="Override pipeline id (default: value from .pipeline-active-task.json)",
+    )
     parser.add_argument("--workspace", type=Path, default=None)
     parser.add_argument("--stdin-file", type=Path, help="Hook input file (default: stdin)")
     parser.add_argument("--proposed-subagent", help="Dry-run: subagent_type to validate")
@@ -167,7 +175,12 @@ def main(argv: list[str] | None = None) -> int:
     root = (args.workspace or workspace_root()).resolve()
 
     if args.proposed_subagent is not None:
-        payload = validate_task(root, args.proposed_subagent.strip(), slug_hint=args.slug or "")
+        payload = validate_task(
+            root,
+            args.proposed_subagent.strip(),
+            slug_hint=args.slug or "",
+            pipeline_arg=args.pipeline,
+        )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         decision = payload["hookSpecificOutput"]["permissionDecision"]
         return 0 if decision == "allow" else 1

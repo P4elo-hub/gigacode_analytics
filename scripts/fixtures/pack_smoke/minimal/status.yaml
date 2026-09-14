@@ -1,0 +1,8 @@
+task_kind: slug
+artifacts:
+collectors:
+stale:
+orchestrator:
+messages:
+  ready: Smoke minimal ready
+  stopped: Smoke minimal stopped

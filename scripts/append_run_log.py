@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--new-run", action="store_true", help="Start new run before append")
     parser.add_argument("--note", default="", help="Optional short note")
     parser.add_argument("--workspace", type=Path, help="Workspace root")
+    parser.add_argument("--pipeline", default="", help="Active pipeline id (spec, calibration, …)")
     return parser.parse_args()
 
 
@@ -42,6 +43,7 @@ def main() -> None:
         "attempt": args.attempt,
         "session": args.session or None,
         "note": args.note or None,
+        "pipeline": args.pipeline or None,
     }
     record = {k: v for k, v in record.items() if v is not None}
 

@@ -1,58 +1,50 @@
-# Pipeline router (phase 2)
+# Pipeline router
 
-Declarative next-step routing for the **spec** pipeline. Topology stays in `pipelines.spec`; **when** to take each branch lives in `dispatch.spec`.
+Declarative next-step routing. Topology is `pipelines/<id>/graph.yaml`.
+**when** names live in `dispatch.yaml` and must be in that pipeline's predicate catalog.
 
-**Cutover complete:** `feature_status.choose_next_step()` always calls `pipeline_router.apply_router_decision()`. There is no legacy imperative router.
+`--pipeline` (default `spec`) selects the graph. `load_dispatch(pipeline_id)`
+returns the compiled block or `None`. Missing/empty rules are valid (Option A:
+calibration has a graph, no router; API → `dispatch_supported: false`).
 
 ## Source files
 
 | File | Role |
 |------|------|
-| `pipeline.yaml` → `dispatch.spec` | Invariants + ordered rules |
-| `generated/pipeline_registry.json` | Compiled dispatch block (via `--apply`) |
-| `pipeline_router.py` | Named predicates, invariant gate, rule chain |
-| `feature_status.py` | `build_status_fields()` + `choose_next_step()` → router |
+| `pipelines/<id>/dispatch.yaml` | Invariants + ordered rules + fallback |
+| `pipelines/<id>/status.yaml` | Artifacts, collectors, stale |
+| `pipelines/<id>/predicates.py` | Domain `when:` implementations |
+| `scripts/pipeline_predicates.py` | Core catalog + merge |
+| `scripts/pipeline_status.py` | `load_status_spec(pipeline_id)` + generic builder |
+| `generated/pipeline_registry.json` | Compiled dispatch + status |
 
 ## DSL
 
-### Invariants (global, before rules)
+YAML is still only `priority` + `when` + `next` (+ optional `outcome`). No formulas.
 
-Run once per dispatch, **after rules P10–P30** (alignment limit, context, spec) and before P40+.
+### Invariants
 
-- `needs-check-feature` — same logic as `needs_check_feature()` (mtime, GAPS_MAP, CHALLENGES_MAP, run-log). Forces `check-feature` when true.
+Run after rules with `priority <= invariant_after_priority` (spec: 30).
+
+- spec: `needs-check-feature` → `check-feature`
 
 ### Rules
 
-Each rule:
-
 ```yaml
-- priority: 90          # unique, lower = earlier
-  when: open_gaps        # named predicate (Python, not eval)
-  next: resolve-gaps     # step id, or null for terminal
-  outcome: ready         # optional: ready | stopped (required when next: null)
+- priority: 90
+  when: open_gaps
+  next: resolve-gaps
 ```
 
-Terminal outcomes:
+`when` must be in `catalog_names(pipeline_id)` (core auto-names from artifacts + pack domain).
 
-- `outcome: stopped` — empty next, `orchestrator_mode=stopped`
-- `outcome: ready` — empty next, `ready=true`, `orchestrator_mode=ready`
-
-`_finalize_orchestrator_mode()` still sets `ask_user`, `write_feature_cycle`, `delegate`, `must_continue`.
-
-## Add a rule
-
-1. Implement predicate in `pipeline_router.py` (`PREDICATES` + `reason_for_predicate`).
-2. Add to `KNOWN_PREDICATES`.
-3. Append rule to `dispatch.spec.rules` in `pipeline.yaml` with a **new unique priority** (respect order vs neighbours).
-4. Add golden fixture in `fixtures/dispatch_golden/cases.json` + row in `COVERAGE.md`.
-5. `pipeline_compile.py --apply` → run golden + smoke.
+New semantics: register a predicate in the pack, do not edit the router.
 
 ## Tests
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py   # includes dispatch-golden
-PYTHONPATH=scripts python3 scripts/feature_status_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```
 
-Golden fixtures exercise `build_dispatch()` → compiled router end-to-end.
+Golden lives in `fixtures/dispatch_golden/<pipeline_id>/cases.json`.
