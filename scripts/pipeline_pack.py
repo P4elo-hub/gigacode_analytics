@@ -179,6 +179,8 @@ def build_catalog(root: Path | None = None) -> dict:
         steps[pid] = [n.get("id") for n in nodes if isinstance(n, dict) and n.get("id")]
         predicates[pid] = sorted(catalog_names(pid))
 
+    from pipeline_runtime import runtime_contract
+
     return {
         "pipelines": [
             {
@@ -195,6 +197,7 @@ def build_catalog(root: Path | None = None) -> dict:
             "core": sorted(core_predicate_names()),
             "by_pipeline": predicates,
         },
+        "runtime": {pid: runtime_contract(pid) for pid in packs},
         "pack_files": list(PACK_FILES),
         "optional_python": list(OPTIONAL_PY),
     }

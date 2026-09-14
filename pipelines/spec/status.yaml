@@ -100,6 +100,9 @@ orchestrator:
   ask_user_when: decisions_needs_answer
 messages:
   ready: Spec готов — финальный ответ пользователю.
+  ready_title: Spec готов
+  ready_detail: PASS / PASS WITH GAPS
+  ready_fix: Финальный ответ пользователю; калибровка — только по запросу.
   stopped: Пайплайн остановлен.
   ask_user: НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.
   write_cycle: Цикл write-feature (spec-writer по блокам).

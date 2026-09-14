@@ -177,13 +177,17 @@ def check_resolve_pipeline_from_active_task(report: Report) -> None:
 
 
 def check_validate_calibration(report: Report, slug: str) -> None:
-    """pipeline_validate for calibration must ok with dispatch-not-configured advice."""
+    """pipeline_validate for calibration: no early return; pack extra_advice runs."""
     from pipeline_validate import validate_slug
 
     try:
         result = validate_slug(ROOT, slug, pipeline="calibration")
         advice_ids = [a.id for a in result.advice]
-        ok = result.ok and "dispatch-not-configured" in advice_ids
+        ok = (
+            result.ok
+            and "cal-orchestrator-only" in advice_ids
+            and "dispatch-not-configured" not in advice_ids
+        )
         report.add(
             f"validate:calibration:{slug}",
             ok,

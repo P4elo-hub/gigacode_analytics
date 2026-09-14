@@ -1,36 +1,44 @@
 ---
-description: Strict spec-orchestrator step order — pipeline_delegate is source of truth
+description: Orchestrator runtime loop — pipeline_delegate is source of truth for any pack
 alwaysApply: true
 ---
 # Pipeline enforcement
 
-Оркестратор (**spec-orchestrator**, основная сессия GigaCode/Qwen) **не выбирает**
-следующий шаг по intuition. Единственный источник истины перед `task`:
+Оркестратор (**spec-orchestrator**, **calibration-orchestrator**, будущие packs)
+**не выбирает** следующий шаг по intuition. Единственный источник истины перед `task`:
 
 ```bash
-python3 scripts/pipeline_delegate.py <slug> --cli qwen
+python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline <id>
 ```
 
 `pipeline_dispatch.py` и `feature_status.py` — read-only для человека; оркестратор
 вызывает **только** `pipeline_delegate.py` (он внутри делает dispatch + active-task).
 
-## Обязательный цикл
+Default `--pipeline spec`. Калибровка: `--pipeline calibration`.
 
-Перед **каждым** `task` (кроме повторных `spec-writer` внутри `write_feature_cycle`):
+## Runtime loop (mandatory)
 
-1. `pipeline_delegate.py <slug> --cli qwen`
-2. `action: task` → **сразу** `task` только на `task.subagent_type` из JSON
-3. После SubagentStop hook (или fallback ingest) → снова шаг 1
-4. **Не завершай ход**, пока `must_continue: true` (смотри `dispatch` внутри JSON)
+Один цикл для любого pack с orchestrator + agents/skills:
 
-**Hard gate:** PreToolUse hook `.qwen/hooks/pipeline-before-subagent.sh` **блокирует**
+1. `python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline <id>`
+2. `action` → `task` | `ask_user` | `write_feature_cycle` | `orchestrator_only` | `ready` | `stopped` | `error`
+3. После `task` hook SubagentStop пишет лог; fallback:
+   `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline <id>`
+4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline <id>` (если hook не сделал)
+5. `python3 scripts/pipeline_validate.py <task_id> --pipeline <id>`
+
+Не вызывай `pipeline_dispatch.py` и `pipeline_set_active_task.py` отдельно.
+Прочитай injected context от hook и выполни `workflow_fix` для `severity: block`
+**до** следующего delegate.
+
+**Hard gate:** PreToolUse hook `pipeline-before-subagent.sh` **блокирует**
 `task`, если `subagent_type` ≠ active-task из delegate. Обойти нельзя — только
 снова `pipeline_delegate.py`.
 
 Preflight (опционально):
 
 ```bash
-python3 scripts/pipeline_delegate.py <slug> --assert-subagent gap-resolver
+python3 scripts/pipeline_delegate.py <task_id> --assert-subagent <имя> --pipeline <id>
 ```
 
 Код ≠ 0 → subagent не тот; **не** вызывай `task`.
@@ -39,18 +47,22 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent gap-resolver
 
 | action | Действие |
 |--------|----------|
-| `task` | Один `task` на `subagent_type` из JSON |
-| `ask_user` | `ask_user_question` по DECISIONS, **без** `task` |
-| `write_feature_cycle` | Цикл spec-writer (оркестратор) |
+| `task` | Один `task` **только** на `task.subagent_type` из JSON |
+| `ask_user` | `ask_user_question`, **без** `task` |
+| `write_feature_cycle` | Цикл оркестратора (spec: spec-writer по блокам) |
+| `orchestrator_only` | Dispatch нет — шаги по markdown; delegate проверяет рёбра (`--from-step` / `--to-step`) |
 | `ready` | Финальный ответ пользователю |
-| `stopped` | Сообщить причину (лимит alignment, права) |
-| `error` | Стоп, показать `instruction` |
+| `stopped` | Сообщить причину, стоп |
+| `error` | Стоп, показать `instruction` — **не** improvising retry |
 
 ## Run until done
 
-Правило **`run-until-done`**: выход только на `ready`, `ask_user`, `stopped`.
-Fail субагента → `append_run_log` → **`pipeline_delegate.py`** → retry **только**
-если delegate снова вернул `action: task` с тем же или новым subagent.
+Выход только на `ready`, `ask_user`, `stopped` (или `orchestrator_only`, когда
+следующий шаг оркестратор ведёт сам). Fail субагента → `append_run_log` →
+**`pipeline_delegate.py --pipeline <id>`** → retry **только** если delegate снова
+вернул `action: task`.
+
+**Не завершай ход**, пока `must_continue: true`.
 
 ## Запреты
 
@@ -60,14 +72,20 @@ Fail субагента → `append_run_log` → **`pipeline_delegate.py`** → 
 - ❌ Отдельный вызов `pipeline_set_active_task.py` (делает delegate)
 - ❌ Завершать сессию при `must_continue: true`
 - ❌ Параллельные содержательные `task`
-- ❌ Писать/править `SPEC`, отчёты — только через субагентов
 
-## write-feature
+## Spec pack
 
-После assemble — **обязательно** `task spec-reviewer` (`check-feature`) через delegate.
+- `ask_user` — строки `needs-answer` в DECISIONS
+- `write_feature_cycle` — после assemble снова delegate → `task spec-reviewer`
+- Не писать/править `SPEC` и отчёты — только через субагентов (`DECISIONS` — исключение)
+
+## Calibration pack
+
+Явно `--pipeline calibration`. `orchestrator_mode: orchestrator_only` — правил
+dispatch нет; цепочка по markdown, рёбра графа через delegate.
 
 ## Карта шаг → субагент
 
 Канон: `pipelines/<id>/registry.yaml` **активного** pipeline
 (`--pipeline` / `.pipeline-active-task.json` → `registry_for(pipeline_id)`).
-Не `STEP_TO_SUBAGENT`. Граф viewer: `scripts/pipeline_schema.json`.
+Не `STEP_TO_SUBAGENT`. Контракт: `scripts/PIPELINE-RUNTIME.md`.

@@ -47,12 +47,17 @@ PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 python3 scripts/feature_status_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of smoke
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py     # full suite (smoke has scoped check only)
+PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py      # pack-first validate + orchestrator loop
 ```
 
 `pipeline_registry_test.py`: `registry_for("calibration")` ≠ spec, calibration
 steps do not resolve via spec, hook gated uses active-task + `--pipeline`,
 compile rejects a mapped step missing from the graph, calibration restart
 rolls back `Calibration/<slug>/` only. Smoke only has `pipeline-registry:scoped`.
+
+`pipeline_runtime_test.py`: pack-first validate (calibration extra_advice without
+engine duplicate), spec extra_advice severity matrix, orchestrator runtime loop
+block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>`).
 
 ## Edit workflow
 

@@ -119,12 +119,12 @@ def format_hook_context(report: ValidationReport, *, step: str, subagent: str, r
         "PIPELINE HOOK — post-subagent cycle completed.",
         f"Step: {step} → {subagent} ({result})",
         f"Validate OK: {'yes' if report.ok else 'NO'} · must_continue: {report.must_continue}",
-        f"Next dispatch: {report.next_step} → {report.next_subagent}",
+        f"Next: {report.next_step} → {report.next_subagent}",
         "",
     ]
     actionable = [a for a in report.advice if a.severity in (SEVERITY_BLOCK, SEVERITY_WARN)]
     if actionable:
-        blocks.append("Workflow advice (follow before next dispatch):")
+        blocks.append("Workflow advice (follow before next delegate):")
         for item in actionable:
             icon = "BLOCK" if item.severity == SEVERITY_BLOCK else "WARN"
             blocks.append(f"- [{icon}] {item.title}: {item.workflow_fix}")
@@ -135,7 +135,7 @@ def format_hook_context(report: ValidationReport, *, step: str, subagent: str, r
                 break
     blocks.append("")
     blocks.append(
-        "Orchestrator: run pipeline_dispatch.py --json, then task on next_subagent "
+        "Orchestrator: run pipeline_delegate.py --pipeline <id>, then task on next_subagent "
         "in the same turn if must_continue."
     )
     return "\n".join(blocks)

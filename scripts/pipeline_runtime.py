@@ -1,4 +1,9 @@
-"""Resolve pipeline_id and load per-pipeline schema / dispatch."""
+"""Resolve pipeline_id, load per-pipeline schema / dispatch, expose runtime_contract().
+
+Canonical orchestrator loop (any pack):
+delegate → action → append_run_log → ingest → validate, all with ``--pipeline <id>``.
+See PIPELINE-RUNTIME.md.
+"""
 
 from __future__ import annotations
 
@@ -73,3 +78,30 @@ def dispatch_supported(pipeline_id: str) -> bool:
     if not isinstance(block, dict):
         return False
     return bool(block.get("rules") or block.get("invariants"))
+
+
+def runtime_contract(pipeline_id: str | None = None) -> dict:
+    """Canonical orchestrator loop for a pack (docs / ``pipeline_compile.py --catalog``)."""
+    pipe_id = normalize_pipeline_id(pipeline_id or DEFAULT_PIPELINE_ID)
+    schema = load_pipeline_schema(pipe_id)
+    pack_validate = Path(__file__).resolve().parent.parent / "pipelines" / pipe_id / "validate.py"
+    return {
+        "pipeline_id": pipe_id,
+        "orchestrator": schema.get("orchestrator") or "",
+        "dispatch_supported": dispatch_supported(pipe_id),
+        "loop": [
+            f"python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline {pipe_id}",
+            "action → task | ask_user | write_feature_cycle | orchestrator_only | ready | stopped | error",
+            (
+                "python3 scripts/append_run_log.py --slug <task_id> --step <step> "
+                f"--subagent <agent> --result ok --pipeline {pipe_id}"
+            ),
+            f"python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline {pipe_id}",
+            f"python3 scripts/pipeline_validate.py <task_id> --pipeline {pipe_id}",
+        ],
+        "validate": {
+            "engine": "scripts/pipeline_validate.py",
+            "pack": f"pipelines/{pipe_id}/validate.py",
+            "extra_advice": pack_validate.is_file(),
+        },
+    }

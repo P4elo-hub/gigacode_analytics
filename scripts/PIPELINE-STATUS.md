@@ -57,8 +57,13 @@ orchestrator:
   write_cycle_step: write-feature
   ask_user_when: decisions_needs_answer
 messages:
-  ready: ...
+  ready: ...                  # display / fallback
+  ready_title: ...            # pipeline_validate pipeline-ready title
+  ready_detail: ...           # fallback detail if dispatch has no next_reason
+  ready_fix: ...              # pipeline-ready workflow_fix
   stopped: ...
+  ask_user: ...
+  write_cycle: ...
 display:                        # optional CLI table for feature_status
   heading: "Фича: {slug}"
   rows:

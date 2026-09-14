@@ -233,6 +233,9 @@
       "orchestrator": {},
       "messages": {
         "ready": "Calibration pack has no dispatch rules.",
+        "ready_title": "Calibration без dispatch",
+        "ready_detail": "Calibration pack has no dispatch rules.",
+        "ready_fix": "Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
         "stopped": "Calibration пайплайн остановлен."
       },
       "invariants": [],
@@ -359,6 +362,9 @@
       },
       "messages": {
         "ready": "Spec готов — финальный ответ пользователю.",
+        "ready_title": "Spec готов",
+        "ready_detail": "PASS / PASS WITH GAPS",
+        "ready_fix": "Финальный ответ пользователю; калибровка — только по запросу.",
         "stopped": "Пайплайн остановлен.",
         "ask_user": "НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.",
         "write_cycle": "Цикл write-feature (spec-writer по блокам)."

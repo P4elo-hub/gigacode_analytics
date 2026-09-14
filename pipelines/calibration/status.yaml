@@ -5,4 +5,7 @@ stale: []
 orchestrator: {}
 messages:
   ready: Calibration pack has no dispatch rules.
+  ready_title: Calibration без dispatch
+  ready_detail: Calibration pack has no dispatch rules.
+  ready_fix: Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.
   stopped: Calibration пайплайн остановлен.

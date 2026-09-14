@@ -23,7 +23,8 @@ from build_pipeline_graph import (
     read_jsonl,
 )
 from pipeline_active_task import load_active_task, load_active_task_for_slug
-from feature_status import build_status
+from feature_status import build_status, build_status_fields
+from pipeline_common import write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import SEVERITY_ERROR, analyze_divergence, finalize_divergence
 from pipeline_runtime import (
@@ -34,6 +35,7 @@ from pipeline_runtime import (
     normalize_pipeline_id,
     resolve_pipeline_id,
 )
+from pipeline_status import load_status_spec
 
 SEVERITY_BLOCK = "block"
 SEVERITY_WARN = "warn"
@@ -82,6 +84,27 @@ def _add(report: ValidationReport, *, id: str, severity: str, title: str, detail
         report.ok = False
 
 
+def _status_messages(pipeline_id: str) -> dict:
+    spec = load_status_spec(pipeline_id)
+    messages = spec.get("messages") if isinstance(spec, dict) else None
+    return dict(messages) if isinstance(messages, dict) else {}
+
+
+def _pack_validate_module(pipe_id: str):
+    from pipeline_pack import load_pack_module
+
+    extra = load_pack_module(pipe_id, "validate")
+    if extra is not None and hasattr(extra, "extra_advice"):
+        return extra
+    return None
+
+
+def _call_extra_advice(root: Path, slug: str, pipe_id: str, status, dispatch: dict, report: ValidationReport) -> None:
+    extra = _pack_validate_module(pipe_id)
+    if extra is not None:
+        extra.extra_advice(root, slug, status, dispatch, report, _add)
+
+
 def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID) -> ValidationReport:
     pipe_id = normalize_pipeline_id(pipeline)
     dispatch = build_dispatch(root, slug, pipeline_id=pipe_id)
@@ -93,8 +116,10 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID)
         next_step=dispatch.get("next_step") or "",
         next_subagent=dispatch.get("next_subagent") or "",
     )
+    has_dispatch = dispatch_supported(pipe_id)
+    pack_validate = _pack_validate_module(pipe_id)
 
-    if not dispatch_supported(pipe_id):
+    if not has_dispatch and pack_validate is None:
         _add(
             report,
             id="dispatch-not-configured",
@@ -103,18 +128,20 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID)
             detail=dispatch.get("next_reason") or f"pipeline {pipe_id} has no dispatch rules",
             fix="Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
         )
-        return report
 
-    status = build_status(root, slug, pipe_id)
+    # Router-backed status when dispatch exists; artifacts-only otherwise
+    # (calibration has no compiled rules — build_status would raise).
+    status = build_status(root, slug, pipe_id) if has_dispatch else build_status_fields(root, slug, pipe_id)
 
-    if report.ready:
+    if has_dispatch and report.ready:
+        messages = _status_messages(pipe_id)
         _add(
             report,
             id="pipeline-ready",
             severity=SEVERITY_OK,
-            title="Spec готов",
-            detail=dispatch.get("next_reason") or "PASS / PASS WITH GAPS",
-            fix="Финальный ответ пользователю; калибровка — только по запросу.",
+            title=str(messages.get("ready_title") or "Pipeline готов"),
+            detail=dispatch.get("next_reason") or str(messages.get("ready_detail") or ""),
+            fix=str(messages.get("ready_fix") or "Финальный ответ пользователю."),
         )
         return report
 
@@ -142,17 +169,20 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID)
                     datetime.now(timezone.utc) - last_ts
                 ).total_seconds() <= IDLE_HANDOFF_GRACE_SEC
 
+        cycle = write_cycle_config(pipe_id)
         if orchestrator_mode == "write_feature_cycle":
+            cycle_step = cycle.get("step") or report.next_step or "write-cycle"
+            cycle_agent = cycle.get("subagent") or "subagent"
             _add(
                 report,
                 id="write-feature-cycle-idle",
                 severity=SEVERITY_WARN,
-                title="write-feature: сессия idle между блоками",
+                title=f"{cycle_step}: сессия idle между блоками",
                 detail=(
                     f"Dispatch в режиме write_feature_cycle "
                     f"(`{report.next_step}`). Оркестратор может работать без subagent."
                 ),
-                fix="Продолжай цикл spec-writer / assemble. BLOCK не нужен.",
+                fix=f"Продолжай цикл {cycle_agent} / assemble. BLOCK не нужен.",
             )
         elif active_for_slug:
             pass
@@ -169,7 +199,8 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID)
                     f"но сессия idle."
                 ),
                 fix=(
-                    "Немедленно: `pipeline_dispatch.py --json` → `task` на `next_subagent`. "
+                    f"Немедленно: `pipeline_delegate.py --pipeline {pipe_id}` "
+                    f"→ `task` на `{report.next_subagent or 'next_subagent'}`. "
                     "Не завершай ход, не спрашивай «продолжить?»."
                 ),
             )
@@ -187,16 +218,13 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID)
             detail=last.get("note") or "Subagent вернул fail/retry",
             fix=(
                 "1) `append_run_log.py --result fail --note '…'` "
-                "2) dispatch 3) повтори `task` на `next_subagent` в том же ходе."
+                f"2) `pipeline_delegate.py --pipeline {pipe_id}` "
+                "3) повтори `task` на `next_subagent` в том же ходе."
             ),
         )
 
     report._last_history = last  # type: ignore[attr-defined]
-    from pipeline_pack import load_pack_module
-
-    extra = load_pack_module(pipe_id, "validate")
-    if extra is not None and hasattr(extra, "extra_advice"):
-        extra.extra_advice(root, slug, status, dispatch, report, _add)
+    _call_extra_advice(root, slug, pipe_id, status, dispatch, report)
 
     divergence = analyze_divergence(
         root=root,
@@ -228,7 +256,7 @@ def validate_slug(root: Path, slug: str, *, pipeline: str = DEFAULT_PIPELINE_ID)
             severity=SEVERITY_OK,
             title="Workflow в норме",
             detail=f"Следующий шаг: {report.next_step} → {report.next_subagent}",
-            fix="Продолжай: dispatch → task → append_run_log → ingest → validate.",
+            fix="Продолжай: delegate → task → append_run_log → ingest → validate.",
         )
 
     return report

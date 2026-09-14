@@ -348,29 +348,33 @@ Spec должен оставаться **чистым**: журналы реше
 
 Routing — compiled router по pack `pipelines/<id>/`. Phase 3+ делает
 `pipeline_id` явной сущностью: один движок, несколько графов.
+**Runtime** — один цикл для любого pack (spec, calibration, future):
+delegate → action → append_run_log → ingest → validate (`--pipeline <id>`).
+Оркестратор следует правилу `pipeline-enforcement` (блок **Runtime loop**).
 
 ```
 --pipeline <id>  (default spec)
     ↓
-pipelines/<id>/{graph,dispatch,status,registry}.yaml
+pipelines/<id>/{graph,dispatch,status,registry}.yaml [+ validate.py]
     ↓
 pipeline_status.load_status_spec(id) + predicate catalog
     ↓
-pipeline_dispatch / pipeline_delegate / validate
+pipeline_dispatch / pipeline_delegate / pipeline_validate
 ```
 
 | Слой | Скрипты | Роль |
 |------|---------|------|
 | **Status** | `pipelines/<id>/status.yaml` + `pipeline_status.py` | снимок задачи для predicates |
 | **Routing** | `pipeline_dispatch.py`, `pipeline_router.py` | next step; `feature_status.py` — CLI spec |
-| **Enforcement** | `pipeline_delegate.py`, hooks, `pipeline_validate.py` | рёбра графа, registry активного `pipeline_id` |
+| **Runtime** | `pipeline_delegate.py`, hooks, `append_run_log.py`, `pipeline_validate.py` | цикл оркестратора; pack `validate.py` = `extra_advice` |
 | **Topology** | `pipelines/<id>/` → `pipeline_compile.py` | граф, registry, status, predicates |
 | **Registry** | `pipelines/<id>/registry.yaml` | step → subagent активного `pipeline_id`; `registry_for(id)` |
 | **Predicates** | `pipeline_predicates.py` + pack `predicates.py` | `when:` names: core from status.yaml + domain |
 
 `--pipeline spec` — полный declarative dispatch (эталон, 24+ golden).
 `--pipeline calibration` — граф и проверка рёбер; правил dispatch нет
-(`orchestrator_mode: orchestrator_only`).
+(`orchestrator_mode: orchestrator_only`). Validate всё равно вызывает
+`pipelines/calibration/validate.py` (`extra_advice`).
 
 `.pipeline-active-task.json` хранит `"pipeline"`. Hooks читают его,
 если `--pipeline` не задан.
@@ -520,8 +524,9 @@ python3 scripts/ingest_session_telemetry.py <slug> --cli gigacode
 append_run_log → ingest_session_telemetry → pipeline_validate → additionalContext
 ```
 
-**Перед** `task` оркестратор вызывает `pipeline_set_active_task.py` (slug, step, subagent) —
-hook читает `.pipeline-active-task.json`.
+**Перед** `task` оркестратор вызывает `pipeline_delegate.py --pipeline <id>`
+(delegate сам пишет `.pipeline-active-task.json`). Отдельный
+`pipeline_set_active_task.py` не нужен.
 
 Viewer показывает validation в API графа (`validation` field) и в UI (баннер + sidebar).
 
