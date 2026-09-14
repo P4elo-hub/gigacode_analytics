@@ -7,20 +7,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from pipeline_predicates import (
-    catalog_names,
-    evaluate_invariant,
-    invariant_names,
-    predicates_for,
-    reason_for,
-)
+from pipeline_predicates import evaluate_invariant, predicates_for, reason_for
 from pipeline_status import apply_dispatch_fields
 
 SCRIPTS = Path(__file__).resolve().parent
 REGISTRY_PATH = SCRIPTS / "generated" / "pipeline_registry.json"
 
-KNOWN_INVARIANTS = invariant_names("spec")
-KNOWN_PREDICATES = catalog_names("spec")
 VALID_OUTCOMES = frozenset({"ready", "stopped"})
 INVARIANT_AFTER_PRIORITY = 30
 

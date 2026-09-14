@@ -34,7 +34,7 @@ def _dispatch_configured(block: object) -> bool:
 
 def validate_dispatch(pipeline_id: str, spec: dict, restartable_steps: list[str], node_ids: set[str]) -> list[str]:
     errors: list[str] = []
-    from pipeline_predicates import catalog_names, invariant_names
+    from pipeline_predicates import catalog_names, invariant_names, validate_catalog
 
     known_when = catalog_names(pipeline_id)
     known_inv = invariant_names(pipeline_id)
@@ -87,6 +87,7 @@ def validate_dispatch(pipeline_id: str, spec: dict, restartable_steps: list[str]
             errors.append(f"{pipeline_id}: invalid next: {next_step!r}")
         if outcome and outcome not in {"ready", "stopped"}:
             errors.append(f"{pipeline_id}: invalid outcome: {outcome!r}")
+    errors.extend(validate_catalog(pipeline_id, spec))
     return errors
 
 
@@ -144,6 +145,60 @@ def validate_source(data: dict) -> list[str]:
                     {sid for sid in node_ids if sid},
                 )
             )
+        errors.extend(validate_status(pipe_id, (data.get("status") or {}).get(pipe_id) or {}))
+        if not _dispatch_configured(dispatch):
+            from pipeline_predicates import validate_catalog
+
+            errors.extend(validate_catalog(pipe_id, dispatch if isinstance(dispatch, dict) else None))
+    return errors
+
+
+def validate_status(pipeline_id: str, spec: object) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(spec, dict):
+        errors.append(f"{pipeline_id}: status must be a mapping")
+        return errors
+    artifacts = spec.get("artifacts") or {}
+    if spec.get("artifacts") not in (None, {}, []) and not isinstance(artifacts, dict):
+        errors.append(f"{pipeline_id}: status.artifacts must be a mapping")
+        artifacts = {}
+    collectors = spec.get("collectors") or []
+    if spec.get("collectors") not in (None, [], "[]") and not isinstance(collectors, list):
+        errors.append(f"{pipeline_id}: status.collectors must be a list")
+        return errors
+    registry: dict = {}
+    if collectors:
+        from pipeline_pack import load_pack_module
+
+        mod = load_pack_module(pipeline_id, "collectors")
+        if mod is None:
+            errors.append(f"{pipeline_id}: status.collectors set but collectors.py missing")
+        else:
+            raw = getattr(mod, "COLLECTORS", {})
+            registry = raw if isinstance(raw, dict) else {}
+    for item in collectors if isinstance(collectors, list) else []:
+        if not isinstance(item, dict):
+            errors.append(f"{pipeline_id}: collector entries must be mappings")
+            continue
+        cid = item.get("id")
+        if cid not in registry:
+            errors.append(f"{pipeline_id}: unknown collector id: {cid!r}")
+        source = item.get("source")
+        if source and source not in artifacts:
+            errors.append(f"{pipeline_id}: collector {cid} unknown source: {source!r}")
+    for rule in spec.get("stale") or []:
+        if not isinstance(rule, dict):
+            continue
+        for side in ("left", "right"):
+            key = rule.get(side)
+            if key and key not in artifacts:
+                errors.append(f"{pipeline_id}: stale {rule.get('id')} unknown {side}: {key!r}")
+    for inv in spec.get("invariants") or []:
+        if not isinstance(inv, dict):
+            continue
+        cid = inv.get("collector")
+        if cid and cid not in registry:
+            errors.append(f"{pipeline_id}: invariant collector unknown: {cid!r}")
     return errors
 
 

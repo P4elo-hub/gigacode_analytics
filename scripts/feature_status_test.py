@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
-"""Unit tests for feature_status parsing helpers."""
+"""Unit tests for spec collectors and yaml-driven populate_status."""
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from feature_status import (  # noqa: E402
-    ALIGNMENT_RELATES_RE,
-    DECISION_ROW_RE,
-    build_status_fields,
-    parse_alignment,
-)
+from pipeline_pack import load_pack_module  # noqa: E402
+from pipeline_status import populate_status  # noqa: E402
+from feature_status import build_status_fields, render_markdown  # noqa: E402
+
+_collectors = load_pack_module("spec", "collectors")
+ALIGNMENT_RELATES_RE = _collectors.ALIGNMENT_RELATES_RE
+DECISION_ROW_RE = _collectors.DECISION_ROW_RE
+parse_alignment = _collectors.parse_alignment
+
+GOLDEN = SCRIPTS / "fixtures" / "status_golden" / "spec" / "cases.json"
 
 
 class ParseAlignmentTest(unittest.TestCase):
@@ -95,8 +103,7 @@ class DecisionsParsingTest(unittest.TestCase):
             fw.mkdir(parents=True)
             ctx_dir = root / "Feature-context"
             ctx_dir.mkdir(parents=True)
-            ctx = ctx_dir / f"{slug}.md"
-            ctx.write_text("# Context\n\nVerified.\n", encoding="utf-8")
+            (ctx_dir / f"{slug}.md").write_text("# Context\n\nVerified.\n", encoding="utf-8")
             (fw / f"{slug}.md").write_text("# spec\n", encoding="utf-8")
             (fw / f"{slug}-decisions.md").write_text(self.SAMPLE, encoding="utf-8")
 
@@ -105,6 +112,56 @@ class DecisionsParsingTest(unittest.TestCase):
             self.assertEqual(status.decisions_needs_answer_alignment, 1)
             self.assertEqual(status.decisions_pending_apply, 2)
             self.assertEqual(status.decisions_pending_apply_alignment, 1)
+
+
+class PopulateStatusYamlTest(unittest.TestCase):
+    def test_populate_status_generic_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            slug = "ns-task"
+            status = SimpleNamespace(slug=slug)
+            populate_status(status, root, slug, "spec")
+            self.assertFalse(status.has_spec)
+            self.assertFalse(status.has_context)
+            self.assertEqual(status.stale, [])
+            self.assertFalse(status.alignment_stale)
+
+    def test_render_markdown_uses_display_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            slug = "unit-render"
+            fw = root / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            (fw / f"{slug}.md").write_text("# spec\n", encoding="utf-8")
+            text = render_markdown(build_status_fields(root, slug))
+            self.assertIn("| CONTEXT_DOC |", text)
+            self.assertIn("| SPEC |", text)
+            self.assertIn("| ALIGNMENT |", text)
+
+
+class StatusGoldenTest(unittest.TestCase):
+    def test_yaml_files_to_fields(self) -> None:
+        cases = json.loads(GOLDEN.read_text(encoding="utf-8"))
+        for case in cases:
+            with self.subTest(case["id"]):
+                self._run_case(case)
+
+    def _run_case(self, case: dict) -> None:
+        task_id = case["task_id"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel, content in (case.get("files") or {}).items():
+                path = root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            order = case.get("mtime_order") or []
+            base = time.time() - max(len(order), 1) * 10
+            for index, rel in enumerate(order):
+                os.utime(root / rel, (base + index * 10, base + index * 10))
+            status = build_status_fields(root, task_id)
+            for key, expected in (case.get("expect") or {}).items():
+                actual = getattr(status, key)
+                self.assertEqual(actual, expected, msg=f"{case['id']}.{key}")
 
 
 class PipelineRuntimeTest(unittest.TestCase):
@@ -124,6 +181,8 @@ class PipelineRuntimeTest(unittest.TestCase):
         spec = load_status_spec("spec")
         self.assertIn("artifacts", spec)
         self.assertIn("spec", spec["artifacts"])
+        self.assertTrue(any(item.get("id") == "needs_check_feature" for item in spec.get("collectors") or []))
+        self.assertTrue(any(item.get("id") == "needs-check-feature" for item in spec.get("invariants") or []))
         cal = load_status_spec("calibration")
         self.assertIsInstance(cal.get("artifacts"), dict)
 

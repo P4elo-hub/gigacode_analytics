@@ -24,7 +24,14 @@ After `--apply`:
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 PYTHONPATH=scripts python3 scripts/feature_status_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of smoke
 ```
+
+Status contract (artifacts / collectors): [PIPELINE-STATUS.md](PIPELINE-STATUS.md).
+Predicate catalog (`when:` names): [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md).
+
+`--check` rejects unknown `when:`, empty reasons, and
+`DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`.
 
 ## Edit workflow
 

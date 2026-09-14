@@ -27,4 +27,5 @@ Hooks (`pipeline_before_subagent`, `pipeline_after_subagent`) resolve
 | `pipeline_validate.py` | Generic idle/fail/divergence + pack `validate.py` |
 
 New scenario: add `pipelines/<id>/` + agents/skills, then
-`pipeline_compile.py --apply`. No engine Python for topology or `when:` names.
+`pipeline_compile.py --apply`. No engine Python for topology or `when:` names
+(predicate catalog: [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md)).

@@ -361,9 +361,11 @@ pipeline_dispatch / pipeline_delegate / validate
 
 | Слой | Скрипты | Роль |
 |------|---------|------|
-| **Routing** | `pipeline_status.py`, `pipeline_dispatch.py` | next step; `feature_status.py` — wrapper spec |
+| **Status** | `pipelines/<id>/status.yaml` + `pipeline_status.py` | снимок задачи для predicates |
+| **Routing** | `pipeline_dispatch.py`, `pipeline_router.py` | next step; `feature_status.py` — CLI spec |
 | **Enforcement** | `pipeline_delegate.py`, hooks, `pipeline_validate.py` | рёбра графа, `--pipeline` |
 | **Topology** | `pipelines/<id>/` → `pipeline_compile.py` | граф, registry, status, predicates |
+| **Predicates** | `pipeline_predicates.py` + pack `predicates.py` | `when:` names: core from status.yaml + domain |
 
 `--pipeline spec` — полный declarative dispatch (эталон, 24+ golden).
 `--pipeline calibration` — граф и проверка рёбер; правил dispatch нет
@@ -372,9 +374,15 @@ pipeline_dispatch / pipeline_delegate / validate
 `.pipeline-active-task.json` хранит `"pipeline"`. Hooks читают его,
 если `--pipeline` не задан.
 
+Новый `when:` — функция в `pipelines/<id>/predicates.py` и правило в
+`dispatch.yaml`. Router не правится. Typo в `when:` ловит
+`pipeline_compile.py --check`.
+
 Подробнее: [scripts/PIPELINE-ROUTER.md](scripts/PIPELINE-ROUTER.md),
+[scripts/PIPELINE-PREDICATES.md](scripts/PIPELINE-PREDICATES.md),
 [scripts/PIPELINE-COMPILE.md](scripts/PIPELINE-COMPILE.md),
-[scripts/PIPELINE-RUNTIME.md](scripts/PIPELINE-RUNTIME.md).
+[scripts/PIPELINE-RUNTIME.md](scripts/PIPELINE-RUNTIME.md),
+[scripts/PIPELINE-STATUS.md](scripts/PIPELINE-STATUS.md).
 Golden: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.

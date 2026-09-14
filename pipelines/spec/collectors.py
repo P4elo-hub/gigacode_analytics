@@ -3,14 +3,8 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
-
-from artifact_paths import (
-    challenges_map_path,
-    challenges_path,
-    gaps_map_path,
-    spec_path,
-)
 
 INLINE_GAP_RE = re.compile(r"\[GAP-[A-Z0-9-]+\]")
 TABLE_GAP_RE = re.compile(r"^\|\s*(GAP-[A-Z0-9-]+)\s*\|", re.MULTILINE)
@@ -41,6 +35,16 @@ CH_COVERED = "covered"
 CH_UNRESOLVED = (CH_OPEN, CH_NEEDS_ANSWER, CH_ANSWERED_LEGACY)
 
 
+@dataclass
+class ChallengeCounts:
+    open: int = 0
+    deferred: int = 0
+    resolved: int = 0
+    covered: int = 0
+    open_critical: int = 0
+    open_major: int = 0
+
+
 def _section_after(text: str, heading_re: re.Pattern[str]) -> str:
     match = heading_re.search(text)
     if not match:
@@ -67,9 +71,7 @@ def collect_open_questions(context_text: str) -> list[str]:
     return sorted(open_ids - closed_ids)
 
 
-def collect_challenges(challenges_text: str):
-    from feature_status import ChallengeCounts
-
+def collect_challenges(challenges_text: str) -> ChallengeCounts:
     counts = ChallengeCounts()
     for match in CHALLENGE_ROW_RE.finditer(challenges_text):
         severity = match.group(2).strip().lower()
@@ -162,23 +164,47 @@ def collect_alignment_frontmatter(_root: Path, _task_id: str, status, paths: dic
     status.critical_major_mismatch = mismatch
 
 
+def collect_needs_check_feature(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
+    needed, reason = needs_check_feature(root, task_id, status, paths)
+    status.needs_check_feature = needed
+    status.needs_check_feature_reason = reason
+
+
 COLLECTORS = {
     "decisions_table": collect_decisions_table,
     "spec_gaps": collect_spec_gaps,
     "context_questions": collect_context_questions,
     "challenges_table": collect_challenges_table,
     "alignment_frontmatter": collect_alignment_frontmatter,
+    "needs_check_feature": collect_needs_check_feature,
 }
 
 
-def needs_check_feature(root: Path, slug: str, status) -> tuple[bool, str]:
-    spec = spec_path(root, slug)
-    if not spec.is_file():
+def _artifact(paths: dict[str, Path] | None, key: str) -> Path | None:
+    if not paths:
+        return None
+    path = paths.get(key)
+    return path if isinstance(path, Path) else None
+
+
+def needs_check_feature(
+    root: Path,
+    slug: str,
+    status,
+    paths: dict[str, Path] | None = None,
+) -> tuple[bool, str]:
+    if paths is None:
+        from pipeline_status import resolve_artifact_paths
+
+        pid = getattr(status, "pipeline_id", None) or "spec"
+        paths = resolve_artifact_paths(root, slug, pid)
+    spec = _artifact(paths, "spec")
+    if spec is None or not spec.is_file():
         return False, ""
 
     spec_mtime = spec.stat().st_mtime
-    gaps_map = gaps_map_path(root, slug)
-    challenges_map = challenges_map_path(root, slug)
+    gaps_map = _artifact(paths, "gaps_map")
+    challenges_map = _artifact(paths, "challenges_map")
 
     from pipeline_common import last_successful_step_ts
 
@@ -186,20 +212,29 @@ def needs_check_feature(root: Path, slug: str, status) -> tuple[bool, str]:
     if last_check is not None and last_check >= spec_mtime - 2:
         return False, ""
 
-    if gaps_map.is_file() and spec_mtime > gaps_map.stat().st_mtime + 1:
+    if gaps_map is not None and gaps_map.is_file() and spec_mtime > gaps_map.stat().st_mtime + 1:
         return True, "SPEC новее GAPS_MAP — перепроверка после resolve-gaps"
 
-    if challenges_map.is_file() and spec_mtime > challenges_map.stat().st_mtime + 1:
+    if (
+        challenges_map is not None
+        and challenges_map.is_file()
+        and spec_mtime > challenges_map.stat().st_mtime + 1
+    ):
         return True, "SPEC новее CHALLENGES_MAP — перепроверка после resolve-challenges"
 
     if status.has_challenges or status.has_alignment:
-        challenges = challenges_path(root, slug)
-        if challenges.is_file() and spec_mtime <= challenges.stat().st_mtime + 1:
+        challenges = _artifact(paths, "challenges")
+        if challenges is not None and challenges.is_file() and spec_mtime <= challenges.stat().st_mtime + 1:
             return False, ""
-        if gaps_map.is_file() and spec_mtime <= gaps_map.stat().st_mtime + 1:
+        if gaps_map is not None and gaps_map.is_file() and spec_mtime <= gaps_map.stat().st_mtime + 1:
             return False, ""
 
     if not status.has_gaps_map and not status.has_challenges and not status.has_alignment:
         return True, "spec не проходила check-feature"
 
     return True, "нет check-feature после последней правки SPEC"
+
+
+INVARIANTS = {
+    "needs-check-feature": needs_check_feature,
+}

@@ -18,6 +18,8 @@ calibration has a graph, no router; API → `dispatch_supported: false`).
 | `scripts/pipeline_status.py` | `load_status_spec(pipeline_id)` + generic builder |
 | `generated/pipeline_registry.json` | Compiled dispatch + status |
 
+Status YAML schema: [PIPELINE-STATUS.md](PIPELINE-STATUS.md).
+
 ## DSL
 
 YAML is still only `priority` + `when` + `next` (+ optional `outcome`). No formulas.
@@ -36,15 +38,20 @@ Run after rules with `priority <= invariant_after_priority` (spec: 30).
   next: resolve-gaps
 ```
 
-`when` must be in `catalog_names(pipeline_id)` (core auto-names from artifacts + pack domain).
+`when` must be in `catalog_names(pipeline_id)` (core auto-names from artifacts +
+counters in `status.yaml` + pack domain). Compile also requires an implementation
+and a non-empty `reason_for`.
 
 New semantics: register a predicate in the pack, do not edit the router.
+See [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md).
 
 ## Tests
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py
 ```
 
 Golden lives in `fixtures/dispatch_golden/<pipeline_id>/cases.json`.
+Predicate catalog tests are a separate file, not smoke checks.

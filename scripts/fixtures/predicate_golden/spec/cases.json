@@ -1,0 +1,23 @@
+{
+  "pipeline_id": "spec",
+  "cases": [
+    {
+      "id": "core-not-has-context",
+      "when": "not_has_context",
+      "status": {"has_context": false},
+      "expect": true
+    },
+    {
+      "id": "domain-open-gaps",
+      "when": "open_gaps",
+      "status": {"open_gaps": ["GAP-1"]},
+      "expect": true
+    },
+    {
+      "id": "domain-alignment-pass",
+      "when": "alignment_pass",
+      "status": {"verdict": "PASS WITH GAPS"},
+      "expect": true
+    }
+  ]
+}

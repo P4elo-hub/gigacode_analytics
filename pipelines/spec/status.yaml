@@ -1,14 +1,51 @@
-# Status contract for the spec pack. Engine reads this; collectors live in collectors.py.
+# Spec-pack status contract. Engine: pipeline_status.populate_status.
+# Inventory: field → source (artifact exists_as/lines_as, collector id, or stale rule).
+#   has_context / context_lines                 artifacts.context
+#   has_spec / spec_lines                       artifacts.spec
+#   has_decisions                               artifacts.decisions
+#   has_gaps_map                                artifacts.gaps_map
+#   has_challenges                              artifacts.challenges
+#   has_challenges_map                          artifacts.challenges_map
+#   has_alignment                               artifacts.alignment
+#   decisions_needs_answer                      collectors.decisions_table
+#   decisions_pending_apply                     collectors.decisions_table
+#   decisions_needs_answer_alignment            collectors.decisions_table
+#   decisions_pending_apply_alignment           collectors.decisions_table
+#   open_gaps                                   collectors.spec_gaps
+#   open_questions                              collectors.context_questions
+#   challenges.*                                collectors.challenges_table
+#   verdict / alignment_iteration               collectors.alignment_frontmatter
+#   critical_major_mismatch                     collectors.alignment_frontmatter
+#   stale                                       stale[]
+#   alignment_stale                             alignment_stale
+#   needs_check_feature / _reason               collectors.needs_check_feature
+#                                               (invariants.needs-check-feature)
+# Core when names: not_has_<artifact> / {field}_gt_{n} from core_predicates.counters
 task_kind: slug
+constants:
+  alignment_max_iterations: 3
+  verdict_pass: PASS
+  verdict_pass_with_gaps: PASS WITH GAPS
+  verdict_fail: FAIL
+core_predicates:
+  counters:
+    - field: decisions_needs_answer
+      gt: 0
+      alias: field_gt          # legacy catalog name; dispatch uses domain when:
+    - field: decisions_pending_apply
+      gt: 0
+      alias: pending_apply     # same; not a dispatch.yaml when:
 artifacts:
   context:
     path: Feature-context/{task_id}.md
     exists_as: has_context
     lines_as: context_lines
+    missing_reason: нет проверенного контекста
   spec:
     path: Feature-writing/{task_id}/{task_id}.md
     exists_as: has_spec
     lines_as: spec_lines
+    missing_reason: спецификация не написана
   decisions:
     path: Feature-writing/{task_id}/{task_id}-decisions.md
     exists_as: has_decisions
@@ -35,6 +72,8 @@ collectors:
     source: challenges
   - id: alignment_frontmatter
     source: alignment
+  - id: needs_check_feature
+    source: spec
 stale:
   - id: alignment
     when: artifact_older_than
@@ -53,6 +92,9 @@ alignment_stale:
   left: alignment
   right: spec
   require_left: true
+invariants:
+  - id: needs-check-feature
+    collector: needs_check_feature
 orchestrator:
   write_cycle_step: write-feature
   ask_user_when: decisions_needs_answer
@@ -61,3 +103,26 @@ messages:
   stopped: Пайплайн остановлен.
   ask_user: НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.
   write_cycle: Цикл write-feature (spec-writer по блокам).
+display:
+  heading: "Фича: {slug}"
+  rows:
+    - label: CONTEXT_DOC
+      exists: has_context
+      suffix: "{context_lines} строк"
+    - label: SPEC
+      exists: has_spec
+      suffix: "{spec_lines} строк"
+    - label: DECISIONS
+      exists: has_decisions
+      suffix: "ask {decisions_needs_answer} · apply {decisions_pending_apply}"
+    - label: GAPS_MAP
+      exists: has_gaps_map
+    - label: CHALLENGES
+      exists: has_challenges
+      suffix: "open {challenges_open}"
+    - label: CHALLENGES_MAP
+      exists: has_challenges_map
+    - label: ALIGNMENT
+      exists: has_alignment
+      present_format: "✅ итерация {alignment_iteration}/{alignment_max_iterations}"
+      absent_format: "❌"

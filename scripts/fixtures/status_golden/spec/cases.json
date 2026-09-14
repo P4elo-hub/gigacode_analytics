@@ -1,0 +1,51 @@
+[
+  {
+    "id": "empty-task",
+    "task_id": "unit-empty",
+    "files": {},
+    "expect": {
+      "has_context": false,
+      "has_spec": false,
+      "has_decisions": false,
+      "open_gaps": [],
+      "stale": [],
+      "alignment_stale": false,
+      "needs_check_feature": false
+    }
+  },
+  {
+    "id": "spec-with-inline-gap",
+    "task_id": "unit-gap",
+    "files": {
+      "Feature-context/unit-gap.md": "# Context\n\nVerified.\n",
+      "Feature-writing/unit-gap/unit-gap.md": "# spec\n\n[GAP-INT-01] missing fact\n"
+    },
+    "expect": {
+      "has_context": true,
+      "has_spec": true,
+      "open_gaps": ["GAP-INT-01"],
+      "spec_lines": 3,
+      "needs_check_feature": true
+    }
+  },
+  {
+    "id": "alignment-stale-vs-spec",
+    "task_id": "unit-stale",
+    "files": {
+      "Feature-writing/unit-stale/unit-stale.md": "# spec\n",
+      "Feature-writing/unit-stale/unit-stale-code-alignment.md": "---\nverdict: FAIL\nalignment_iteration: 1\n---\n"
+    },
+    "mtime_order": [
+      "Feature-writing/unit-stale/unit-stale-code-alignment.md",
+      "Feature-writing/unit-stale/unit-stale.md"
+    ],
+    "expect": {
+      "has_spec": true,
+      "has_alignment": true,
+      "verdict": "FAIL",
+      "alignment_iteration": 1,
+      "alignment_stale": true,
+      "stale": ["alignment"]
+    }
+  }
+]

@@ -48,8 +48,9 @@
 
 ---
 
-Канон подсчёта — `scripts/feature_status.py` (`build_status_fields`).
-Канон routing — `scripts/pipeline.yaml` → `dispatch.spec` → `pipeline_router.py`.
+Канон подсчёта — `pipelines/spec/status.yaml` + `pipelines/spec/collectors.py`
+(`pipeline_status.populate_status`).
+Канон routing — `pipelines/spec/dispatch.yaml` → `pipeline_router.py`.
 
 Полная таблица правил, приоритетов и golden-fixtures:
 [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](../../../scripts/fixtures/dispatch_golden/spec/COVERAGE.md).

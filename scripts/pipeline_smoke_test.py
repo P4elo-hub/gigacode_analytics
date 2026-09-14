@@ -292,14 +292,16 @@ def check_ts_sort_node_state(report: Report) -> None:
 
 def check_graph_order_gate(report: Report, slug: str) -> None:
     """After write-feature, dispatch must not skip check-feature for graph branches."""
-    from feature_status import build_status, needs_check_feature
+    from pipeline_pack import load_pack_module
+    from feature_status import build_status
 
     try:
         status = build_status(ROOT, slug)
         if not status.has_spec:
             report.add(f"graph-order-gate:{slug}", True, "no spec — skip")
             return
-        need, _ = needs_check_feature(ROOT, slug, status)
+        collectors = load_pack_module("spec", "collectors")
+        need, _ = collectors.needs_check_feature(ROOT, slug, status)
         if not need:
             report.add(f"graph-order-gate:{slug}", True, "check-feature done — skip")
             return

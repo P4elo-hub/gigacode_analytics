@@ -43,6 +43,28 @@ def resolve_artifact_path(root: Path, template: str, task_id: str) -> Path:
     return root / template.format(task_id=task_id, slug=task_id)
 
 
+def resolve_artifact_paths(
+    root: Path,
+    task_id: str,
+    pipeline_id: str = DEFAULT_PIPELINE_ID,
+) -> dict[str, Path]:
+    spec = load_status_spec(pipeline_id)
+    paths: dict[str, Path] = {}
+    for art_id, art in (spec.get("artifacts") or {}).items():
+        if not isinstance(art, dict):
+            continue
+        template = art.get("path")
+        if template:
+            paths[str(art_id)] = resolve_artifact_path(root, str(template), task_id)
+    return paths
+
+
+def collectors_for(pipeline_id: str = DEFAULT_PIPELINE_ID) -> dict:
+    collectors_mod = load_pack_module(pipeline_id, "collectors")
+    registry = getattr(collectors_mod, "COLLECTORS", {}) if collectors_mod else {}
+    return registry if isinstance(registry, dict) else {}
+
+
 def _line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines()) if path.is_file() else 0
 
@@ -72,24 +94,17 @@ def populate_status(status, root: Path, task_id: str, pipeline_id: str = DEFAULT
     spec = load_status_spec(pipeline_id)
     if hasattr(status, "pipeline_id"):
         status.pipeline_id = pipeline_id
+    paths = resolve_artifact_paths(root, task_id, pipeline_id)
     artifacts = spec.get("artifacts") or {}
-    paths: dict[str, Path] = {}
-    for art_id, art in artifacts.items():
-        if not isinstance(art, dict):
-            continue
-        template = art.get("path")
-        if not template:
-            continue
-        path = resolve_artifact_path(root, str(template), task_id)
-        paths[art_id] = path
-        exists_as = art.get("exists_as") or f"has_{art_id}"
+    for art_id, path in paths.items():
+        art = artifacts.get(art_id) if isinstance(artifacts.get(art_id), dict) else {}
+        exists_as = (art or {}).get("exists_as") or f"has_{art_id}"
         setattr(status, exists_as, path.is_file())
-        lines_as = art.get("lines_as")
+        lines_as = (art or {}).get("lines_as")
         if lines_as:
             setattr(status, lines_as, _line_count(path))
 
-    collectors_mod = load_pack_module(pipeline_id, "collectors")
-    registry = getattr(collectors_mod, "COLLECTORS", {}) if collectors_mod else {}
+    registry = collectors_for(pipeline_id)
     for item in spec.get("collectors") or []:
         if not isinstance(item, dict):
             continue
@@ -145,12 +160,13 @@ def apply_dispatch_fields(status, next_step: str, next_reason: str, pipeline_id:
     finalize_orchestrator_mode(status, pipeline_id)
 
 
-def build_status(root: Path, task_id: str, pipeline_id: str = DEFAULT_PIPELINE_ID):
-    from feature_status import FeatureStatus, choose_next_step
+def build_status(root: Path, task_id: str, pipeline_id: str = DEFAULT_PIPELINE_ID, *, status=None):
+    if status is None:
+        from feature_status import FeatureStatus
 
-    status = FeatureStatus(slug=task_id)
-    if hasattr(status, "pipeline_id"):
-        status.pipeline_id = pipeline_id
+        status = FeatureStatus(slug=task_id, pipeline_id=pipeline_id)
     populate_status(status, root, task_id, pipeline_id)
-    choose_next_step(status, root=root, pipeline_id=pipeline_id)
+    from pipeline_router import apply_router_decision
+
+    apply_router_decision(status, root, task_id, pipeline_id=pipeline_id)
     return status

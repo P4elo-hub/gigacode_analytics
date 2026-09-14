@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from artifact_paths import spec_path
 from pipeline_common import last_successful_step_ts
 
 
@@ -35,16 +34,22 @@ def extra_advice(root: Path, task_id: str, status, dispatch: dict, report, add) 
             ),
         )
 
-    from feature_status import needs_check_feature
+    from pipeline_pack import load_pack_module
 
-    check_needed, check_reason = needs_check_feature(root, task_id, status)
+    collectors = load_pack_module(getattr(status, "pipeline_id", None) or "spec", "collectors")
+    if collectors is None:
+        return
+    check_needed, check_reason = collectors.needs_check_feature(root, task_id, status)
     last_check_ts = last_successful_step_ts(root, task_id, "check-feature")
-    spec = spec_path(root, task_id)
+    from pipeline_status import resolve_artifact_paths
+
+    spec = resolve_artifact_paths(root, task_id, getattr(status, "pipeline_id", None) or "spec").get("spec")
     last = getattr(report, "_last_history", None)
     if (
         check_needed
         and check_reason.startswith("SPEC новее GAPS_MAP")
         and last_check_ts is not None
+        and spec is not None
         and spec.is_file()
         and last_check_ts >= spec.stat().st_mtime - 2
         and last

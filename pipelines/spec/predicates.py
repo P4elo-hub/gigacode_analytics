@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
-from artifact_paths import ALIGNMENT_MAX_ITERATIONS, VERDICT_FAIL, VERDICT_PASS, VERDICT_PASS_WITH_GAPS
+from pipeline_pack import load_pack
 
+PIPELINE_ID = "spec"
 DOMAIN_PREDICATE_NAMES = frozenset(
     {
         "alignment_limit_exhausted",
@@ -27,11 +29,35 @@ DOMAIN_PREDICATE_NAMES = frozenset(
 DOMAIN_INVARIANT_NAMES = frozenset({"needs-check-feature"})
 
 
+@lru_cache(maxsize=1)
+def _constants() -> dict:
+    try:
+        return dict((load_pack(PIPELINE_ID).get("status") or {}).get("constants") or {})
+    except FileNotFoundError:
+        return {}
+
+
+def _max_iter() -> int:
+    return int(_constants().get("alignment_max_iterations", 3))
+
+
+def _verdict_pass() -> set[str]:
+    const = _constants()
+    return {
+        str(const.get("verdict_pass", "PASS")),
+        str(const.get("verdict_pass_with_gaps", "PASS WITH GAPS")),
+    }
+
+
+def _verdict_fail() -> str:
+    return str(_constants().get("verdict_fail", "FAIL"))
+
+
 def _alignment_limit_exhausted(_root: Path, _slug: str, status) -> bool:
     return (
         status.has_alignment
-        and status.alignment_iteration >= ALIGNMENT_MAX_ITERATIONS
-        and status.verdict == VERDICT_FAIL
+        and status.alignment_iteration >= _max_iter()
+        and status.verdict == _verdict_fail()
     )
 
 
@@ -58,7 +84,7 @@ def _pending_apply_alignment_only(_root: Path, _slug: str, status) -> bool:
     return (
         status.decisions_pending_apply_alignment > 0
         and status.critical_major_mismatch > 0
-        and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
+        and status.alignment_iteration < _max_iter()
         and not status.alignment_stale
     )
 
@@ -73,7 +99,7 @@ def _pending_apply_challenges_only(_root: Path, _slug: str, status) -> bool:
 def _critical_major_mismatch_resolvable(_root: Path, _slug: str, status) -> bool:
     return (
         status.critical_major_mismatch > 0
-        and status.alignment_iteration < ALIGNMENT_MAX_ITERATIONS
+        and status.alignment_iteration < _max_iter()
         and not status.alignment_stale
     )
 
@@ -95,7 +121,7 @@ def _alignment_missing_or_stale(_root: Path, _slug: str, status) -> bool:
 
 
 def _alignment_pass(_root: Path, _slug: str, status) -> bool:
-    return status.verdict in {VERDICT_PASS, VERDICT_PASS_WITH_GAPS}
+    return status.verdict in _verdict_pass()
 
 
 def _alignment_fail_reaudit(_root: Path, _slug: str, status) -> bool:
@@ -123,7 +149,7 @@ PREDICATES = {
 def reason_for_predicate(when: str, status) -> str:
     if when == "alignment_limit_exhausted":
         return (
-            f"лимит цикла alignment исчерпан ({ALIGNMENT_MAX_ITERATIONS}), "
+            f"лимит цикла alignment исчерпан ({_max_iter()}), "
             "нужен ручной разбор ALIGNMENT"
         )
     if when == "needs_answer_with_gaps":
@@ -180,12 +206,14 @@ def reason_for_predicate(when: str, status) -> str:
 
 
 def evaluate_invariant(inv_id: str, root: Path, slug: str, status):
-    if inv_id != "needs-check-feature":
-        return None
     from pipeline_pack import load_pack_module
 
-    collectors = load_pack_module("spec", "collectors")
+    pid = getattr(status, "pipeline_id", None) or PIPELINE_ID
+    collectors = load_pack_module(pid, "collectors")
     if collectors is None:
         return None
-    needed, reason = collectors.needs_check_feature(root, slug, status)
-    return needed, reason
+    table = getattr(collectors, "INVARIANTS", None)
+    fn = table.get(inv_id) if isinstance(table, dict) else None
+    if fn is None:
+        return None
+    return fn(root, slug, status)

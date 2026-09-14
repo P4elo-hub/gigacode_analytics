@@ -15,28 +15,12 @@ from artifact_paths import (
     workspace_root,
 )
 from pipeline_pack import DEFAULT_PIPELINE_ID, load_pack_module
-from pipeline_status import populate_status
+from pipeline_status import load_status_spec, populate_status
 
 _spec_collectors = load_pack_module("spec", "collectors")
-INLINE_GAP_RE = _spec_collectors.INLINE_GAP_RE
-TABLE_GAP_RE = _spec_collectors.TABLE_GAP_RE
-DECISION_ROW_RE = _spec_collectors.DECISION_ROW_RE
-ALIGNMENT_RELATES_RE = _spec_collectors.ALIGNMENT_RELATES_RE
-collect_open_gaps = _spec_collectors.collect_open_gaps
-collect_open_questions = _spec_collectors.collect_open_questions
-collect_challenges = _spec_collectors.collect_challenges
-parse_alignment = _spec_collectors.parse_alignment
-needs_check_feature = _spec_collectors.needs_check_feature
-
-
-@dataclass
-class ChallengeCounts:
-    open: int = 0
-    deferred: int = 0
-    resolved: int = 0
-    covered: int = 0
-    open_critical: int = 0
-    open_major: int = 0
+if _spec_collectors is None:
+    raise ImportError("pipelines/spec/collectors.py is required for feature-status")
+ChallengeCounts = _spec_collectors.ChallengeCounts
 
 
 @dataclass
@@ -64,6 +48,8 @@ class FeatureStatus:
     critical_major_mismatch: int = 0
     alignment_stale: bool = False
     stale: list[str] = field(default_factory=list)
+    needs_check_feature: bool = False
+    needs_check_feature_reason: str = ""
     next_command: str = ""
     next_step: str = ""
     next_subagent: str = ""
@@ -77,12 +63,6 @@ def detect_stale(root: Path, slug: str, pipeline_id: str = DEFAULT_PIPELINE_ID) 
     status = FeatureStatus(slug=slug, pipeline_id=pipeline_id)
     populate_status(status, root, slug, pipeline_id)
     return list(status.stale)
-
-
-def _finalize_orchestrator_mode(status: FeatureStatus, pipeline_id: str | None = None) -> None:
-    from pipeline_status import finalize_orchestrator_mode
-
-    finalize_orchestrator_mode(status, pipeline_id or status.pipeline_id)
 
 
 def choose_next_step(
@@ -114,13 +94,70 @@ def build_status(root: Path, slug: str, pipeline_id: str = DEFAULT_PIPELINE_ID) 
     return status
 
 
-def render_markdown(status: FeatureStatus) -> str:
+def _format_ctx(status: FeatureStatus, spec: dict) -> dict:
+    constants = spec.get("constants") or {}
+    max_iter = constants.get("alignment_max_iterations", ALIGNMENT_MAX_ITERATIONS)
+    challenges = status.challenges
+    return {
+        "slug": status.slug,
+        "context_lines": status.context_lines,
+        "spec_lines": status.spec_lines,
+        "decisions_needs_answer": status.decisions_needs_answer,
+        "decisions_pending_apply": status.decisions_pending_apply,
+        "challenges_open": challenges.open,
+        "challenges_open_critical": challenges.open_critical,
+        "alignment_iteration": status.alignment_iteration,
+        "alignment_max_iterations": max_iter,
+        "open_gaps_count": len(status.open_gaps),
+        "open_questions_count": len(status.open_questions),
+        "verdict": status.verdict or "—",
+        "critical_major_mismatch": status.critical_major_mismatch,
+        "stale_list": ", ".join(status.stale) if status.stale else "—",
+        "next_reason": status.next_reason,
+        "next_command": status.next_command,
+        "next_subagent": status.next_subagent,
+        "orchestrator_mode": status.orchestrator_mode,
+    }
+
+
+def _render_table(status: FeatureStatus, spec: dict, ctx: dict) -> str:
     mark = lambda present: "✅" if present else "❌"
-    alignment = (
-        f"✅ итерация {status.alignment_iteration}/{ALIGNMENT_MAX_ITERATIONS}"
-        if status.has_alignment
-        else "❌"
-    )
+    display = spec.get("display") or {}
+    rows = display.get("rows")
+    lines = ["| Артефакт | Статус |", "|----------|--------|"]
+    if isinstance(rows, list) and rows:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            present = bool(getattr(status, str(row.get("exists") or ""), False))
+            if present and row.get("present_format"):
+                cell = str(row["present_format"]).format(**ctx)
+            elif not present and row.get("absent_format"):
+                cell = str(row["absent_format"]).format(**ctx)
+            else:
+                suffix = str(row.get("suffix") or "").format(**ctx).strip()
+                cell = f"{mark(present)} {suffix}".rstrip()
+            lines.append(f"| {row.get('label', '')} | {cell} |")
+        return "\n".join(lines)
+    artifacts = spec.get("artifacts") or {}
+    for art_id, art in artifacts.items():
+        if not isinstance(art, dict):
+            continue
+        exists_as = art.get("exists_as") or f"has_{art_id}"
+        present = bool(getattr(status, exists_as, False))
+        lines_as = art.get("lines_as")
+        extra = f" {getattr(status, lines_as, 0)} строк" if lines_as else ""
+        lines.append(f"| {art_id} | {mark(present)}{extra} |")
+    return "\n".join(lines)
+
+
+def render_markdown(status: FeatureStatus) -> str:
+    spec = load_status_spec(status.pipeline_id)
+    ctx = _format_ctx(status, spec)
+    display = spec.get("display") or {}
+    heading = str(display.get("heading") or "Фича: {slug}").format(**ctx)
+    table = _render_table(status, spec, ctx)
+    max_iter = ctx["alignment_max_iterations"]
     if status.ready:
         next_line = f"**Next:** spec готов — {status.next_reason}"
     elif status.next_command:
@@ -138,20 +175,12 @@ def render_markdown(status: FeatureStatus) -> str:
     else:
         next_line = f"**Next:** стоп — {status.next_reason}"
     return (
-        f"## Фича: {status.slug}\n\n"
-        "| Артефакт | Статус |\n|----------|--------|\n"
-        f"| CONTEXT_DOC | {mark(status.has_context)} {status.context_lines} строк |\n"
-        f"| SPEC | {mark(status.has_spec)} {status.spec_lines} строк |\n"
-        f"| DECISIONS | {mark(status.has_decisions)} "
-        f"ask {status.decisions_needs_answer} · apply {status.decisions_pending_apply} |\n"
-        f"| GAPS_MAP | {mark(status.has_gaps_map)} |\n"
-        f"| CHALLENGES | {mark(status.has_challenges)} open {status.challenges.open} |\n"
-        f"| CHALLENGES_MAP | {mark(status.has_challenges_map)} |\n"
-        f"| ALIGNMENT | {alignment} |\n\n"
+        f"## {heading}\n\n"
+        f"{table}\n\n"
         f"**Открыто:** GAP: {len(status.open_gaps)} · CH open: {status.challenges.open} "
         f"(Critical {status.challenges.open_critical}) · Q: {len(status.open_questions)}\n"
         f"**Alignment:** {status.verdict or '—'} "
-        f"(итерация {status.alignment_iteration}/{ALIGNMENT_MAX_ITERATIONS}), "
+        f"(итерация {status.alignment_iteration}/{max_iter}), "
         f"Critical/Major MISMATCH: {status.critical_major_mismatch}\n"
         f"**Устарело:** {', '.join(status.stale) if status.stale else '—'}\n\n"
         f"{next_line}\n"

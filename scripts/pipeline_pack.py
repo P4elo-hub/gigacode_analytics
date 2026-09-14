@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,7 @@ def load_pack_module(pipeline_id: str, name: str, root: Path | None = None):
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -83,7 +85,11 @@ def load_pack(pipeline_id: str, root: Path | None = None) -> dict[str, Any]:
     pack["status"]["artifacts"] = _as_dict(pack["status"].get("artifacts"))
     pack["status"]["collectors"] = _as_list(pack["status"].get("collectors"))
     pack["status"]["stale"] = _as_list(pack["status"].get("stale"))
+    pack["status"]["invariants"] = _as_list(pack["status"].get("invariants"))
     pack["status"]["orchestrator"] = _as_dict(pack["status"].get("orchestrator"))
+    pack["status"]["messages"] = _as_dict(pack["status"].get("messages"))
+    pack["status"]["display"] = _as_dict(pack["status"].get("display"))
+    pack["status"]["constants"] = _as_dict(pack["status"].get("constants"))
     return pack
 
 
