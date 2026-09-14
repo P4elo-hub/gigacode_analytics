@@ -12,6 +12,23 @@ from typing import Any
 PACK_FILES = ("graph.yaml", "dispatch.yaml", "status.yaml", "registry.yaml")
 OPTIONAL_PY = ("collectors.py", "predicates.py", "validate.py")
 DEFAULT_PIPELINE_ID = "spec"
+PACK_SCHEMA_RELPATH = "scripts/pipeline_pack_schema.json"
+CATALOG_VERSION = 1
+CATALOG_KEYS = (
+    "catalog_version",
+    "pipelines",
+    "agents",
+    "skills",
+    "steps",
+    "predicates",
+    "runtime",
+    "pack_files",
+    "optional_python",
+    "pack_schema",
+)
+CATALOG_PIPELINE_ITEM_KEYS = ("id", "label", "orchestrator")
+CATALOG_PREDICATES_KEYS = ("core", "by_pipeline")
+CATALOG_RUNTIME_KEYS = ("pipeline_id", "orchestrator", "dispatch_supported", "loop", "validate")
 
 
 def repo_root() -> Path:
@@ -81,6 +98,10 @@ def load_pack(pipeline_id: str, root: Path | None = None) -> dict[str, Any]:
     pack["dispatch"] = _normalize_dispatch_block(_as_dict(pack.get("dispatch")))
     pack["status"] = _as_dict(pack.get("status"))
     pack["registry"] = _as_dict(pack.get("registry"))
+    pack["registry"]["step_to_subagent"] = _as_dict(pack["registry"].get("step_to_subagent"))
+    pack["registry"]["orchestrator_owned"] = _as_list(pack["registry"].get("orchestrator_owned"))
+    pack["registry"]["gated_subagents"] = _as_list(pack["registry"].get("gated_subagents"))
+    pack["registry"]["restartable_steps"] = _as_list(pack["registry"].get("restartable_steps"))
     pack["registry"]["delegate_modes"] = _as_dict(pack["registry"].get("delegate_modes"))
     pack["status"]["artifacts"] = _as_dict(pack["status"].get("artifacts"))
     pack["status"]["collectors"] = _as_list(pack["status"].get("collectors"))
@@ -181,7 +202,35 @@ def build_catalog(root: Path | None = None) -> dict:
 
     from pipeline_runtime import runtime_contract
 
+    runtime: dict[str, dict] = {}
+    for pid, pack in packs.items():
+        try:
+            runtime[pid] = runtime_contract(pid)
+        except (ValueError, FileNotFoundError, KeyError):
+            dispatch = pack.get("dispatch") or {}
+            runtime[pid] = {
+                "pipeline_id": pid,
+                "orchestrator": pack["graph"].get("orchestrator") or "",
+                "dispatch_supported": bool(dispatch.get("rules") or dispatch.get("invariants")),
+                "loop": [
+                    f"python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline {pid}",
+                    "action → task | ask_user | write_feature_cycle | orchestrator_only | ready | stopped | error",
+                    (
+                        "python3 scripts/append_run_log.py --slug <task_id> --step <step> "
+                        f"--subagent <agent> --result ok --pipeline {pid}"
+                    ),
+                    f"python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline {pid}",
+                    f"python3 scripts/pipeline_validate.py <task_id> --pipeline {pid}",
+                ],
+                "validate": {
+                    "engine": "scripts/pipeline_validate.py",
+                    "pack": f"pipelines/{pid}/validate.py",
+                    "extra_advice": (packs_dir(base) / pid / "validate.py").is_file(),
+                },
+            }
+
     return {
+        "catalog_version": CATALOG_VERSION,
         "pipelines": [
             {
                 "id": pid,
@@ -197,9 +246,10 @@ def build_catalog(root: Path | None = None) -> dict:
             "core": sorted(core_predicate_names()),
             "by_pipeline": predicates,
         },
-        "runtime": {pid: runtime_contract(pid) for pid in packs},
+        "runtime": runtime,
         "pack_files": list(PACK_FILES),
         "optional_python": list(OPTIONAL_PY),
+        "pack_schema": PACK_SCHEMA_RELPATH,
     }
 
 
@@ -223,11 +273,101 @@ def _dump_yaml(payload: object) -> str:
 
         return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
     except ImportError:
-        return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        return _dump_simple_yaml(payload) + "\n"
+
+
+def _format_yaml_scalar(value: object) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+    text = str(value)
+    if (
+        text == ""
+        or text.strip() != text
+        or text in {"true", "false", "null", "~"}
+        or any(char in text for char in ":#{}[]&*?|>'!%@`,\n")
+    ):
+        return json.dumps(text, ensure_ascii=False)
+    return text
+
+
+def _dump_simple_yaml(payload: object, indent: int = 0) -> str:
+    """Subset matching parse_simple_yaml (no PyYAML required)."""
+    pad = "  " * indent
+    if isinstance(payload, dict):
+        if not payload:
+            return ""
+        lines = [_dump_mapping_item(str(key), value, indent) for key, value in payload.items()]
+        return "\n".join(line for line in lines if line != "")
+    if isinstance(payload, list):
+        return _dump_simple_list(payload, indent)
+    return f"{pad}{_format_yaml_scalar(payload)}"
+
+
+def _dump_mapping_item(key: str, value: object, indent: int) -> str:
+    pad = "  " * indent
+    if isinstance(value, dict):
+        if not value:
+            return f"{pad}{key}:"
+        return f"{pad}{key}:\n{_dump_simple_yaml(value, indent + 1)}"
+    if isinstance(value, list):
+        if not value:
+            return f"{pad}{key}:"
+        return f"{pad}{key}:\n{_dump_simple_list(value, indent + 1)}"
+    return f"{pad}{key}: {_format_yaml_scalar(value)}"
+
+
+def _dump_simple_list(items: list, indent: int) -> str:
+    pad = "  " * indent
+    lines: list[str] = []
+    for item in items:
+        if isinstance(item, dict) and item:
+            entries = list(item.items())
+            first_key, first_val = entries[0]
+            if isinstance(first_val, (dict, list)):
+                lines.append(f"{pad}-")
+                lines.append(_dump_simple_yaml(item, indent + 1))
+            else:
+                lines.append(f"{pad}- {first_key}: {_format_yaml_scalar(first_val)}")
+                rest = dict(entries[1:])
+                if rest:
+                    lines.append(_dump_simple_yaml(rest, indent + 1))
+        elif isinstance(item, list):
+            lines.append(f"{pad}-")
+            if item:
+                lines.append(_dump_simple_list(item, indent + 1))
+        else:
+            lines.append(f"{pad}- {_format_yaml_scalar(item)}")
+    return "\n".join(line for line in lines if line != "")
+
+
+def export_pack_json(pipeline_id: str, root: Path | None = None) -> dict:
+    """YAML pack → authoring JSON (editor roundtrip)."""
+    pack = load_pack(pipeline_id, root)
+    return {
+        "id": pack["id"],
+        "graph": pack["graph"],
+        "dispatch": pack["dispatch"],
+        "status": pack["status"],
+        "registry": pack["registry"],
+    }
 
 
 def apply_pack_json(payload: dict, root: Path | None = None) -> list[Path]:
-    pipeline_id = str(payload.get("id") or payload.get("pipeline_id") or "")
+    from pipeline_pack_authoring import normalize_pack_payload, validate_pack_json
+
+    if not isinstance(payload, dict):
+        raise ValueError("invalid pack JSON:\n  pack JSON: payload must be an object")
+    data = normalize_pack_payload(payload)
+    errors = validate_pack_json(data)
+    if errors:
+        raise ValueError("invalid pack JSON:\n  " + "\n  ".join(errors))
+    pipeline_id = str(data.get("id") or "")
     if not pipeline_id:
         raise ValueError("pack JSON needs id or pipeline_id")
-    return write_pack_yaml(pipeline_id, payload, root)
+    return write_pack_yaml(pipeline_id, data, root)

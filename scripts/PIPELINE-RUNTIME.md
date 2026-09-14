@@ -48,8 +48,9 @@ Registry: [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md). Restart:
 calibration rolls back `Calibration/<slug>/runs/<current>/` only.
 
 New scenario: add `pipelines/<id>/` + agents/skills, then
-`pipeline_compile.py --apply`. No engine Python for topology or `when:` names
-(predicate catalog: [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md)).
+`pipeline_compile.py --apply`. Scaffold: `--init-pack` /
+[PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md). No engine Python for
+topology or `when:` names (predicate catalog: [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md)).
 
 ## Validate (engine vs pack)
 

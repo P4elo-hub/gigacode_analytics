@@ -24,7 +24,12 @@ PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --catalog
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --from-json pack.json
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --export-json spec
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --init-pack <id> [--template minimal]
 ```
+
+Authoring (new pack without engine edits): [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md).
+JSON schema: [pipeline_pack_schema.json](pipeline_pack_schema.json).
 
 Status contract (artifacts / collectors): [PIPELINE-STATUS.md](PIPELINE-STATUS.md).
 Predicate catalog (`when:` names): [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md).
@@ -32,6 +37,26 @@ Registry: [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
 
 `--check` rejects unknown `when:`, empty reasons,
 `DOMAIN_PREDICATE_NAMES` ≠ `PREDICATES`, and registry steps not in the graph.
+`--from-json` validates the payload against `pipeline_pack_schema.json` before YAML write.
+
+## Authoring (Phase 8)
+
+New pipeline = pack + agents/skills. Not a fork of the engine.
+
+1. `--init-pack <id>` (templates: `minimal`, `orchestrator-only`, `full-dispatch`) or `--from-json`.
+2. Copy `scripts/fixtures/pack_authoring/orchestrator-agent.md` → `*/agents/<id>-orchestrator.md`.
+3. `--apply` → `--check` (новый pack: apply первым, иначе `--check` = drift).
+4. Smoke after apply: schema contains `<id>`; `pipeline_delegate.py … --pipeline <id>`.
+5. Dispatch optional: empty rules = calibration-style (`orchestrator_only`).
+   Full dispatch = spec-style; add `predicates.py` for domain `when:` and golden under
+   `fixtures/dispatch_golden/<id>/`.
+
+`--catalog` is the versioned UI palette (`catalog_version`, `pack_schema`, steps,
+predicates core vs `by_pipeline`, `runtime.<id>.loop`). Additive keys only.
+`--from-json` = schema (shape) then compile (`when:` / agents). Schema runtime is
+a subset walker; `pipeline_pack_schema.json` is the UI `$schema`. Agent files and
+dispatch golden for a new pack are manual (Phase 9). See
+[PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md).
 
 ## Tests
 
@@ -48,6 +73,7 @@ python3 scripts/feature_status_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of smoke
 PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py     # full suite (smoke has scoped check only)
 PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py      # pack-first validate + orchestrator loop
+PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py         # schema, catalog, --from-json, --init-pack
 ```
 
 `pipeline_registry_test.py`: `registry_for("calibration")` ≠ spec, calibration
@@ -68,4 +94,5 @@ block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>
 
 Spec pack is the reference (24+ dispatch cases). New packs need their own golden folder.
 
-See `pipelines/README.md`, [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md), and [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).
+See `pipelines/README.md`, [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md),
+[PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md), and [PIPELINE-REGISTRY.md](PIPELINE-REGISTRY.md).

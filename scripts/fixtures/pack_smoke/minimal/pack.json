@@ -1,0 +1,61 @@
+{
+  "id": "smoke-minimal",
+  "graph": {
+    "label": "Smoke minimal pack",
+    "orchestrator": "smoke-orchestrator",
+    "nodes": [
+      {
+        "id": "smoke-orchestrator",
+        "label": "smoke-orchestrator",
+        "kind": "orchestrator"
+      },
+      {
+        "id": "only-step",
+        "label": "only-step",
+        "subagent": null,
+        "kind": "step"
+      },
+      {
+        "id": "done",
+        "label": "done",
+        "kind": "terminal"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-start",
+        "from": "smoke-orchestrator",
+        "to": "only-step",
+        "kind": "main"
+      },
+      {
+        "id": "e-done",
+        "from": "only-step",
+        "to": "done",
+        "kind": "main"
+      }
+    ]
+  },
+  "dispatch": {
+    "invariant_after_priority": 0,
+    "invariants": [],
+    "rules": []
+  },
+  "status": {
+    "task_kind": "slug",
+    "artifacts": {},
+    "collectors": [],
+    "stale": [],
+    "orchestrator": {},
+    "messages": {
+      "ready": "Smoke minimal ready",
+      "stopped": "Smoke minimal stopped"
+    }
+  },
+  "registry": {
+    "step_to_subagent": {},
+    "orchestrator_owned": ["only-step"],
+    "gated_subagents": [],
+    "restartable_steps": ["only-step"]
+  }
+}

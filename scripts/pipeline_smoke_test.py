@@ -200,7 +200,8 @@ def check_validate_calibration(report: Report, slug: str) -> None:
 def check_pack_smoke_minimal(report: Report) -> None:
     """Minimal pack fixture compiles in isolation (Phase 8 template)."""
     from pipeline_compile import compile_outputs, validate_source
-    from pipeline_pack import merge_compiled_source
+    from pipeline_pack import apply_pack_json, merge_compiled_source
+    from pipeline_pack_authoring import validate_pack_json
 
     fixture = SCRIPTS / "fixtures" / "pack_smoke" / "minimal"
     try:
@@ -215,13 +216,25 @@ def check_pack_smoke_minimal(report: Report) -> None:
             schema_text, registry_text = compile_outputs(data)
             registry = json.loads(registry_text)
             compiled_dispatch = (registry.get("dispatch") or {}).keys()
-            ok = (
+            yaml_ok = (
                 not errors
                 and "smoke-minimal" in schema_text
                 and "smoke-minimal" in registry_text
                 and "smoke-minimal" not in compiled_dispatch
             )
-            detail = "compile ok, no dispatch router" if ok else "; ".join(errors[:3]) or "missing pack id"
+            payload = json.loads((fixture / "pack.json").read_text(encoding="utf-8"))
+            schema_ok = not validate_pack_json(payload)
+            payload["id"] = "smoke-from-json"
+            apply_pack_json(payload, root)
+            data_json = merge_compiled_source(root)
+            json_errors = validate_source(data_json)
+            schema_json, _ = compile_outputs(data_json)
+            json_ok = not json_errors and "smoke-from-json" in schema_json
+            ok = yaml_ok and schema_ok and json_ok
+            if ok:
+                detail = "compile ok, no dispatch router; from-json roundtrip"
+            else:
+                detail = "; ".join((errors + json_errors)[:3]) or "missing pack id / pack.json"
             report.add("pack-smoke:minimal", ok, detail)
     except Exception as exc:
         report.add("pack-smoke:minimal", False, str(exc))

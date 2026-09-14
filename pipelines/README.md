@@ -22,6 +22,18 @@ PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
 ```
 
+**New pipeline (authoring):** [PIPELINE-PACK-AUTHORING.md](../scripts/PIPELINE-PACK-AUTHORING.md)
+— `--init-pack <id>`, pack JSON schema, catalog contract, orchestrator template.
+
+```bash
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --init-pack <id> [--template minimal|orchestrator-only|full-dispatch]
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --catalog
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --from-json pack.json
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --export-json <id>
+```
+
+Schema: `scripts/pipeline_pack_schema.json`. Fixture: `scripts/fixtures/pack_smoke/minimal/`.
+
 Catalog (palette for authoring): `pipeline_compile.py --catalog`.
 Apply a pack JSON from a frontend: `pipeline_compile.py --from-json pack.json`.
 

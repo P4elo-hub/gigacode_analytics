@@ -92,8 +92,9 @@ Do not add the name to the router. Do not put the condition in YAML.
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --catalog
 ```
 
-JSON includes `predicates.core` (union of auto core names across packs) and
-`predicates.by_pipeline.<id>` (core + domain for that pack).
+JSON includes `catalog_version`, `predicates.core` (union of auto core names
+across packs), `predicates.by_pipeline.<id>` (core + domain for that pack),
+and `runtime.<id>.loop`. Contract: [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md).
 
 ## Example: new `when` for calibration
 

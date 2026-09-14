@@ -379,6 +379,17 @@ pipeline_dispatch / pipeline_delegate / pipeline_validate
 `.pipeline-active-task.json` хранит `"pipeline"`. Hooks читают его,
 если `--pipeline` не задан.
 
+**Новый pipeline (без правок движка):**
+`--init-pack <id>` или `--from-json` → orchestrator agent (шаблон
+`scripts/fixtures/pack_authoring/orchestrator-agent.md`, блок Runtime loop,
+`--pipeline <id>`) → `--apply` → `--check` → smoke delegate.
+До `--apply` runtime не знает `<id>` (`unknown pipeline_id`); `--check`
+на новом pack без apply покажет drift generated JSON — это нормально.
+Dispatch **не обязателен**: пустые `rules` = как calibration (`orchestrator_only`);
+полный router = как spec (`when:` из catalog). Чеклист:
+[scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md).
+Schema: `scripts/pipeline_pack_schema.json`. Catalog: `--catalog`.
+
 Новый `when:` — функция в `pipelines/<id>/predicates.py` и правило в
 `dispatch.yaml`. Router не правится. Typo в `when:` ловит
 `pipeline_compile.py --check`.
@@ -388,7 +399,8 @@ pipeline_dispatch / pipeline_delegate / pipeline_validate
 [scripts/PIPELINE-COMPILE.md](scripts/PIPELINE-COMPILE.md),
 [scripts/PIPELINE-RUNTIME.md](scripts/PIPELINE-RUNTIME.md),
 [scripts/PIPELINE-STATUS.md](scripts/PIPELINE-STATUS.md),
-[scripts/PIPELINE-REGISTRY.md](scripts/PIPELINE-REGISTRY.md).
+[scripts/PIPELINE-REGISTRY.md](scripts/PIPELINE-REGISTRY.md),
+[scripts/PIPELINE-PACK-AUTHORING.md](scripts/PIPELINE-PACK-AUTHORING.md).
 Golden: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.

@@ -16,6 +16,7 @@ from pipeline_pack import (
     merge_compiled_source,
     repo_root,
 )
+from pipeline_pack_authoring import TEMPLATES
 
 SCRIPTS = Path(__file__).resolve().parent
 SCHEMA_PATH = SCRIPTS / "pipeline_schema.json"
@@ -117,13 +118,19 @@ def _validate_pack_registry(
         if step not in node_ids_clean:
             errors.append(f"{pipeline_id}: registry step {step} not in graph nodes")
         if subagent and known_agents and subagent not in known_agents:
-            errors.append(f"{pipeline_id}: registry subagent {subagent} not in agent catalog")
+            errors.append(
+                f"{pipeline_id}: add agent {subagent!r} — not in agent catalog "
+                "(.qwen/.gigacode/.opencode/agents)"
+            )
     for step in orch_owned:
         if step not in node_ids_clean:
             errors.append(f"{pipeline_id}: orchestrator_owned step {step} not in graph nodes")
     for subagent in reg.get("gated_subagents") or []:
         if subagent and known_agents and subagent not in known_agents:
-            errors.append(f"{pipeline_id}: gated subagent {subagent} not in agent catalog")
+            errors.append(
+                f"{pipeline_id}: add agent {subagent!r} — gated subagent not in agent catalog "
+                "(.qwen/.gigacode/.opencode/agents)"
+            )
     for step in reg.get("restartable_steps") or []:
         if step not in node_ids_clean:
             errors.append(f"{pipeline_id}: restartable step {step} not in graph nodes")
@@ -471,6 +478,14 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--apply", action="store_true")
     group.add_argument("--catalog", action="store_true", help="JSON palette: agents, skills, steps, predicates")
     group.add_argument("--from-json", metavar="FILE", help="Write pack YAML from JSON, then --apply")
+    group.add_argument("--init-pack", metavar="ID", help="Scaffold pipelines/<id>/ from a template")
+    group.add_argument("--export-json", metavar="ID", help="Print pack JSON for an existing pack")
+    parser.add_argument(
+        "--template",
+        choices=list(TEMPLATES),
+        default="minimal",
+        help="Template for --init-pack (default: minimal)",
+    )
     args = parser.parse_args(argv)
     root = repo_root()
 
@@ -478,9 +493,52 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(build_catalog(root), ensure_ascii=False, indent=2))
         return 0
 
+    if args.export_json:
+        from pipeline_pack import export_pack_json
+
+        try:
+            print(json.dumps(export_pack_json(args.export_json, root), ensure_ascii=False, indent=2))
+        except (FileNotFoundError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        return 0
+
+    if args.init_pack:
+        from pipeline_pack_authoring import init_pack
+
+        try:
+            written = init_pack(args.init_pack, args.template, root)
+        except (FileExistsError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        for path in written:
+            print(f"Wrote {path}")
+        data = merge_compiled_source(root)
+        errors = validate_source(data)
+        print("pipeline compile --init-pack")
+        print("-" * 40)
+        if errors:
+            for item in errors:
+                print(f"[FAIL] {item}")
+            print("-" * 40)
+            print("FAIL")
+            return 1
+        print(f"[OK]   pack {args.init_pack!r} template={args.template}")
+        print("next: add orchestrator agent (see scripts/PIPELINE-PACK-AUTHORING.md)")
+        print("then: PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply")
+        print("then: PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check")
+        print("note: --check before --apply will FAIL (generated JSON stale until apply)")
+        print("-" * 40)
+        print("PASS")
+        return 0
+
     if args.from_json:
-        payload = json.loads(Path(args.from_json).read_text(encoding="utf-8"))
-        written = apply_pack_json(payload, root)
+        try:
+            payload = json.loads(Path(args.from_json).read_text(encoding="utf-8"))
+            written = apply_pack_json(payload, root)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         for path in written:
             print(f"Wrote {path}")
         data = merge_compiled_source(root)

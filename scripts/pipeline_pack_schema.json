@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/pipeline_pack.schema.json",
+  "title": "Pipeline pack authoring payload",
+  "description": "Authoring JSON contract for --from-json and UI editors. Runtime validates a subset of this schema in pipeline_pack_authoring.validate_pack_json (no jsonschema dependency). Compile (when:/agents) is a second layer. YAML on disk is the on-disk form of this object.",
+  "type": "object",
+  "required": ["id", "graph", "status", "registry"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Pipeline id = folder name pipelines/<id>/. kebab-case."
+    },
+    "pipeline_id": {
+      "type": "string",
+      "description": "Alias for id. Normalized to id before write."
+    },
+    "graph": {
+      "type": "object",
+      "required": ["label", "orchestrator", "nodes", "edges"],
+      "additionalProperties": true,
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "orchestrator": { "type": "string", "minLength": 1 },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "label": { "type": "string" },
+              "kind": { "type": "string" },
+              "subagent": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string" },
+              "from": { "type": "string", "minLength": 1 },
+              "to": { "type": "string", "minLength": 1 },
+              "kind": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "dispatch": {
+      "type": "object",
+      "description": "Optional. Empty rules/invariants → no compiled router (calibration-style).",
+      "additionalProperties": true,
+      "properties": {
+        "invariant_after_priority": { "type": "integer" },
+        "invariants": { "type": "array" },
+        "rules": { "type": "array" },
+        "fallback": { "type": "object" }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "task_kind": { "type": "string" },
+        "artifacts": { "type": "object" },
+        "collectors": { "type": "array" },
+        "stale": { "type": "array" },
+        "invariants": { "type": "array" },
+        "orchestrator": { "type": "object" },
+        "messages": { "type": "object" },
+        "constants": { "type": "object" },
+        "display": { "type": "object" },
+        "core_predicates": { "type": "object" }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "required": [
+        "step_to_subagent",
+        "orchestrator_owned",
+        "gated_subagents",
+        "restartable_steps"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "step_to_subagent": { "type": "object" },
+        "orchestrator_owned": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "gated_subagents": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "restartable_steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "delegate_modes": { "type": "object" }
+      }
+    }
+  }
+}

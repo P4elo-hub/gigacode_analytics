@@ -51,6 +51,9 @@ delegate_modes:
 
 ## Add a pack
 
+Prefer `--init-pack` / `--from-json` ([PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md)).
+Or by hand:
+
 1. `pipelines/<id>/registry.yaml` next to `graph.yaml`.
 2. Map every delegated step; list orchestrator-owned steps separately.
 3. Put hook-gated agents in `gated_subagents` (must exist under
