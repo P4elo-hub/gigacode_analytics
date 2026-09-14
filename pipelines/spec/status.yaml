@@ -23,8 +23,9 @@
 #                                               (invariants.needs-check-feature)
 #   overlay fields                              collectors.routing_state (last; gated)
 # Core when names: not_has_<artifact> / {field}_gt_{n} from core_predicates.counters
-# Live dispatch stays collectors-first. Overlay runs only in parity B-mode or
-# when routing-state.json is valid and newer than stale_vs (see routing_conditions.yaml).
+# Live dispatch stays collectors-first. Overlay runs only in parity B-mode
+# (overlay_context / PIPELINE_ROUTING_STATE_OVERLAY=1). JSON freshness is
+# extra_advice, not live populate_status (Phase 12 cutover).
 # analyze-routing is NOT a spec graph node (Phase 12).
 task_kind: slug
 constants:

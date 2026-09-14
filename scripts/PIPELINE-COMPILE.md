@@ -67,8 +67,8 @@ shadow `routing_conditions.yaml`.
    (семантика = collectors). Phase 12: collectors снимают.
 4. **Stale spec** — JSON vs spec / context / decisions / challenges / alignment /
    gaps_map / challenges_map. POC stale — только vs spec.
-5. **Live dispatch** collectors-first. Overlay только B-mode / свежий JSON.
-   `analyze-routing` **не** в spec `graph.yaml`.
+5. **Live dispatch** collectors-first. Overlay только parity B-mode.
+   `analyze-routing` **не** в spec `graph.yaml`. JSON freshness = extra_advice.
 
 ## Authoring (Phase 8)
 

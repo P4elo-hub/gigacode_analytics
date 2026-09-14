@@ -311,20 +311,13 @@ def _effective_routing_state_path(root: Path, task_id: str, paths: dict[str, Pat
 
 
 def spec_overlay_should_apply(root: Path, task_id: str, paths: dict[str, Path]) -> bool:
+    del root, task_id, paths
     mode = _overlay_force or _env_overlay_mode()
-    if mode == "off":
-        return False
-    if mode == "on":
-        return True
-    path = _effective_routing_state_path(root, task_id, paths)
-    payload, error = load_routing_state(path, slug=task_id)
-    if payload is None or error:
-        return False
-    return not routing_state_is_stale(paths, routing_path=path)
+    return mode == "on"
 
 
 def spec_overlay_collector(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
-    """Spec dual-run overlay. Live default: only when JSON is valid and fresh."""
+    """Spec dual-run overlay. Live default: collectors. Overlay only in B-mode."""
     if not spec_overlay_should_apply(root, task_id, paths):
         return
     path = _effective_routing_state_path(root, task_id, paths)

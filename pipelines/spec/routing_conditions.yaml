@@ -258,5 +258,5 @@ overlay:
   live_default: collectors
   apply_when:
     - parity B-mode (PIPELINE_ROUTING_STATE_OVERLAY=1 or overlay_context)
-    - valid JSON newer than every existing stale_vs artifact
   collector_order: routing_state last so JSON wins over overlay-field collectors
+  freshness: extra_advice routing-state-stale / analyzer refresh — not live dispatch (Phase 12)

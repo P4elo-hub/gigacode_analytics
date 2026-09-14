@@ -117,9 +117,12 @@ collectors do not win over JSON (`routing_state` is last).
 
 When overlay applies:
 
-- parity B-mode: `overlay_context(mode="on")` or `PIPELINE_ROUTING_STATE_OVERLAY=1`
-- live: valid JSON newer than every existing `stale_vs` artifact
-- otherwise collectors (Mode A). Golden spec 24 cases have no JSON → unchanged.
+- parity B-mode only: `overlay_context(mode="on")` or `PIPELINE_ROUTING_STATE_OVERLAY=1`
+- otherwise collectors (Mode A / live). Golden spec 24 cases unchanged.
+
+JSON missing/stale is `extra_advice` (`routing-state-missing` / `routing-state-stale`),
+not a live overlay trigger. Live overlay-if-fresh would be Phase 12 cutover:
+`needs_check_feature` depends on run-log, which is not in `stale_vs`.
 
 ```bash
 PYTHONPATH=scripts python3 scripts/routing_state_parity.py <slug>

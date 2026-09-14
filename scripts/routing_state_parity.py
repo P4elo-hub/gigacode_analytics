@@ -59,7 +59,7 @@ def _equal(left, right) -> bool:
 
 def _resolve_replay(root: Path, slug: str, replay: Path | None) -> Path | None:
     if replay is not None:
-        return replay if replay.is_file() else replay
+        return replay
     fixture = default_replay_path(root, slug)
     if fixture.is_file():
         return fixture

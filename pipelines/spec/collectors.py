@@ -171,7 +171,7 @@ def collect_needs_check_feature(root: Path, task_id: str, status, paths: dict[st
 
 
 def collect_routing_state(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
-    """Gated overlay (last). Live path skips unless JSON is fresh or B-mode."""
+    """Gated overlay (last). Live path skips; B-mode overlay_context applies JSON."""
     from pipeline_routing_state import spec_overlay_collector
 
     spec_overlay_collector(root, task_id, status, paths)

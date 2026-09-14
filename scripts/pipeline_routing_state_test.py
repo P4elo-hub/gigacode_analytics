@@ -128,6 +128,14 @@ class SpecOverlayGatingTest(unittest.TestCase):
             with overlay_context(mode="off"):
                 populate_status(status, tmp, slug, "spec")
             self.assertEqual(status.open_gaps, ["GAP-SPEC"])
+            status_live = FeatureStatus(slug=slug)
+            populate_status(status_live, tmp, slug, "spec")
+            self.assertEqual(status_live.open_gaps, ["GAP-SPEC"])
+            newer = time.time() + 60
+            os.utime(path, (newer, newer))
+            status_fresh = FeatureStatus(slug=slug)
+            populate_status(status_fresh, tmp, slug, "spec")
+            self.assertEqual(status_fresh.open_gaps, ["GAP-SPEC"])
             status_b = FeatureStatus(slug=slug)
             with overlay_context(mode="on", replay=path):
                 populate_status(status_b, tmp, slug, "spec")
