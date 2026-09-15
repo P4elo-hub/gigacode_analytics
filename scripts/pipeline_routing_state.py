@@ -32,8 +32,8 @@ SPEC_STALE_VS = (
 )
 POC_STALE_VS = ("spec",)
 ENGINE_RECOMPUTED_FIELDS = frozenset({"stale", "alignment_stale"})
-# Top-level JSON metadata (hook); router ignores — see step_completion.
-SYNC_METADATA_KEYS = frozenset({"step_completion"})
+# Top-level JSON metadata (hook); router ignores — see step_completion / position.
+SYNC_METADATA_KEYS = frozenset({"step_completion", "position"})
 ROUTER_OWNED = frozenset(
     {
         "next_step",
@@ -161,6 +161,10 @@ def validate_payload(payload: Any, *, slug: str | None = None) -> list[str]:
     completion = payload.get("step_completion")
     if completion is not None and not isinstance(completion, dict):
         errors.append("step_completion must be a mapping")
+    position = payload.get("position")
+    if position is not None:
+        if not isinstance(position, dict) or not str(position.get("step") or "").strip():
+            errors.append("position must be a mapping with step")
     fields = payload.get("fields")
     if not isinstance(fields, dict):
         errors.append("fields must be a mapping")
@@ -450,17 +454,24 @@ def sync_routing_state_after_step(
 
 
 def spec_overlay_collector(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
-    """Spec overlay. Live default: read JSON only (collector_mode routing_state).
+    """Spec overlay: JSON fields, minus SPEC table-deferred GAP ids.
 
-    Missing JSON → dispatch P5 analyze-routing (no baseline on live path).
-    Baseline parser is CI/replay only (`routing_state_baseline.py`).
-    Gate steps (no file change) stamp JSON via hook; mutating steps leave it
-    stale so analyze-routing rewrites the snapshot.
+    Analyzer snapshot can still list leftover inline [GAP-NFR-…] after D-14.
+    Those ids stay in the spec for PASS WITH GAPS and must not re-queue
+    resolve-gaps. JSON remains source of truth for every other field.
     """
     if not spec_overlay_should_apply(root, task_id, paths):
         return
     path = _effective_routing_state_path(root, task_id, paths)
     apply_routing_state_file(status, path, slug=task_id)
+    spec = paths.get("spec")
+    if spec is None or not spec.is_file():
+        return
+    from routing_state_baseline import deferred_gap_ids
+
+    deferred = deferred_gap_ids(spec.read_text(encoding="utf-8"))
+    if deferred:
+        status.open_gaps = [gap_id for gap_id in (status.open_gaps or []) if gap_id not in deferred]
 
 
 def serialize_status_fields(status) -> dict:

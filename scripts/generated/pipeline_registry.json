@@ -185,7 +185,7 @@
       ]
     },
     "spec": {
-      "invariant_after_priority": 30,
+      "invariant_after_priority": 70,
       "invariants": [
         {
           "id": "needs-check-feature",

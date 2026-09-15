@@ -1,21 +1,21 @@
 ---
 name: routing-poc-orchestrator
 description: >-
-  Orchestrator for the routing-poc pipeline (Phase 10). Delegate-first;
-  analyzer writes routing-state.json, router reads it. Not spec-orchestrator.
+  Do NOT use for a feature brief. Only when the user explicitly says
+  routing-poc. Spec briefs stay on spec-orchestrator.
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - list_directory
-  - run_shell_command
-  - skill
-  - task
-  - ask_user_question
-  - write_file
-  - edit
+  read: true
+  grep: true
+  glob: true
+  list: true
+  bash: true
+  skill: true
+  task: true
+  question: true
+  write: true
+  edit: true
 ---
 
 > OpenCode: `.opencode/skills/` принадлежат субагентам. Runtime loop — `scripts/PIPELINE-RUNTIME.md`.

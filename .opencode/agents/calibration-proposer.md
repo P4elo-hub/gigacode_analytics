@@ -4,12 +4,12 @@ description: Propose skill/process patches from delta + telemetry (proposals onl
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - run_shell_command
-  - skill
-  - write_file
+  read: true
+  grep: true
+  glob: true
+  bash: true
+  skill: true
+  write: true
 ---
 
 > OpenCode: `.opencode/skills/propose-calibration/SKILL.md`.

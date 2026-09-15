@@ -1,0 +1,13 @@
+.pipeline-active-task.json
+Feature-writing/*/.pipeline-active-task.json
+Feature-writing/lab-demo/
+Feature-writing/lab-0*/
+Feature-context/lab-demo.md
+Feature-context/lab-0*.md
+agent-logs/lab-0*/
+__pycache__/
+.git/
+*.pyc
+.DS_Store
+
+.git-qwen-local/

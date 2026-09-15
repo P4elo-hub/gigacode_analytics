@@ -6,13 +6,13 @@ description: >-
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - list_directory
-  - run_shell_command
-  - skill
-  - write_file
+  read: true
+  grep: true
+  glob: true
+  list: true
+  bash: true
+  skill: true
+  write: true
 ---
 
 > OpenCode: скилл загружай через `skill` или `.opencode/skills/analyze-telemetry/SKILL.md`.

@@ -1,5 +1,8 @@
 # Named when: values must be in the spec predicate catalog (core + pack).
-invariant_after_priority: 30
+# Invariant after needs-answer + pending-apply (P40–70). A SPEC edit during
+# challenge/gaps must not skip apply: graph has challenge-feature →
+# resolve-challenges, not challenge-feature → check-feature.
+invariant_after_priority: 70
 invariants:
   - id: needs-check-feature
     step: check-feature

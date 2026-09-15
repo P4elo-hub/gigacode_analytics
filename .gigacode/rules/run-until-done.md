@@ -45,5 +45,6 @@ delegate.
 - ❌ Завершать ход при `must_continue: true`
 - ❌ Спрашивать «продолжить?» / «запустить check-feature?»
 - ❌ Improvised re-run после удаления артефактов
+- ❌ Читать `pipelines/` / `scripts/pipeline_*`, если «кажется цикл»
 
 Канон шага: **`pipeline_delegate.py`**. Порядок: `pipeline-enforcement`.

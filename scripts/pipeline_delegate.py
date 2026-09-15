@@ -12,11 +12,17 @@ import json
 import sys
 from pathlib import Path
 
-from artifact_paths import resolve_slug, workspace_root
+from artifact_paths import resolve_slug
 from pipeline_active_task import save_active_task
 from pipeline_common import subagent_for_step, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
+from pipeline_pack import (
+    add_pack_dir_argument,
+    apply_pack_dir_from_args,
+    workspace_root_for_run,
+)
+from pipeline_position import resolve_position
 from pipeline_runtime import (
     DEFAULT_PIPELINE_ID,
     known_pipeline_ids,
@@ -137,7 +143,10 @@ def build_delegate(
         return payload
 
     last = last_ok_pipeline_step(root, slug, pipe_id)
-    origin = from_step or (last.get("step") if last else schema.get("orchestrator"))
+    standing = resolve_position(root, slug, pipe_id)
+    origin = from_step or (standing.get("step") if standing else None) or (
+        last.get("step") if last else schema.get("orchestrator")
+    )
     if origin and next_step and not is_allowed_transition(schema, origin, next_step):
         payload["ok"] = False
         payload["action"] = "error"
@@ -186,13 +195,14 @@ def build_delegate(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline-delegate", description=__doc__)
     parser.add_argument("slug")
-    parser.add_argument("--root", type=Path, default=".")
+    parser.add_argument("--root", type=Path, default=None)
     parser.add_argument("--cli", choices=("qwen", "gigacode", "opencode"), default="qwen")
     parser.add_argument(
         "--pipeline",
         default=DEFAULT_PIPELINE_ID,
         help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
     )
+    add_pack_dir_argument(parser)
     parser.add_argument("--from-step", default=None, help="Explicit graph origin for edge check")
     parser.add_argument("--to-step", default=None, help="Explicit graph target for edge check")
     parser.add_argument(
@@ -202,7 +212,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    root = workspace_root(args.root)
+    try:
+        apply_pack_dir_from_args(args)
+    except FileNotFoundError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}), ensure_ascii=False)
+        return 1
+
+    root = workspace_root_for_run(args.root)
     slug = resolve_slug(args.slug, root)
     if slug is None:
         print(json.dumps({"ok": False, "error": f"unknown slug: {args.slug}"}), ensure_ascii=False)

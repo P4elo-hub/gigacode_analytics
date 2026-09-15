@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
+import os
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -13,7 +15,12 @@ PACK_FILES = ("graph.yaml", "dispatch.yaml", "status.yaml", "registry.yaml")
 OPTIONAL_YAML = ("routing_conditions.yaml",)
 OPTIONAL_PY = ("collectors.py", "predicates.py", "validate.py", "routing_state_sync.py")
 DEFAULT_PIPELINE_ID = "spec"
+PACK_DIR_ENV = "PIPELINE_PACK_DIR"
+PACK_ID_ENV = "PIPELINE_PACK_ID"
 PACK_SCHEMA_RELPATH = "scripts/pipeline_pack_schema.json"
+_UNSET = object()
+_pack_dir_state: object = _UNSET
+_pack_id_state: object = _UNSET
 CATALOG_VERSION = 2
 CATALOG_KEYS = (
     "catalog_version",
@@ -40,6 +47,185 @@ def repo_root() -> Path:
 
 def packs_dir(root: Path | None = None) -> Path:
     return (root or repo_root()) / "pipelines"
+
+
+def set_pack_dir(path: Path | str | None, pipeline_id: str | None = None) -> None:
+    """Runtime overlay: load one pack folder instead of pipelines/<id>/.
+
+    ``None`` disables the overlay (ignore env too). Compile must call this so
+    a leftover ``PIPELINE_PACK_DIR`` cannot drift generated artifacts.
+    """
+    global _pack_dir_state, _pack_id_state
+    if path is None:
+        _pack_dir_state = None
+        _pack_id_state = None
+    else:
+        _pack_dir_state = Path(path).expanduser().resolve()
+        _pack_id_state = pipeline_id or DEFAULT_PIPELINE_ID
+    _clear_pack_loader_caches()
+
+
+def reset_pack_dir() -> None:
+    """Return to default: compiled packs, honor env if set."""
+    global _pack_dir_state, _pack_id_state
+    _pack_dir_state = _UNSET
+    _pack_id_state = _UNSET
+    _clear_pack_loader_caches()
+
+
+def resolve_pack_dir() -> Path | None:
+    if _pack_dir_state is not _UNSET:
+        return _pack_dir_state if isinstance(_pack_dir_state, Path) else None
+    raw = os.environ.get(PACK_DIR_ENV, "").strip()
+    return Path(raw).expanduser().resolve() if raw else None
+
+
+def resolve_pack_pipeline_id() -> str | None:
+    if _pack_id_state is not _UNSET:
+        return str(_pack_id_state) if _pack_id_state else None
+    raw = os.environ.get(PACK_ID_ENV, "").strip()
+    if raw:
+        return raw
+    if resolve_pack_dir() is not None:
+        return DEFAULT_PIPELINE_ID
+    return None
+
+
+def resolve_pack_dir_argument(raw: str, *, start: Path | None = None) -> Path:
+    candidate = Path(raw).expanduser()
+    if candidate.is_absolute():
+        return candidate.resolve()
+    cwd_path = (start or Path.cwd()) / candidate
+    if cwd_path.is_dir():
+        return cwd_path.resolve()
+    repo_path = repo_root() / candidate
+    if repo_path.is_dir():
+        return repo_path.resolve()
+    return cwd_path.resolve()
+
+
+def add_pack_dir_argument(parser) -> None:
+    parser.add_argument(
+        "--pack-dir",
+        default=None,
+        metavar="DIR",
+        help=(
+            "Load this pack folder (graph/dispatch/status/registry YAML + optional "
+            f"*.py) instead of pipelines/<id>/. Env {PACK_DIR_ENV}. Off by default."
+        ),
+    )
+
+
+def apply_pack_dir_from_args(args) -> Path | None:
+    raw = getattr(args, "pack_dir", None) or os.environ.get(PACK_DIR_ENV, "")
+    raw = str(raw or "").strip()
+    if not raw:
+        return None
+    path = resolve_pack_dir_argument(raw)
+    if not path.is_dir():
+        raise FileNotFoundError(f"pack-dir is not a directory: {path}")
+    if not (path / "graph.yaml").is_file():
+        raise FileNotFoundError(f"pack-dir missing graph.yaml: {path}")
+    pipeline_id = getattr(args, "pipeline", None) or os.environ.get(PACK_ID_ENV) or DEFAULT_PIPELINE_ID
+    if pipeline_id in {"", "auto", None}:
+        pipeline_id = DEFAULT_PIPELINE_ID
+    set_pack_dir(path, str(pipeline_id))
+    os.environ[PACK_DIR_ENV] = str(path)
+    os.environ[PACK_ID_ENV] = str(pipeline_id)
+    return path
+
+
+def workspace_root_for_run(root_arg: Path | None = None) -> Path:
+    from artifact_paths import workspace_root
+
+    if root_arg is not None:
+        return workspace_root(root_arg)
+    pack = resolve_pack_dir()
+    if pack is not None:
+        return workspace_root(pack.parent)
+    return workspace_root()
+
+
+def pack_folder(pipeline_id: str, root: Path | None = None, *, use_override: bool = True) -> Path:
+    if use_override:
+        override = resolve_pack_dir()
+        override_id = resolve_pack_pipeline_id()
+        if override is not None and (override_id is None or pipeline_id == override_id):
+            return override
+    return packs_dir(root) / pipeline_id
+
+
+def _clear_pack_loader_caches() -> None:
+    for name in ("load_pack_module", "_load_pack_module_from_path"):
+        fn = globals().get(name)
+        if fn is not None and hasattr(fn, "cache_clear"):
+            fn.cache_clear()
+    try:
+        from pipeline_common import _load_compiled_registry_file
+
+        _load_compiled_registry_file.cache_clear()
+    except Exception:
+        pass
+    try:
+        from pipeline_edge_conditions import predicates_from_edge_conditions
+
+        predicates_from_edge_conditions.cache_clear()
+    except Exception:
+        pass
+    try:
+        from pipeline_status import _STATUS_CACHE
+
+        _STATUS_CACHE.clear()
+    except Exception:
+        pass
+
+
+def overlay_compiled_registry(data: dict) -> dict:
+    """Replace one pipeline's compiled registry block with YAML from --pack-dir."""
+    override = resolve_pack_dir()
+    pid = resolve_pack_pipeline_id()
+    if override is None or not pid:
+        return data
+    pack = load_pack(pid)
+    out = copy.deepcopy(data)
+    restartable = list((pack.get("registry") or {}).get("restartable_steps") or [])
+    reg = pack.get("registry") or {}
+    pipes = dict(out.get("pipelines") or {})
+    pipes[pid] = {
+        "step_to_subagent": dict(reg.get("step_to_subagent") or {}),
+        "orchestrator_owned": list(reg.get("orchestrator_owned") or []),
+        "gated_subagents": list(reg.get("gated_subagents") or []),
+        "restartable_steps": restartable,
+        "step_order": {name: index for index, name in enumerate(restartable)},
+        "delegate_modes": dict(reg.get("delegate_modes") or {})
+        if isinstance(reg.get("delegate_modes"), dict)
+        else {},
+    }
+    out["pipelines"] = pipes
+    nodes = dict(out.get("nodes") or {})
+    graph = pack.get("graph") or {}
+    nodes[pid] = [
+        {
+            "id": node["id"],
+            "label": node.get("label", node["id"]),
+            "kind": node.get("kind"),
+            "subagent": node.get("subagent"),
+        }
+        for node in graph.get("nodes") or []
+        if isinstance(node, dict) and node.get("id")
+    ]
+    out["nodes"] = nodes
+    status = dict(out.get("status") or {})
+    status[pid] = dict(pack.get("status") or {})
+    out["status"] = status
+    dispatch_block = pack.get("dispatch") or {}
+    dispatch = dict(out.get("dispatch") or {})
+    if dispatch_block.get("rules") or dispatch_block.get("invariants"):
+        dispatch[pid] = dict(dispatch_block)
+    else:
+        dispatch.pop(pid, None)
+    out["dispatch"] = dispatch
+    return out
 
 
 def load_yaml(path: Path) -> dict:
@@ -71,12 +257,12 @@ def discover_pipeline_ids(root: Path | None = None) -> list[str]:
     return ids
 
 
-@lru_cache(maxsize=16)
-def load_pack_module(pipeline_id: str, name: str, root: Path | None = None):
-    path = packs_dir(root) / pipeline_id / f"{name}.py"
+@lru_cache(maxsize=32)
+def _load_pack_module_from_path(folder: str, pipeline_id: str, name: str):
+    path = Path(folder) / f"{name}.py"
     if not path.is_file():
         return None
-    mod_name = f"pipeline_pack_{pipeline_id}_{name}"
+    mod_name = f"pipeline_pack_{pipeline_id}_{name}_{Path(folder).name}"
     spec = importlib.util.spec_from_file_location(mod_name, path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load {path}")
@@ -86,8 +272,24 @@ def load_pack_module(pipeline_id: str, name: str, root: Path | None = None):
     return module
 
 
-def load_pack(pipeline_id: str, root: Path | None = None) -> dict[str, Any]:
-    folder = packs_dir(root) / pipeline_id
+@lru_cache(maxsize=16)
+def load_pack_module(
+    pipeline_id: str,
+    name: str,
+    root: Path | None = None,
+    use_override: bool = True,
+):
+    folder = pack_folder(pipeline_id, root, use_override=use_override)
+    return _load_pack_module_from_path(str(folder), pipeline_id, name)
+
+
+def load_pack(
+    pipeline_id: str,
+    root: Path | None = None,
+    *,
+    use_override: bool = True,
+) -> dict[str, Any]:
+    folder = pack_folder(pipeline_id, root, use_override=use_override)
     if not folder.is_dir():
         raise FileNotFoundError(f"missing pack: {folder}")
     pack: dict[str, Any] = {"id": pipeline_id}
@@ -144,7 +346,7 @@ def _normalize_dispatch_block(spec: dict) -> dict:
 
 
 def load_all_packs(root: Path | None = None) -> dict[str, dict]:
-    return {pid: load_pack(pid, root) for pid in discover_pipeline_ids(root)}
+    return {pid: load_pack(pid, root, use_override=False) for pid in discover_pipeline_ids(root)}
 
 
 def _catalog_routing_block(rc: dict) -> dict:

@@ -15,6 +15,7 @@ from pipeline_pack import (
     discover_pipeline_ids,
     merge_compiled_source,
     repo_root,
+    set_pack_dir,
 )
 from pipeline_pack_authoring import TEMPLATES
 
@@ -229,7 +230,7 @@ def validate_status(pipeline_id: str, spec: object) -> list[str]:
     if collectors:
         from pipeline_pack import load_pack_module
 
-        mod = load_pack_module(pipeline_id, "collectors")
+        mod = load_pack_module(pipeline_id, "collectors", use_override=False)
         if mod is None:
             errors.append(f"{pipeline_id}: status.collectors set but collectors.py missing")
         else:
@@ -511,6 +512,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Template for --init-pack (default: minimal)",
     )
     args = parser.parse_args(argv)
+    set_pack_dir(None)
     root = repo_root()
 
     if args.catalog:

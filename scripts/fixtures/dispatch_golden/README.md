@@ -27,5 +27,8 @@ Each case:
 - `touch_after` — `[older, newer]` mtime pairs
 - `run_log` — optional `agent-logs` rows
 - `routing_state` — option B: JSON body injected after mtimes (spec pack)
+- `routing_state_older_than` — JSON mtime older than this file → stale → analyzer
+- `sync_after_step` — `{step, result}` runs pack hook stamp before dispatch
+- `expect_sync` — whether that stamp wrote JSON (`true` = gate, `false` = mutate/stale)
 - `expect` — `next_step`, `orchestrator_mode`, `ready`, …
 - `pipeline_id` — set from the parent folder name

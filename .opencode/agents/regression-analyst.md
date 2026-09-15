@@ -4,12 +4,12 @@ description: Analyze baseline vs gold delta and enrich delta-analysis.md.
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - grep_search
-  - run_shell_command
-  - skill
-  - write_file
-  - edit
+  read: true
+  grep: true
+  bash: true
+  skill: true
+  write: true
+  edit: true
 ---
 
 > OpenCode: `.opencode/skills/analyze-delta/SKILL.md`.

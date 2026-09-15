@@ -20,23 +20,35 @@ JSON stays stale → P5 `analyze-routing`. Golden `25-check-feature-stamped-json
 `stale` / `alignment_stale` are engine mtime after overlay.
 
 P5 `routing_state_needs_refresh` → `analyze-routing` when JSON is missing,
-stale, or invalid (spec `00-no-json-no-context`, routing-poc `03-stale-json`).
-Live overlay does not use baseline; baseline is CI/replay only.
+stale, or invalid (spec `00-no-json-no-context`, `26-spec-newer-than-json`,
+routing-poc `03-stale-json`). Live overlay does not use baseline; baseline is
+CI/replay only.
 
-## Invariant (after P10–P30, before P40+)
+Gate vs mutate (hook `sync_after_step` in the golden runner):
+
+| Case | Meaning | Next |
+|------|---------|------|
+| `26-spec-newer-than-json` | SPEC newer than JSON | analyze-routing |
+| `27-check-feature-stamp-no-file-change` | check-feature ok, files unchanged | resolve-gaps (stamp) |
+| `28-write-feature-does-not-stamp` | write-feature ok, SPEC newer | analyze-routing |
+| `29-check-feature-after-spec-edit` | check-feature ok, but SPEC newer | analyze-routing |
+
+## Invariant (after P10–P70, before P80+)
 
 | Invariant | Fixtures | Effect |
 |-----------|----------|--------|
 | `needs-check-feature` | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` | `check-feature` |
-| (JSON stamp / hook sync) | `25-check-feature-stamped-json`, `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
+| pending-apply beats invariant | `30-pending-apply-beats-needs-check` | `resolve-challenges` even if `needs_check_feature` |
+| graph from `challenge-feature` | `31-graph-from-challenge-skips-check` | same, with run-log origin — no edge to check-feature |
+| (JSON stamp / hook sync) | `25-check-feature-stamped-json`, `27-check-feature-stamp-no-file-change`, `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
 
-Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — before P40+ branch rules.
+Runs after needs-answer / pending-apply (P40–70). A SPEC edit must not skip apply.
 
 ## `dispatch.spec.rules` (priority / when / next / fixture)
 
 | P | when | next | outcome | Fixture |
 |---|------|------|---------|---------|
-| 5 | `routing_state_needs_refresh` | analyze-routing | | missing / stale / invalid JSON (`00-no-json-no-context`) |
+| 5 | `routing_state_needs_refresh` | analyze-routing | | missing / stale / invalid JSON (`00-no-json-no-context`, `26`–`29`) |
 | 10 | `alignment_limit_exhausted` | — | stopped | `15-alignment-limit-stopped` |
 | 20 | `not_has_context` | find-context | | `01-no-context` (after JSON exists) |
 | 30 | `not_has_spec` | write-feature | | `02-no-spec` |
@@ -68,7 +80,7 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Calibration pipeline graph | `graph:*:calibration` |
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
-Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 24 cases + calibration 1 orchestrator_only)
+Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 30 cases + calibration 1 orchestrator_only)
 and **golden-coverage:packs** (every `pipelines/<id>/` has a golden folder or waiver).
 
 Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`

@@ -1,0 +1,504 @@
+# Spec routing-state mapping + edge_conditions (Phase 13).
+# status_fields = analyzer field SSOT. edge_conditions = when: formulas + dispatch.
+# Runtime: scripts/pipeline_edge_conditions.py interpreter (choice A). No LLM in dispatch.
+# See scripts/PIPELINE-ROUTING-STATE.md and scripts/PIPELINE-PREDICATES.md.
+schema_version: 1
+artifact:
+  id: routing_state
+  path: Feature-writing/{task_id}/{task_id}-routing-state.json
+  exists_as: has_routing_state
+analyzer:
+  step: analyze-routing
+  subagent: routing-analyzer
+  graph: pipelines/spec/graph.yaml (also routing-poc)
+status_fields:
+  has_context:
+    type: bool
+    source: artifacts.context
+    artifacts: [context]
+    collectors: []
+    predicates: [not_has_context]
+    instruction: >
+      True iff Feature-context/{slug}.md exists. Do not parse contents for this
+      flag. Example: file present → true; missing → false.
+  has_spec:
+    type: bool
+    source: artifacts.spec
+    artifacts: [spec]
+    collectors: []
+    predicates: [not_has_spec]
+    instruction: >
+      True iff Feature-writing/{slug}/{slug}.md exists. Missing spec still
+      yields a JSON with has_spec: false and other presence flags.
+  has_decisions:
+    type: bool
+    source: artifacts.decisions
+    artifacts: [decisions]
+    collectors: []
+    predicates: []
+    instruction: >
+      True iff Feature-writing/{slug}/{slug}-decisions.md exists. Display-only
+      for dispatch; still required for overlay parity.
+  has_gaps_map:
+    type: bool
+    source: artifacts.gaps_map
+    artifacts: [gaps_map]
+    collectors: []
+    predicates: []
+    invariant: needs-check-feature
+    instruction: >
+      True iff Feature-writing/{slug}/{slug}-gaps-resolved.md exists.
+      needs_check_feature compares SPEC mtime against this file.
+  has_challenges:
+    type: bool
+    source: artifacts.challenges
+    artifacts: [challenges]
+    collectors: []
+    predicates: [open_challenges, no_challenges_file]
+    instruction: >
+      True iff Feature-writing/{slug}/{slug}-challenges.md exists.
+      open_challenges requires this AND challenges.open > 0.
+      no_challenges_file is not has_challenges (priority 110).
+  has_challenges_map:
+    type: bool
+    source: artifacts.challenges_map
+    artifacts: [challenges_map]
+    collectors: []
+    predicates: []
+    invariant: needs-check-feature
+    instruction: >
+      True iff Feature-writing/{slug}/{slug}-challenges-resolved.md exists.
+  has_alignment:
+    type: bool
+    source: artifacts.alignment
+    artifacts: [alignment]
+    collectors: []
+    predicates: [alignment_limit_exhausted, alignment_missing_or_stale]
+    instruction: >
+      True iff Feature-writing/{slug}/{slug}-code-alignment.md exists.
+      alignment_missing_or_stale = not has_alignment OR "alignment" in stale.
+  decisions_needs_answer:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [needs_answer_with_gaps, needs_answer_challenges_only]
+    orchestrator: ask_user_when
+    instruction: >
+      Count DECISIONS table rows (| D-NN | …) whose Status column is
+      needs-answer (case-insensitive). Relates is column 2; Status is after
+      Prompt, Options, Decision. Example: two needs-answer rows → 2.
+      Missing file → 0. Do not invent D-ids.
+  decisions_pending_apply:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [pending_apply_with_gaps, pending_apply_challenges_only]
+    instruction: >
+      Count DECISIONS rows whose Status is pending-apply. Example: one
+      pending-apply → 1. Other statuses ignored.
+  decisions_needs_answer_alignment:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [needs_answer_alignment_only, needs_answer_challenges_only]
+    instruction: >
+      Subset of needs-answer whose Relates matches \b[FICTKAM]-\d+\b
+      (F/I/C/T/K/A/M ids from ALIGNMENT). Q-* and CH-* are not alignment.
+      needs_answer_alignment_only: this > 0 and open_gaps empty.
+      needs_answer_challenges_only: needs_answer > this and open_gaps empty.
+  decisions_pending_apply_alignment:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [pending_apply_alignment_only, pending_apply_challenges_only]
+    instruction: >
+      Subset of pending-apply whose Relates matches \b[FICTKAM]-\d+\b.
+      pending_apply_alignment_only also needs critical_major_mismatch > 0,
+      alignment_iteration < 3, not alignment_stale.
+  open_gaps:
+    type: list
+    source: collectors.spec_gaps
+    artifacts: [spec]
+    collectors: [spec_gaps]
+    predicates: [open_gaps, needs_answer_with_gaps, pending_apply_with_gaps]
+    instruction: >
+      From SPEC: every inline [GAP-ID] token, plus markdown table rows
+      starting with | GAP-ID |. Exclude an id if its table row contains
+      «закрыт», «closed», «отложено», or «deferred» — including leftover
+      inline tokens of that id. Return sorted unique ids without brackets.
+      Example: [GAP-X] → ["GAP-X"]. Missing SPEC → [].
+  open_questions:
+    type: list
+    source: collectors.context_questions
+    artifacts: [context]
+    collectors: [context_questions]
+    predicates: []
+    instruction: >
+      Q-NN ids in CONTEXT_DOC § «Открытые вопросы» minus § «Закрытые вопросы».
+      Display-only (not a dispatch when:). Missing file or headings → [].
+  challenges:
+    type: object
+    source: collectors.challenges_table
+    artifacts: [challenges]
+    collectors: [challenges_table]
+    predicates: [open_challenges]
+    instruction: >
+      Parse CHALLENGES table rows | CH-NN | … | severity | status |.
+      status open / needs-answer / answered (legacy) → open (+ open_critical
+      / open_major from severity). deferred / resolved / covered increment
+      those keys. Dispatch uses challenges.open only. Missing file → all 0.
+      Example: one open Critical → {open: 1, open_critical: 1, …}.
+  verdict:
+    type: string
+    source: collectors.alignment_frontmatter
+    artifacts: [alignment]
+    collectors: [alignment_frontmatter]
+    predicates: [alignment_pass, alignment_limit_exhausted]
+    instruction: >
+      YAML frontmatter verdict: on ALIGNMENT (first --- … ---). Values
+      PASS / PASS WITH GAPS / FAIL. alignment_pass ∈ {PASS, PASS WITH GAPS}.
+      Missing file or key → "".
+  alignment_iteration:
+    type: int
+    source: collectors.alignment_frontmatter
+    artifacts: [alignment]
+    collectors: [alignment_frontmatter]
+    predicates: [alignment_limit_exhausted, critical_major_mismatch_resolvable, pending_apply_alignment_only]
+    instruction: >
+      Frontmatter alignment_iteration: digits only. Limit exhausted when
+      has_alignment and iteration >= 3 and verdict == FAIL. Missing → 0.
+  critical_major_mismatch:
+    type: int
+    source: collectors.alignment_frontmatter
+    artifacts: [alignment]
+    collectors: [alignment_frontmatter]
+    predicates: [critical_major_mismatch_resolvable, pending_apply_alignment_only]
+    instruction: >
+      Count ALIGNMENT table rows that contain «mismatch» and critical or
+      major (skip summary rows matching critical|major|minor|total mismatch).
+      Example: one Critical MISMATCH + one Major MISMATCH → 2. Minor only → 0.
+  alignment_stale:
+    type: bool
+    source: alignment_stale
+    artifacts: [alignment, spec]
+    collectors: []
+    predicates: [critical_major_mismatch_resolvable, pending_apply_alignment_only]
+    instruction: >
+      True iff ALIGNMENT exists and mtime < SPEC mtime (require_left).
+      Engine recomputes this after overlay — still fill for the snapshot.
+  stale:
+    type: list
+    source: stale[]
+    artifacts: [alignment, challenges, context, spec]
+    collectors: []
+    predicates: [alignment_missing_or_stale]
+    instruction: >
+      Engine ids currently: alignment (older than spec), challenges (older
+      than spec), context-newer-than-spec. Dispatch uses "alignment" in stale.
+      Engine recomputes stale[] after overlay. Analyzer may list the same ids.
+  needs_check_feature:
+    type: bool
+    source: collectors.needs_check_feature
+    artifacts: [spec, gaps_map, challenges_map, challenges]
+    collectors: [needs_check_feature]
+    invariant: needs-check-feature
+    instruction: >
+      False if no SPEC. False if last successful check-feature in run-log
+      has ts >= spec mtime − 2s. True if SPEC newer than GAPS_MAP (reason
+      «SPEC новее GAPS_MAP…») or newer than CHALLENGES_MAP. If has_challenges
+      or has_alignment: false when SPEC is not newer than CHALLENGES or
+      GAPS_MAP. If no gaps_map and no challenges and no alignment: true
+      («spec не проходила check-feature»). Else true («нет check-feature
+      после последней правки SPEC»). Same as collectors.needs_check_feature.
+  needs_check_feature_reason:
+    type: string
+    source: collectors.needs_check_feature
+    artifacts: [spec, gaps_map, challenges_map, challenges]
+    collectors: [needs_check_feature]
+    invariant: needs-check-feature
+    instruction: >
+      Empty string when needs_check_feature is false. Otherwise the Russian
+      reason string from collectors.needs_check_feature (do not invent copy).
+not_in_dispatch:
+  - open_questions
+  - spec_lines
+  - context_lines
+  - challenges.open_critical
+  - challenges.open_major
+  - challenges.deferred
+  - challenges.resolved
+  - challenges.covered
+router_owned:
+  - next_step
+  - next_command
+  - next_subagent
+  - next_reason
+  - orchestrator_mode
+  - must_continue
+  - ready
+engine_fields:
+  - has_routing_state
+  - routing_state_invalid
+  - routing_state_error
+stale_vs:
+  - spec
+  - context
+  - decisions
+  - challenges
+  - alignment
+  - gaps_map
+  - challenges_map
+when_to_run_analyzer:
+  - routing-state missing
+  - invalid JSON / schema_version mismatch / router-owned keys in fields
+  - routing-state older than any stale_vs artifact
+  - after mutating steps (write-feature, resolve-*, challenge-feature, check-feature-code, resolve-code-alignment, find-context)
+  - after check-feature only if that step rewrote a stale_vs artifact
+validate_ids:
+  - routing-state-missing
+  - routing-state-stale
+overlay:
+  live_default: routing_state
+  apply_when:
+    - collector_mode routing_state (spec pack default — always)
+  collector_order: routing_state is the only overlay-field collector
+  freshness: dispatch P5 routing_state_needs_refresh → analyze-routing (missing, stale, or invalid JSON)
+  hook_sync_after_step:
+    fn: sync_routing_state_after_step
+    module: pipelines/<pack>/routing_state_sync.py
+    metadata: step_completion
+    skip_after_steps: [analyze-routing]
+    sync_after_steps: [check-feature]  # gate only; mutating steps → stale → analyzer
+  needs_check_feature: >
+    Analyzer (LLM) writes bool + reason into fields. SubagentStop hook stamps
+    gate steps in step_completion (spec: check-feature) and pack refresh_fields
+    clears needs_check_feature. Mutating steps are not stamped. If the gate step
+    rewrote artifacts, hook skips so JSON stays stale. Router reads fields only.
+edge_conditions:
+  _rs_missing_with_error:
+    expr:
+      all:
+        - field: has_routing_state
+          op: falsy
+        - field: routing_state_error
+          op: neq
+          value: ""
+  _rs_payload_stale_or_invalid:
+    expr:
+      any:
+        - field: routing_state_invalid
+          op: truthy
+        - field: stale
+          op: contains
+          value: routing_state
+  routing_state_needs_refresh:
+    expr:
+      any:
+        - field: has_routing_state
+          op: falsy
+        - ref: _rs_payload_stale_or_invalid
+    dispatch:
+      priority: 5
+      next: analyze-routing
+    label: routing-state missing/stale
+  routing_state_ready:
+    expr:
+      all:
+        - ref: routing_state_needs_refresh
+          negate: true
+        - field: open_gaps
+          op: empty
+    label: routing-state актуален
+  alignment_limit_exhausted:
+    expr:
+      all:
+        - field: has_alignment
+          op: truthy
+        - field: alignment_iteration
+          op: gte
+          constant: alignment_max_iterations
+        - field: verdict
+          op: eq
+          constant: verdict_fail
+    dispatch:
+      priority: 10
+      next: null
+      outcome: stopped
+    label: alignment limit exhausted
+  not_has_context:
+    core: true
+    expr:
+      field: has_context
+      op: falsy
+    dispatch:
+      priority: 20
+      next: find-context
+    label: no context
+  not_has_spec:
+    core: true
+    expr:
+      field: has_spec
+      op: falsy
+    dispatch:
+      priority: 30
+      next: write-feature
+    label: no spec
+  needs_answer_with_gaps:
+    expr:
+      all:
+        - field: decisions_needs_answer
+          op: gt
+          value: 0
+        - field: open_gaps
+          op: non_empty
+    dispatch:
+      priority: 40
+      next: resolve-gaps
+    orchestrator: ask_user
+    label: needs-answer with gaps
+  needs_answer_alignment_only:
+    expr:
+      all:
+        - field: decisions_needs_answer_alignment
+          op: gt
+          value: 0
+        - field: open_gaps
+          op: empty
+    dispatch:
+      priority: 45
+      next: resolve-code-alignment
+    orchestrator: ask_user
+    label: needs-answer alignment only
+  needs_answer_challenges_only:
+    expr:
+      all:
+        - field: decisions_needs_answer
+          op: gt
+          other: decisions_needs_answer_alignment
+        - field: open_gaps
+          op: empty
+    dispatch:
+      priority: 50
+      next: resolve-challenges
+    orchestrator: ask_user
+    label: needs-answer challenges only
+  pending_apply_with_gaps:
+    expr:
+      all:
+        - field: decisions_pending_apply
+          op: gt
+          value: 0
+        - field: open_gaps
+          op: non_empty
+    dispatch:
+      priority: 60
+      next: resolve-gaps
+    label: pending-apply with gaps
+  pending_apply_alignment_only:
+    expr:
+      all:
+        - field: decisions_pending_apply_alignment
+          op: gt
+          value: 0
+        - field: critical_major_mismatch
+          op: gt
+          value: 0
+        - field: alignment_iteration
+          op: lt
+          constant: alignment_max_iterations
+        - field: alignment_stale
+          op: falsy
+    dispatch:
+      priority: 65
+      next: resolve-code-alignment
+    label: pending-apply alignment only
+  pending_apply_challenges_only:
+    expr:
+      all:
+        - field: decisions_pending_apply
+          op: gt
+          other: decisions_pending_apply_alignment
+        - field: open_gaps
+          op: empty
+    dispatch:
+      priority: 70
+      next: resolve-challenges
+    label: pending-apply challenges only
+  critical_major_mismatch_resolvable:
+    expr:
+      all:
+        - field: critical_major_mismatch
+          op: gt
+          value: 0
+        - field: alignment_iteration
+          op: lt
+          constant: alignment_max_iterations
+        - field: alignment_stale
+          op: falsy
+    dispatch:
+      priority: 80
+      next: resolve-code-alignment
+    label: alignment findings
+  open_gaps:
+    expr:
+      field: open_gaps
+      op: non_empty
+    dispatch:
+      priority: 90
+      next: resolve-gaps
+    label: gaps open
+  open_challenges:
+    expr:
+      all:
+        - field: has_challenges
+          op: truthy
+        - field: challenges.open
+          op: gt
+          value: 0
+    dispatch:
+      priority: 100
+      next: resolve-challenges
+    label: open challenges
+  no_challenges_file:
+    expr:
+      field: has_challenges
+      op: falsy
+    dispatch:
+      priority: 110
+      next: challenge-feature
+    label: no CHALLENGES yet
+  alignment_missing_or_stale:
+    expr:
+      any:
+        - field: has_alignment
+          op: falsy
+        - field: stale
+          op: contains
+          value: alignment
+    dispatch:
+      priority: 120
+      next: check-feature-code
+    label: alignment missing or stale
+  alignment_pass:
+    expr:
+      field: verdict
+      op: in
+      constants:
+        - verdict_pass
+        - verdict_pass_with_gaps
+    dispatch:
+      priority: 130
+      next: null
+      outcome: ready
+    label: PASS
+  alignment_fail_reaudit:
+    expr:
+      always: true
+    dispatch:
+      priority: 140
+      next: check-feature-code
+    label: alignment without PASS

@@ -1,0 +1,39 @@
+{
+  "context": {
+    "fileName": ["QWEN.md"]
+  },
+  "tools": {
+    "approvalMode": "yolo"
+  },
+  "memory": {
+    "enableAutoSkill": false
+  },
+  "model": {
+    "maxToolCallsPerTurn": 0,
+    "skipLoopDetection": true
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(python3 *)",
+      "Bash(PYTHONPATH=*)",
+      "Agent(context-researcher)",
+      "Agent(spec-writer)",
+      "Agent(routing-analyzer)",
+      "Agent(spec-reviewer)",
+      "Agent(gap-resolver)",
+      "Agent(spec-challenger)",
+      "Agent(challenge-resolver)",
+      "Agent(code-auditor)",
+      "Agent(alignment-resolver)"
+    ],
+    "deny": [
+      "WebFetch",
+      "web_search",
+      "Edit(/analytics/**)",
+      "Write(/analytics/**)",
+      "Edit(/repositories/**)",
+      "Write(/repositories/**)"
+    ]
+  }
+}

@@ -41,7 +41,7 @@ informational). Replay fixtures: `scripts/fixtures/routing_state_replay/`.
 | `critical_major_mismatch` | alignment frontmatter | `critical_major_mismatch` | mismatch resolvable, pending alignment | P65 / P80 |
 | `alignment_stale` | alignment_stale | `alignment_stale` | mismatch, pending alignment | P65 / P80 (engine) |
 | `stale` | stale[] | `stale` | `alignment_missing_or_stale`; P5 refresh | P5 / P120 |
-| `needs_check_feature` | needs_check_feature | `needs_check_feature` | invariant `needs-check-feature` | after P30 → check-feature |
+| `needs_check_feature` | needs_check_feature | `needs_check_feature` | invariant `needs-check-feature` | after P70 → check-feature |
 | `needs_check_feature_reason` | needs_check_feature | `needs_check_feature_reason` | invariant | (reason only) |
 
 ## Documented diffs

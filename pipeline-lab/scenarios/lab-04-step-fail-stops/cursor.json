@@ -1,0 +1,4 @@
+[
+  {"step": "analyze-routing", "variant": "ok"},
+  {"step": "challenge-feature", "variant": "fail"}
+]

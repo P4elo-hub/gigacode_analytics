@@ -4,10 +4,10 @@ description: Prepare isolated benchmark rerun workspace from inputs.lock.
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - run_shell_command
-  - skill
-  - write_file
+  read: true
+  bash: true
+  skill: true
+  write: true
 ---
 
 > OpenCode: `.opencode/skills/benchmark-rerun/SKILL.md`.

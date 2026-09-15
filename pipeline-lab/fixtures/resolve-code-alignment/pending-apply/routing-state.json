@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "slug": "__SLUG__",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "step_completion": {},
+  "fields": {
+    "has_context": true,
+    "has_spec": true,
+    "has_decisions": true,
+    "has_gaps_map": false,
+    "has_challenges": true,
+    "has_challenges_map": false,
+    "has_alignment": true,
+    "decisions_needs_answer": 0,
+    "decisions_pending_apply": 1,
+    "decisions_needs_answer_alignment": 0,
+    "decisions_pending_apply_alignment": 0,
+    "open_gaps": [],
+    "open_questions": [],
+    "challenges": {
+      "open": 0,
+      "deferred": 0,
+      "resolved": 0,
+      "covered": 0,
+      "open_critical": 0,
+      "open_major": 0
+    },
+    "verdict": "",
+    "alignment_iteration": 1,
+    "critical_major_mismatch": 0,
+    "alignment_stale": false,
+    "stale": [],
+    "needs_check_feature": true,
+    "needs_check_feature_reason": "нет check-feature после последней правки SPEC"
+  }
+}

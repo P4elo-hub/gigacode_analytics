@@ -16,7 +16,7 @@ WRITE_FEATURE_CYCLE_MODE = "write_feature_cycle"
 
 
 @lru_cache(maxsize=1)
-def load_pipeline_registry() -> dict:
+def _load_compiled_registry_file() -> dict:
     if not REGISTRY_PATH.is_file():
         raise FileNotFoundError(
             f"Missing {REGISTRY_PATH} — run: python3 scripts/pipeline_compile.py --apply"
@@ -25,6 +25,12 @@ def load_pipeline_registry() -> dict:
     if not isinstance(payload, dict):
         raise ValueError(f"Invalid registry: {REGISTRY_PATH}")
     return payload
+
+
+def load_pipeline_registry() -> dict:
+    from pipeline_pack import overlay_compiled_registry
+
+    return overlay_compiled_registry(_load_compiled_registry_file())
 
 
 def known_pipeline_ids() -> tuple[str, ...]:

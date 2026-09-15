@@ -1,7 +1,8 @@
 """CI / replay baseline: parse spec artifacts the same way Phase 11 collectors did.
 
-Live dispatch does not import this. Analyzer (LLM) follows routing_conditions.yaml.
-This module is the deterministic etalon for --golden and routing_state_parity --replay.
+Analyzer (LLM) follows routing_conditions.yaml. This module is the etalon for
+--golden and routing_state_parity --replay. Live spec overlay uses
+`deferred_gap_ids` so «Отложено» rows do not re-queue resolve-gaps.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ DECISION_ROW_RE = re.compile(
     re.MULTILINE,
 )
 ALIGNMENT_RELATES_RE = re.compile(r"\b[FICTKAM]-\d+\b")
-CLOSED_GAP_MARKERS = ("закрыт", "closed")
+CLOSED_GAP_MARKERS = ("закрыт", "closed", "отложено", "deferred")
 QUESTION_ID_RE = re.compile(r"\bQ-\d+\b")
 CHALLENGE_ROW_RE = re.compile(
     r"^\|\s*(CH-\d+)\s*\|(?:[^|\n]*\|){3}\s*([^|]+)\|\s*([^|]+)\|",
@@ -58,15 +59,28 @@ def _section_after(text: str, heading_re: re.Pattern[str]) -> str:
     return rest[: next_match.start()] if next_match else rest
 
 
-def collect_open_gaps(spec_text: str) -> list[str]:
-    found = [match.group(0)[1:-1] for match in INLINE_GAP_RE.finditer(spec_text)]
+def deferred_gap_ids(spec_text: str) -> set[str]:
+    """GAP ids whose table row is closed / deferred — not dispatch-open."""
+    found: set[str] = set()
     for match in TABLE_GAP_RE.finditer(spec_text):
         line_start = spec_text.rfind("\n", 0, match.start()) + 1
         line_end = spec_text.find("\n", match.start())
-        row = spec_text[line_start:line_end if line_end != -1 else None].lower()
-        if not any(marker in row for marker in CLOSED_GAP_MARKERS):
-            found.append(match.group(1))
-    return sorted(set(found))
+        row = spec_text[line_start : line_end if line_end != -1 else None].lower()
+        if any(marker in row for marker in CLOSED_GAP_MARKERS):
+            found.add(match.group(1))
+    return found
+
+
+def collect_open_gaps(spec_text: str) -> list[str]:
+    """Open gaps: inline [GAP-ID] + table rows, minus closed/deferred ids."""
+    deferred = deferred_gap_ids(spec_text)
+    table_open: list[str] = []
+    for match in TABLE_GAP_RE.finditer(spec_text):
+        gap_id = match.group(1)
+        if gap_id not in deferred:
+            table_open.append(gap_id)
+    inline = [match.group(0)[1:-1] for match in INLINE_GAP_RE.finditer(spec_text)]
+    return sorted({gap_id for gap_id in inline + table_open if gap_id not in deferred})
 
 
 def collect_open_questions(context_text: str) -> list[str]:

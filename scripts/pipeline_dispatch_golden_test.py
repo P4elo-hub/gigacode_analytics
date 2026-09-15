@@ -174,21 +174,54 @@ def _load_cases() -> list[dict]:
     return cases
 
 
-def _inject_routing_state(root: Path, case: dict) -> None:
-    """Option B: write case['routing_state'] after files/mtimes so JSON is newest."""
+def _routing_state_rel(slug: str) -> str:
+    return f"Feature-writing/{slug}/{slug}-routing-state.json"
+
+
+def _inject_routing_state(root: Path, case: dict) -> Path | None:
+    """Option B: write case['routing_state'] after files/mtimes.
+
+    Default: JSON mtime is newest so P5 stale does not fire.
+    ``routing_state_older_than``: JSON older than that artifact → analyzer.
+    """
     payload = case.get("routing_state")
     if payload is None:
-        return
+        return None
     slug = case.get("slug") or SLUG
-    rel = f"Feature-writing/{slug}/{slug}-routing-state.json"
-    path = root / rel
+    path = root / _routing_state_rel(slug)
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(payload, (dict, list)):
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     else:
         path.write_text(str(payload), encoding="utf-8")
+    older_than = case.get("routing_state_older_than")
+    if older_than:
+        other = root / str(older_than)
+        if not other.is_file():
+            raise ValueError(f"routing_state_older_than missing: {older_than}")
+        older = other.stat().st_mtime - 120
+        os.utime(path, (older, older))
+        return path
     newest = time.time() + 60
     os.utime(path, (newest, newest))
+    return path
+
+
+def _run_sync_after_step(root: Path, case: dict) -> bool | None:
+    """Optional hook: pack stamp after a finished step (gate vs mutate)."""
+    spec = case.get("sync_after_step")
+    if not isinstance(spec, dict) or not spec.get("step"):
+        return None
+    from pipeline_routing_state import sync_routing_state_after_step
+
+    slug = case.get("slug") or SLUG
+    return sync_routing_state_after_step(
+        root,
+        slug,
+        str(spec["step"]),
+        str(spec.get("result") or "ok"),
+        pipeline_id=str(case.get("pipeline_id") or DEFAULT_PIPELINE),
+    )
 
 
 def _materialize_case(root: Path, case: dict) -> None:
@@ -204,6 +237,9 @@ def run_case(case: dict) -> tuple[bool, str]:
     try:
         _materialize_case(tmp, case)
         _inject_routing_state(tmp, case)
+        synced = _run_sync_after_step(tmp, case)
+        if "expect_sync" in case and synced is not None and bool(synced) != bool(case["expect_sync"]):
+            return False, f"expect_sync {case['expect_sync']!r}, got {synced!r}"
         dispatch = build_dispatch(tmp, slug, case.get("pipeline_id") or DEFAULT_PIPELINE)
         actual = _dispatch_subset(dispatch)
         mismatches: list[str] = []

@@ -12,20 +12,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_logs import load_manifest, manifest_path, run_log_path
-from artifact_paths import workspace_root
 from build_pipeline_graph import subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, clear_active_task, load_active_task_latest
 from pipeline_dispatch import build_dispatch
+from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, workspace_root_for_run
 from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
 from pipeline_validate import SEVERITY_BLOCK, SEVERITY_WARN, ValidationReport, validate_slug
 
 FAIL_HINTS = re.compile(
-    r"(?i)\b(fail(?:ed|ure)?|error|exception|не\s+удал|ошибк|truncat|timeout|abort)\b"
+    r"(?i)("
+    r"\bfailed\b|\bfailure\b|\bfail\b|"
+    r"\berror:|\bexception\b|"
+    r"не\s+удал|"
+    r"\btruncat|\btimeout\b|\babort\b"
+    r")"
 )
 RETRY_HINTS = re.compile(r"(?i)\bretry\b")
-# Skill table cites «FAIL alignment» — not a subagent failure.
+# Not a subagent failure: skill table «FAIL alignment», quality-gates
+# «fail: 0» / «PASS · fail 0» (colon optional). Keep real failed/failure/timeout.
 _FALSE_FAIL_SNIPPETS = re.compile(
-    r"(?i)(\|\s*fail alignment\s*\||fail alignment\s*\|/resolve-code-alignment)"
+    r"(?i)("
+    r"\|\s*fail alignment\s*\|"
+    r"|fail alignment\s*\|/resolve-code-alignment"
+    r"|fail\s*[:=]?\s*0\b"
+    r")"
 )
 
 
@@ -89,7 +99,10 @@ def recent_duplicate(path: Path, *, step: str, subagent: str, window_sec: int = 
 
 
 def run_script(root: Path, script: str, *args: str) -> tuple[int, str]:
-    cmd = ["python3", str(root / "scripts" / script), *args]
+    scripts_dir = Path(__file__).resolve().parent
+    cmd = ["python3", str(scripts_dir / script), *args]
+    if script in {"append_run_log.py", "ingest_session_telemetry.py"} and "--workspace" not in args:
+        cmd.extend(["--workspace", str(root)])
     proc = subprocess.run(
         cmd,
         cwd=root,
@@ -225,12 +238,15 @@ def after_subagent(
     routing_sync_note = ""
     if slug:
         try:
+            from pipeline_position import record_position
             from pipeline_routing_state import routing_state_sync_enabled, sync_routing_state_after_step
 
+            if record_position(root, slug, step, result):
+                routing_sync_note = " position recorded"
             if routing_state_sync_enabled(pipeline_id) and sync_routing_state_after_step(
                 root, slug, step, result, pipeline_id=pipeline_id
             ):
-                routing_sync_note = " routing-state.json synced"
+                routing_sync_note = (routing_sync_note + " routing-state.json synced").strip()
         except Exception as exc:  # noqa: BLE001 — hook must not crash orchestrator
             routing_sync_note = f" routing-state sync warn: {exc!s}"[:120]
 
@@ -295,11 +311,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Override pipeline id (default: value from .pipeline-active-task.json)",
     )
     parser.add_argument("--workspace", type=Path, default=None)
+    add_pack_dir_argument(parser)
     parser.add_argument("--dry-run", action="store_true", help="No writes; JSON report to stdout")
     parser.add_argument("--stdin-file", type=Path, help="Hook input file (default: stdin)")
     args = parser.parse_args(argv)
 
-    root = (args.workspace or workspace_root()).resolve()
+    try:
+        apply_pack_dir_from_args(args)
+    except FileNotFoundError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}), ensure_ascii=False)
+        return 1
+
+    root = (args.workspace or workspace_root_for_run()).resolve()
     if args.stdin_file:
         raw = args.stdin_file.read_text(encoding="utf-8")
     else:

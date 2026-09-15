@@ -127,9 +127,10 @@ status_fields:
     predicates: [open_gaps, needs_answer_with_gaps, pending_apply_with_gaps]
     instruction: >
       From SPEC: every inline [GAP-ID] token, plus markdown table rows
-      starting with | GAP-ID | unless the row contains «закрыт» or «closed».
-      Return sorted unique ids without brackets. Example: [GAP-X] → ["GAP-X"].
-      Missing SPEC → [].
+      starting with | GAP-ID |. Exclude an id if its table row contains
+      «закрыт», «closed», «отложено», or «deferred» — including leftover
+      inline tokens of that id. Return sorted unique ids without brackets.
+      Example: [GAP-X] → ["GAP-X"]. Missing SPEC → [].
   open_questions:
     type: list
     source: collectors.context_questions

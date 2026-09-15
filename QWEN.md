@@ -52,6 +52,10 @@ Workspace пишется и гоняется в **Qwen Code CLI** (`qwen`). Об
 Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli qwen` →
 `action: task` → **только** `task.subagent_type` из JSON. После subagent — снова delegate.
 **Не завершай ход**, пока `must_continue: true`. Не спрашивай «запускать X?».
+Не читай `pipelines/` и `scripts/pipeline_*`: повтор шага из delegate — не баг,
+снова `task` на тот же `subagent_type`.
+Не читай `pipelines/` и `scripts/pipeline_*`: повтор шага из delegate — не баг,
+снова `task` на тот же `subagent_type`.
 
 **Run until done:** иди по delegate в цикле, пока не `PASS` / `PASS WITH GAPS` или
 `action: ask_user`. Fail — retry **только** через delegate, не improvising subagent.

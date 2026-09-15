@@ -38,6 +38,12 @@ Default `--pipeline spec`. Калибровка: `--pipeline calibration`.
 `task`, если `subagent_type` ≠ active-task из delegate. Обойти нельзя — только
 снова `pipeline_delegate.py`.
 
+**Boxed:** оркестратор **не** открывает `pipelines/`, `scripts/pipeline_*`,
+`routing_conditions.yaml`, `predicates.py`. Повтор того же шага из delegate —
+не баг движка: снова `task` на тот же `subagent_type`. Хук
+`pipeline-box-orchestrator.sh` режет чтение движка в основной сессии;
+субагентам pack YAML можно.
+
 Preflight (опционально):
 
 ```bash
@@ -75,6 +81,7 @@ python3 scripts/pipeline_delegate.py <task_id> --assert-subagent <имя> --pipe
 - ❌ Отдельный вызов `pipeline_set_active_task.py` (делает delegate)
 - ❌ Завершать сессию при `must_continue: true`
 - ❌ Параллельные содержательные `task`
+- ❌ Читать/грепать движок (`pipelines/`, `scripts/pipeline_*`), чтобы «понять цикл»
 
 ## Spec pack
 
@@ -89,6 +96,5 @@ dispatch нет; цепочка по markdown, рёбра графа через 
 
 ## Карта шаг → субагент
 
-Канон: `pipelines/<id>/registry.yaml` **активного** pipeline
-(`--pipeline` / `.pipeline-active-task.json` → `registry_for(pipeline_id)`).
-Не `STEP_TO_SUBAGENT`. Контракт: `scripts/PIPELINE-RUNTIME.md`.
+Канон уже в JSON delegate (`step_to_subagent`). **Не** открывай
+`pipelines/<id>/registry.yaml` и `scripts/PIPELINE-*.md` в рантайме.

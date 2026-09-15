@@ -8,12 +8,14 @@ import json
 import sys
 from pathlib import Path
 
-from artifact_paths import list_feature_slugs, workspace_root
+from artifact_paths import list_feature_slugs
 from build_pipeline_graph import subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_for_slug, load_active_task_latest
 from pipeline_common import delegate_mode_for_subagent, pipeline_gated_subagents, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
+from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, workspace_root_for_run
+from pipeline_position import resolve_position
 from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
 
 DELEGATE_CMD = "python3 scripts/pipeline_delegate.py <slug> --cli qwen"
@@ -128,8 +130,13 @@ def validate_task(
                     active, slug = task, candidate
                     break
 
+        standing = resolve_position(root, slug, pipeline_id)
         last = last_ok_pipeline_step(root, slug, pipeline_id)
-        from_step = (last.get("step") if last else None) or schema.get("orchestrator")
+        from_step = (
+            (standing.get("step") if standing else None)
+            or (last.get("step") if last else None)
+            or schema.get("orchestrator")
+        )
         if not is_allowed_transition(schema, from_step, proposed_step):
             allowed = [
                 e.get("to")
@@ -173,12 +180,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Override pipeline id (default: value from .pipeline-active-task.json)",
     )
     parser.add_argument("--workspace", type=Path, default=None)
+    add_pack_dir_argument(parser)
     parser.add_argument("--stdin-file", type=Path, help="Hook input file (default: stdin)")
     parser.add_argument("--proposed-subagent", help="Dry-run: subagent_type to validate")
     parser.add_argument("--slug", help="Dry-run: slug hint when active-task missing")
     args = parser.parse_args(argv)
 
-    root = (args.workspace or workspace_root()).resolve()
+    try:
+        apply_pack_dir_from_args(args)
+    except FileNotFoundError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}), ensure_ascii=False)
+        return 1
+
+    root = (args.workspace or workspace_root_for_run()).resolve()
 
     if args.proposed_subagent is not None:
         payload = validate_task(

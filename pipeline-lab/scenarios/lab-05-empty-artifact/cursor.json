@@ -1,0 +1,4 @@
+[
+  {"step": "analyze-routing", "variant": "dirty"},
+  {"step": "check-feature", "variant": "empty"}
+]

@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
-from pipeline_pack import load_pack, packs_dir
+from pipeline_pack import load_pack, pack_folder
 
 Predicate = Callable[[Path, str, object], bool]
 
@@ -23,7 +23,7 @@ CLAUSE_KEYS = frozenset(
 
 
 def routing_conditions_path(pipeline_id: str, root: Path | None = None) -> Path:
-    return packs_dir(root) / pipeline_id / "routing_conditions.yaml"
+    return pack_folder(pipeline_id, root) / "routing_conditions.yaml"
 
 
 def load_routing_conditions(pipeline_id: str, root: Path | None = None) -> dict:

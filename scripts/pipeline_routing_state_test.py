@@ -127,6 +127,31 @@ class SpecOverlayAlwaysOnTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_live_overlay_drops_deferred_json_gaps(self) -> None:
+        from feature_status import FeatureStatus
+        from pipeline_status import populate_status
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-defer-"))
+        slug = "demo"
+        try:
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            (fw / f"{slug}.md").write_text(
+                "# spec\n\n[GAP-NFR-06]\n\n| GAP-NFR-06 | Gap | Отложено (D-14) |\n",
+                encoding="utf-8",
+            )
+            path = routing_state_path(tmp, slug)
+            path.write_text(
+                json.dumps(example_payload(slug, open_gaps=["GAP-NFR-06", "GAP-KEEP"])),
+                encoding="utf-8",
+            )
+            os.utime(path, (time.time() + 60, time.time() + 60))
+            status = FeatureStatus(slug=slug)
+            populate_status(status, tmp, slug, "spec")
+            self.assertEqual(status.open_gaps, ["GAP-KEEP"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 class SpecValidateRoutingStateTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -238,6 +263,8 @@ class SpecDispatchMissingJsonTest(unittest.TestCase):
 
 
 class StepSyncTest(unittest.TestCase):
+    """Gate stamp vs mutate → analyzer. Golden twins: spec 26–29."""
+
     def test_check_feature_step_stamps_json_and_unblocks_dispatch(self) -> None:
         from pipeline_dispatch import build_dispatch
 

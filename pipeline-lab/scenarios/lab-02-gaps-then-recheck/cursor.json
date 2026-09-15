@@ -1,0 +1,5 @@
+[
+  {"step": "analyze-routing", "variant": "dirty"},
+  {"step": "check-feature", "variant": "dirty"},
+  {"step": "resolve-gaps", "variant": "ok"}
+]

@@ -26,9 +26,14 @@ YAML is still only `priority` + `when` + `next` (+ optional `outcome`). No formu
 
 ### Invariants
 
-Run after rules with `priority <= invariant_after_priority` (spec: 30).
+Run after rules with `priority <= invariant_after_priority` (spec: 70 — after
+needs-answer and pending-apply, before open_gaps / open_challenges).
 
 - spec: `needs-check-feature` → `check-feature`
+
+When run-log / JSON `position` says where we stand, a rule whose `next` is
+not an outgoing graph edge is skipped. Incomplete step (`retry`/`fail`) may
+repeat itself. No position (empty log) → unconstrained rules (first step / goldens).
 
 ### Rules
 

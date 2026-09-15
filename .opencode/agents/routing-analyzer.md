@@ -6,14 +6,14 @@ description: >-
 model: inherit
 approvalMode: auto-edit
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - list_directory
-  - run_shell_command
-  - skill
-  - write_file
-  - edit
+  read: true
+  grep: true
+  glob: true
+  list: true
+  bash: true
+  skill: true
+  write: true
+  edit: true
 ---
 
 > OpenCode: скилл загружай через `skill` или `.opencode/skills/analyze-routing/SKILL.md`.

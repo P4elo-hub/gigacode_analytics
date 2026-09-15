@@ -1,0 +1,36 @@
+step_to_subagent:
+  find-context: context-researcher
+  analyze-routing: routing-analyzer
+  check-feature: spec-reviewer
+  resolve-gaps: gap-resolver
+  challenge-feature: spec-challenger
+  resolve-challenges: challenge-resolver
+  check-feature-code: code-auditor
+  resolve-code-alignment: alignment-resolver
+orchestrator_owned:
+  - write-feature
+gated_subagents:
+  - context-researcher
+  - routing-analyzer
+  - spec-writer
+  - spec-reviewer
+  - gap-resolver
+  - spec-challenger
+  - challenge-resolver
+  - code-auditor
+  - alignment-resolver
+restartable_steps:
+  - find-context
+  - write-feature
+  - analyze-routing
+  - check-feature
+  - resolve-gaps
+  - challenge-feature
+  - resolve-challenges
+  - check-feature-code
+  - resolve-code-alignment
+delegate_modes:
+  write_feature_cycle:
+    step: write-feature
+    subagent: spec-writer
+    persistent: true

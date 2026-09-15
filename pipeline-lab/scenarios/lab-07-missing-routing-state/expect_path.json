@@ -1,0 +1,4 @@
+[
+  {"action": "task", "step": "analyze-routing"},
+  {"action": "task", "step": "challenge-feature"}
+]

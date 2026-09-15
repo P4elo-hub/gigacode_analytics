@@ -15,6 +15,8 @@ user-invocable: false
 Контракт: `scripts/PIPELINE-ROUTING-STATE.md`. Имена и семантика полей —
 `pipelines/spec/routing_conditions.yaml` (SSOT). `collectors.py` больше не
 источник семантики. `next_step` / `ready` / `orchestrator_mode` **не писать**.
+Где сейчас стоим (`position`) пишет хук SubagentStop, не ты. При перезаписи
+JSON сохрани top-level `position` и `step_completion`, если они уже есть.
 
 Граф: node `analyze-routing` в `pipelines/spec/graph.yaml` (и `routing-poc`).
 После mutating step оркестратор снова delegate; если JSON missing/stale —
@@ -45,7 +47,8 @@ challenge-feature, check-feature-code, resolve-code-alignment, find-context
    - `AGENT_RUN_LOG` — нужен для `needs_check_feature` (последний ok check-feature vs SPEC mtime)
 3. Заполни `fields` по `routing_conditions.yaml`. Presence-флаги — существование
    файлов. Домен:
-   - `open_gaps`: inline `[GAP-…]` + табличные GAP без «закрыт»/«closed»
+   - `open_gaps`: inline `[GAP-…]` + табличные GAP; id с «закрыт»/«closed»/
+     «отложено»/«deferred» в строке таблицы — не открытый (и inline того же id тоже нет)
    - DECISIONS Status `needs-answer` / `pending-apply`; alignment-subset если
      Relates ~ `[FICTKAM]-<n>` (не Q-*, не CH-*)
    - `challenges.*` из таблицы CH; dispatch смотрит `challenges.open`

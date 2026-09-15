@@ -149,11 +149,23 @@
             "timeout": 30000
           }
         ]
+      },
+      {
+        "matcher": "^(read_file|grep_search|glob|list_directory|run_shell_command)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".qwen/hooks/pipeline-box-orchestrator.sh",
+            "name": "pipeline-box-orchestrator",
+            "description": "deny main-session reads of pipelines/ and router sources",
+            "timeout": 10000
+          }
+        ]
       }
     ],
     "SubagentStop": [
       {
-        "matcher": "^(context-researcher|spec-writer|spec-reviewer|gap-resolver|spec-challenger|challenge-resolver|code-auditor|alignment-resolver|review-capturer|regression-analyst|calibration-proposer|calibration-applier|benchmark-runner)$",
+        "matcher": "^(context-researcher|routing-analyzer|spec-writer|spec-reviewer|gap-resolver|spec-challenger|challenge-resolver|code-auditor|alignment-resolver|review-capturer|regression-analyst|calibration-proposer|calibration-applier|benchmark-runner)$",
         "hooks": [
           {
             "type": "command",

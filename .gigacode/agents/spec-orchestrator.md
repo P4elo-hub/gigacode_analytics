@@ -80,6 +80,11 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
 **Запрещено завершать ход**, пока `must_continue: true`. Не спрашивай «продолжить?».
 После каждого `task` — hook SubagentStop → снова **`pipeline_delegate.py --pipeline spec`** → `task`.
 
+**Не отлаживай движок.** Не читай `pipelines/`, `scripts/pipeline_*`,
+`routing_conditions.yaml`, `predicates.py`. Повтор `next_step` из delegate —
+исполни `task` ещё раз. Если без человека нельзя — `ask_user_question`, не grep
+роутера.
+
 Правило **`run-until-done`**: выход **только** на `ready` (PASS / PASS WITH GAPS),
 `ask_user` (строки `needs-answer` в DECISIONS) или `stopped` (лимит alignment, нет
 брифа, права). Fail субагента, truncated output, idle CLI, `pending-apply` — **не**
@@ -265,6 +270,8 @@ PreToolUse hook блокирует `task` с неверным subagent.
 - Отказ по правам у субагента — не перезапускай его вслепую: разберись,
   какой путь или команда заблокированы, и сообщи пользователю.
 - Не спрашивать подтверждение next step («запускать check-feature?» и аналоги).
+- Не читать движок пайплайна (`pipelines/`, `scripts/pipeline_*`) — только
+  `pipeline_delegate.py` и артефакты фичи / `DECISIONS`.
 
 # Завершение
 

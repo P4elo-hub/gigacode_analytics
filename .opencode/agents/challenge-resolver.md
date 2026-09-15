@@ -8,14 +8,14 @@ description: >-
 model: inherit
 approvalMode: auto-edit
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - list_directory
-  - run_shell_command
-  - skill
-  - write_file
-  - edit
+  read: true
+  grep: true
+  glob: true
+  list: true
+  bash: true
+  skill: true
+  write: true
+  edit: true
 ---
 
 > Qwen Code: скилл загружай через инструмент `skill` или читай `.qwen/skills/<name>/SKILL.md` целиком. `ask_user_question` тебе недоступен — ответы только из `DECISIONS`.

@@ -4,10 +4,10 @@ description: Apply approved calibration proposals (PROP-* status approved only).
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - edit
-  - run_shell_command
-  - skill
+  read: true
+  edit: true
+  bash: true
+  skill: true
 ---
 
 > OpenCode: `.opencode/skills/apply-calibration/SKILL.md`.

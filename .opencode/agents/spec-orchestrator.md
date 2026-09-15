@@ -8,16 +8,16 @@ description: >-
 model: inherit
 approvalMode: default
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - list_directory
-  - run_shell_command
-  - skill
-  - task
-  - ask_user_question
-  - write_file
-  - edit
+  read: true
+  grep: true
+  glob: true
+  list: true
+  bash: true
+  skill: true
+  task: true
+  question: true
+  write: true
+  edit: true
 ---
 
 > Qwen Code: скилл загружай через инструмент `skill` или читай `.qwen/skills/<name>/SKILL.md` целиком. Вопросы пользователю — `ask_user_question`. Делегирование — `task` с `subagent_type` и `run_in_background: false`.

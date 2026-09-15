@@ -59,8 +59,23 @@ def resolve_pipeline_id(
 
 
 def load_pipeline_schema(pipeline_id: str) -> dict:
+    from pipeline_pack import load_pack, resolve_pack_dir, resolve_pack_pipeline_id
+
     pipe_id = normalize_pipeline_id(pipeline_id)
+    override = resolve_pack_dir()
+    override_id = resolve_pack_pipeline_id()
+    if override is not None and (override_id is None or pipe_id == override_id):
+        return load_pack(pipe_id)["graph"]
     return load_schema_root()["pipelines"][pipe_id]
+
+
+def outgoing_steps(schema: dict, from_step: str) -> set[str]:
+    """Step ids reachable in one edge from ``from_step``."""
+    return {
+        str(edge.get("to") or "")
+        for edge in schema.get("edges") or []
+        if edge.get("from") == from_step and edge.get("to")
+    }
 
 
 def load_pipeline_dispatch(pipeline_id: str) -> dict | None:

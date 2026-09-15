@@ -7,7 +7,9 @@ alwaysApply: true
 ## Process antipatterns
 
 - **Orchestrator improvises next step** — не угадывать шаг; только
-  `pipeline_dispatch.py <slug> --json`. Завершать ход при `must_continue: true` запрещено.
+  `pipeline_delegate.py <slug>`. Завершать ход при `must_continue: true` запрещено.
+- **Orchestrator debugs the engine** — повтор шага из delegate не повод открывать
+  `pipelines/` и `predicates.py`; исполни JSON или спроси пользователя.
 - **Stopping after subagent fail** — fail/truncated output → `append_run_log --result fail`
   → dispatch → retry `task` в том же ходе. Не ждать «продолжи» и не считать idle CLI концом.
 - **Pausing on pending-apply** — `pending-apply` в DECISIONS → сразу resolver apply;
