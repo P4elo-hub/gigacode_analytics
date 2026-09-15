@@ -41,6 +41,7 @@ const state = {
   pipeline: "spec",
   graphView: "target",
   staleCollapsed: true,
+  showRoutingLoops: false,
   source: null,
   graph: null,
   dismissedNotices: loadDismissedNotices(),
@@ -208,6 +209,18 @@ function initCytoscape() {
         },
       },
       {
+        selector: 'node[kind = "routing-hub"]',
+        style: {
+          width: 132,
+          height: 42,
+          "font-size": "10px",
+          shape: "round-hexagon",
+          "background-color": "#1e293b",
+          "border-color": "#475569",
+          color: "#cbd5e1",
+        },
+      },
+      {
         selector: 'node[kind = "visit"]',
         style: {
           width: 188,
@@ -312,20 +325,67 @@ function initCytoscape() {
           "line-color": "data(color)",
           "target-arrow-color": "data(color)",
           "target-arrow-shape": "triangle",
-          "curve-style": "taxi",
-          "taxi-direction": "vertical",
-          "taxi-turn": 28,
-          "taxi-turn-min-distance": 16,
+          "curve-style": "bezier",
+          "control-point-step-size": 42,
           label: "data(label)",
           "font-size": "8px",
           color: "#94a3b8",
+          "text-background-color": "#0f172a",
+          "text-background-opacity": 0.72,
+          "text-background-padding": "2px",
           "text-rotation": "autorotate",
+          opacity: 0.92,
+        },
+      },
+      {
+        selector: 'edge[kind = "main"]',
+        style: {
+          width: 2.5,
+          "curve-style": "straight",
+          opacity: 1,
+        },
+      },
+      {
+        selector: 'edge[kind = "branch"]',
+        style: {
+          width: 2,
+          "line-style": "dashed",
+          "line-dash-pattern": [8, 5],
+          "line-color": "#64748b",
+          "target-arrow-color": "#64748b",
+          opacity: 0.88,
+        },
+      },
+      {
+        selector: 'edge[kind = "loop"]',
+        style: {
+          width: 1.5,
+          "line-style": "dotted",
+          "line-color": "#6366f1",
+          "target-arrow-color": "#6366f1",
+          opacity: 0.38,
+          "font-size": "7px",
+        },
+      },
+      {
+        selector: 'edge[kind = "loop"][traversed = "true"]',
+        style: {
+          opacity: 0.72,
+          width: 2,
         },
       },
       {
         selector: "edge[traversed = 'true']",
         style: {
           width: 3,
+          opacity: 1,
+        },
+      },
+      {
+        selector: 'edge[kind = "branch"][traversed = "true"]',
+        style: {
+          "line-color": "data(color)",
+          "target-arrow-color": "data(color)",
         },
       },
     ],
@@ -939,6 +999,66 @@ function setGraphViewTabs() {
   document.getElementById("timing-panel")?.classList.toggle("hidden", !isTiming);
   document.getElementById("legend")?.classList.toggle("hidden", isTiming);
   document.getElementById("stale-toggle")?.classList.toggle("hidden", isTiming || state.graphView !== "actual");
+  updateRoutingLoopsToggleUi();
+}
+
+function updateRoutingLoopsToggleUi() {
+  const btn = document.getElementById("routing-loops-toggle");
+  if (!btn) return;
+  const show =
+    state.graphView === "target" && state.pipeline === "spec" && state.graph?.pipeline === "spec";
+  btn.classList.toggle("hidden", !show);
+  if (!show) return;
+  btn.textContent = state.showRoutingLoops
+    ? "Скрыть refresh-петли"
+    : "Показать refresh-петли";
+  btn.classList.toggle("active", state.showRoutingLoops);
+}
+
+function setRoutingLoopsVisible(visible) {
+  state.showRoutingLoops = visible;
+  saveSelection();
+  updateRoutingLoopsToggleUi();
+  if (state.graph) renderGraph(state.graph);
+}
+
+function expectedRoutingTarget(data) {
+  const summary = data?.divergence?.summary;
+  const dispatch = data?.dispatch || {};
+  return (
+    summary?.expected_step ||
+    dispatch.next_step ||
+    data?.current?.step ||
+    ""
+  );
+}
+
+function shouldShowTargetEdge(edge, data) {
+  const kind = edge.kind || "main";
+  if (kind !== "loop" && edge.from !== "analyze-routing") return true;
+
+  if (state.showRoutingLoops) return true;
+
+  if (edge.from === "analyze-routing") {
+    const expected = expectedRoutingTarget(data);
+    if (edge.to === expected) return true;
+    if (edge.to === "done" && (data?.outcome?.ready || data?.dispatch?.ready)) return true;
+    return Boolean(edge.traversed);
+  }
+
+  if (kind === "loop") {
+    return Boolean(edge.traversed);
+  }
+
+  return true;
+}
+
+function targetEdgeLabel(edge) {
+  const kind = edge.kind || "main";
+  if (kind === "loop" && !state.showRoutingLoops) return "";
+  const label = edge.label || "";
+  if (kind === "branch" && label.length > 28) return `${label.slice(0, 26)}…`;
+  return label;
 }
 
 function timingStepColor(stepId) {
@@ -1242,6 +1362,9 @@ function updateGraphViewHint(data) {
     } else {
       el.textContent = `${n} шагов — реальный порядок вызовов subagent`;
     }
+  } else if (state.pipeline === "spec" && !state.showRoutingLoops) {
+    el.textContent =
+      "Основной поток и ветки · refresh analyze-routing скрыты (кнопка справа)";
   } else {
     el.textContent = "Шаги spec; hook/validate — в «Инфраструктура» справа";
   }
@@ -1257,6 +1380,7 @@ function buildTargetElements(data) {
   const elements = [];
   for (const node of data.nodes || []) {
     const pos = node.position || { x: 0, y: 0 };
+    const kind = node.id === "analyze-routing" ? "routing-hub" : node.kind;
     elements.push({
       group: "nodes",
       data: {
@@ -1265,20 +1389,23 @@ function buildTargetElements(data) {
         label: formatNodeLabel(node),
         color: node.color,
         state: node.state,
-        kind: node.kind,
+        kind,
       },
       position: pos,
     });
   }
   for (const edge of data.edges || []) {
+    if (!shouldShowTargetEdge(edge, data)) continue;
+    const kind = edge.kind || "main";
     elements.push({
       group: "edges",
       data: {
         id: edge.id,
         source: edge.from,
         target: edge.to,
-        label: edge.label || "",
+        label: targetEdgeLabel(edge),
         color: edge.color,
+        kind,
         traversed: edge.traversed ? "true" : "false",
       },
     });
@@ -1607,6 +1734,7 @@ function saveSelection() {
       pipeline: state.pipeline,
       graphView: state.graphView,
       staleCollapsed: state.staleCollapsed,
+      showRoutingLoops: state.showRoutingLoops,
     })
   );
 }
@@ -1666,6 +1794,7 @@ function renderGraph(data) {
 
   setGraphViewTabs();
   updateGraphViewHint(data);
+  updateRoutingLoopsToggleUi();
 
   if (state.graphView === "timing") {
     renderTimingsPanel(data.timings);
@@ -1900,12 +2029,17 @@ async function init() {
     state.pipeline = saved.pipeline || config.default_pipeline || "spec";
     state.graphView = ["actual", "timing"].includes(saved.graphView) ? saved.graphView : "target";
     state.staleCollapsed = saved.staleCollapsed !== false;
+    state.showRoutingLoops = saved.showRoutingLoops === true;
     setActiveTab(state.pipeline);
     setGraphViewTabs();
     state.slug = fillSlugSelect(payload, config, saved);
 
     document.getElementById("stale-toggle")?.addEventListener("click", () => {
       setStaleCollapsed(!state.staleCollapsed);
+    });
+
+    document.getElementById("routing-loops-toggle")?.addEventListener("click", () => {
+      setRoutingLoopsVisible(!state.showRoutingLoops);
     });
 
     document.querySelectorAll("#graph-view-tabs .tab").forEach((btn) => {

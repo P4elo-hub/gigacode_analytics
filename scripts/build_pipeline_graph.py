@@ -481,11 +481,12 @@ def _layout_vertical_chain(
 
 
 def _layout_spec_vertical(nodes: list[dict]) -> list[dict]:
-    """Top-to-bottom spec pipeline; branches on left/right."""
-    center_x = 360
-    left_x = 100
-    right_x = 620
-    step_y = 105
+    """Top-to-bottom spec pipeline: main spine, side branches, routing hub on the left."""
+    center_x = 440.0
+    left_x = 150.0
+    routing_x = 40.0
+    right_x = 740.0
+    step_y = 112.0
     main_chain = [
         "spec-orchestrator",
         "find-context",
@@ -495,18 +496,22 @@ def _layout_spec_vertical(nodes: list[dict]) -> list[dict]:
         "done",
     ]
     positions: dict[str, tuple[float, float]] = {}
-    y = 70
+    y = 64.0
     for node_id in main_chain:
         positions[node_id] = (center_x, y)
         y += step_y
 
     cf_y = positions["check-feature"][1]
     cc_y = positions["check-feature-code"][1]
+    wf_y = positions["write-feature"][1]
+    orch_y = positions["spec-orchestrator"][1]
+
     positions["resolve-gaps"] = (left_x, cf_y)
     positions["resolve-code-alignment"] = (left_x, cc_y)
-    positions["challenge-feature"] = (right_x, cf_y - 45)
-    positions["resolve-challenges"] = (right_x, cf_y + 45)
-    positions["archive-session"] = (right_x, positions["spec-orchestrator"][1])
+    positions["challenge-feature"] = (right_x, cf_y - 50)
+    positions["resolve-challenges"] = (right_x, cf_y + 50)
+    positions["archive-session"] = (right_x, orch_y + 18)
+    positions["analyze-routing"] = (routing_x, (wf_y + cf_y) / 2)
 
     return _apply_positions(nodes, positions)
 

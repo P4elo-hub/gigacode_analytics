@@ -54,6 +54,9 @@
           <button type="button" class="tab" data-view="timing">Время</button>
         </nav>
         <span id="graph-view-hint" class="graph-view-hint">Содержательные шаги spec (не hook/validate)</span>
+        <button type="button" id="routing-loops-toggle" class="routing-loops-toggle hidden">
+          Показать refresh-петли
+        </button>
         <button type="button" id="stale-toggle" class="stale-toggle hidden">
           Развернуть отменённые
         </button>
@@ -88,6 +91,7 @@
           <span class="dot diverged"></span> mismatch
           <span class="dot redo"></span> заново
           <span class="dot stale"></span> устарел (лог)
+          <span class="legend-edges"> · — основной · ╌ ветка · · refresh</span>
         </span>
         <span class="legend-actual hidden">
           <span class="dot ok"></span> шаг ok
@@ -168,6 +172,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=13"></script>
+  <script src="/static/app.js?v=14"></script>
 </body>
 </html>
