@@ -39,7 +39,8 @@ Workspace пишется и гоняется в **GigaCode CLI** (`gigacode`). �
 ## Пайплайн
 
 ```
-/find-context → /write-feature → /check-feature → /resolve-gaps
+/analyze-routing (если нет routing-state.json или JSON stale)
+  → /find-context → /write-feature → /check-feature → /resolve-gaps
   → /challenge-feature → /resolve-challenges
   → /check-feature-code ↔ /resolve-code-alignment (≤3)
 ```

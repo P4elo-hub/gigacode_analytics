@@ -255,7 +255,8 @@ when_to_run_analyzer:
   - routing-state missing
   - invalid JSON / schema_version mismatch / router-owned keys in fields
   - routing-state older than any stale_vs artifact
-  - after write-feature, check-feature, resolve-*, challenge-feature, check-feature-code, resolve-code-alignment
+  - after mutating steps (write-feature, resolve-*, challenge-feature, check-feature-code, resolve-code-alignment, find-context)
+  - after check-feature only if that step rewrote a stale_vs artifact
 validate_ids:
   - routing-state-missing
   - routing-state-stale
@@ -264,8 +265,18 @@ overlay:
   apply_when:
     - collector_mode routing_state (spec pack default — always)
   collector_order: routing_state is the only overlay-field collector
-  freshness: dispatch P5 routing_state_needs_refresh → analyze-routing
-  needs_check_feature: analyzer writes the bool + reason into JSON (includes run-log); engine does not recompute on the hot path
+  freshness: dispatch P5 routing_state_needs_refresh → analyze-routing (missing, stale, or invalid JSON)
+  hook_sync_after_step:
+    fn: sync_routing_state_after_step
+    module: pipelines/<pack>/routing_state_sync.py
+    metadata: step_completion
+    skip_after_steps: [analyze-routing]
+    sync_after_steps: [check-feature]  # gate only; mutating steps → stale → analyzer
+  needs_check_feature: >
+    Analyzer (LLM) writes bool + reason into fields. SubagentStop hook stamps
+    gate steps in step_completion (spec: check-feature) and pack refresh_fields
+    clears needs_check_feature. Mutating steps are not stamped. If the gate step
+    rewrote artifacts, hook skips so JSON stays stale. Router reads fields only.
 edge_conditions:
   _rs_missing_with_error:
     expr:
@@ -275,15 +286,20 @@ edge_conditions:
         - field: routing_state_error
           op: neq
           value: ""
-  routing_state_needs_refresh:
+  _rs_payload_stale_or_invalid:
     expr:
       any:
         - field: routing_state_invalid
           op: truthy
-        - ref: _rs_missing_with_error
         - field: stale
           op: contains
           value: routing_state
+  routing_state_needs_refresh:
+    expr:
+      any:
+        - field: has_routing_state
+          op: falsy
+        - ref: _rs_payload_stale_or_invalid
     dispatch:
       priority: 5
       next: analyze-routing

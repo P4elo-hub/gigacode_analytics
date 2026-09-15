@@ -17,8 +17,8 @@ user-invocable: false
 источник семантики. `next_step` / `ready` / `orchestrator_mode` **не писать**.
 
 Граф: node `analyze-routing` в `pipelines/spec/graph.yaml` (и `routing-poc`).
-После mutating step оркестратор снова delegate; если JSON missing/stale —
-router выбирает этот шаг.
+После mutating step оркестратор снова delegate; если JSON missing/stale/invalid —
+router выбирает этот шаг (P5, всегда до domain-шагов).
 
 ## Когда
 
@@ -26,9 +26,10 @@ router выбирает этот шаг.
 или mtime старше любого из: SPEC, CONTEXT_DOC, DECISIONS, CHALLENGES,
 ALIGNMENT, GAPS_MAP, CHALLENGES_MAP (`stale_vs`).
 
-После: write-feature, check-feature, resolve-gaps, resolve-challenges,
+После mutating-шагов: write-feature, resolve-gaps, resolve-challenges,
 challenge-feature, check-feature-code, resolve-code-alignment, find-context
-(если записал CONTEXT).
+(если записал CONTEXT). Check-feature **без** правок файлов — хук, не этот шаг.
+Если check-feature всё же переписал SPEC — JSON stale, снова этот шаг.
 
 ## Шаги
 

@@ -32,6 +32,8 @@ SPEC_STALE_VS = (
 )
 POC_STALE_VS = ("spec",)
 ENGINE_RECOMPUTED_FIELDS = frozenset({"stale", "alignment_stale"})
+# Top-level JSON metadata (hook); router ignores — see step_completion.
+SYNC_METADATA_KEYS = frozenset({"step_completion"})
 ROUTER_OWNED = frozenset(
     {
         "next_step",
@@ -107,6 +109,11 @@ __all__ = [
     "add_routing_state_advice",
     "load_spec_routing_conditions",
     "default_replay_path",
+    "SYNC_METADATA_KEYS",
+    "load_routing_state_sync_config",
+    "routing_state_sync_enabled",
+    "stale_vs_for_pipeline",
+    "sync_routing_state_after_step",
 ]
 
 
@@ -115,6 +122,7 @@ def example_payload(slug: str, *, open_gaps: list[str] | None = None) -> dict:
         "schema_version": SCHEMA_VERSION,
         "slug": slug,
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "step_completion": {},
         "fields": {
             "has_context": True,
             "has_spec": True,
@@ -150,6 +158,9 @@ def validate_payload(payload: Any, *, slug: str | None = None) -> list[str]:
         errors.append(f"schema_version must be {SCHEMA_VERSION}, got {version!r}")
     if slug and payload.get("slug") not in (None, "", slug):
         errors.append(f"slug mismatch: file {payload.get('slug')!r} vs {slug!r}")
+    completion = payload.get("step_completion")
+    if completion is not None and not isinstance(completion, dict):
+        errors.append("step_completion must be a mapping")
     fields = payload.get("fields")
     if not isinstance(fields, dict):
         errors.append("fields must be a mapping")
@@ -195,7 +206,7 @@ def apply_routing_state_fields(status, fields: dict) -> None:
 
 def apply_routing_state_file(status, path: Path, *, slug: str | None = None) -> str:
     payload, error = load_routing_state(path, slug=slug)
-    status.routing_state_invalid = bool(error)
+    status.routing_state_invalid = bool(error) and error != "missing"
     status.routing_state_error = error
     if payload is None:
         return error
@@ -328,8 +339,124 @@ def spec_overlay_should_apply(root: Path, task_id: str, paths: dict[str, Path]) 
     return collector_mode == "routing_state"
 
 
+def load_routing_state_sync_config(pipeline_id: str) -> dict | None:
+    """Pack hook sync config when collector_mode is routing_state (authoring YAML)."""
+    from pipeline_pack import load_pack, repo_root
+
+    spec = load_pack(pipeline_id, repo_root()).get("status") or {}
+    if str(spec.get("collector_mode") or "") != "routing_state":
+        return None
+    raw = spec.get("routing_state_sync")
+    if raw is False:
+        return None
+    defaults: dict[str, Any] = {
+        "skip_after_steps": ["analyze-routing"],
+        "sync_after_steps": [],
+    }
+    if isinstance(raw, dict):
+        return {**defaults, **raw}
+    return defaults
+
+
+def routing_state_sync_enabled(pipeline_id: str) -> bool:
+    return load_routing_state_sync_config(pipeline_id) is not None
+
+
+def stale_vs_for_pipeline(pipeline_id: str) -> tuple[str, ...]:
+    """Artifact names whose mtime makes routing-state stale (pack YAML)."""
+    from pipeline_pack import load_pack, repo_root
+
+    pack = load_pack(pipeline_id, repo_root())
+    rc = pack.get("routing_conditions") or {}
+    vs = rc.get("stale_vs")
+    if isinstance(vs, list) and vs:
+        return tuple(str(item) for item in vs)
+    rights: list[str] = []
+    for rule in (pack.get("status") or {}).get("stale") or []:
+        if not isinstance(rule, dict):
+            continue
+        if str(rule.get("id") or "") != STALE_ID:
+            continue
+        right = str(rule.get("right") or "")
+        if right and right not in rights:
+            rights.append(right)
+    if rights:
+        return tuple(rights)
+    return POC_STALE_VS if pipeline_id == PIPELINE_POC_ID else SPEC_STALE_VS
+
+
+def _hook_sync_allowed(cfg: dict, step: str) -> bool:
+    if step in {str(item) for item in (cfg.get("skip_after_steps") or [])}:
+        return False
+    allowed = cfg.get("sync_after_steps")
+    if not isinstance(allowed, list) or not allowed:
+        return False
+    return step in {str(item) for item in allowed}
+
+
+def sync_routing_state_after_step(
+    root: Path,
+    slug: str,
+    step: str,
+    result: str,
+    *,
+    pipeline_id: str,
+) -> bool:
+    """Stamp routing-state.json after a gate step that did not mutate artifacts.
+
+    Mutating steps are not synced: JSON stays older than files → stale →
+    analyze-routing. If a listed gate step still left artifacts newer than JSON,
+    skip the stamp so the analyzer runs.
+    """
+    cfg = load_routing_state_sync_config(pipeline_id)
+    if cfg is None or result != "ok":
+        return False
+    if not _hook_sync_allowed(cfg, step):
+        return False
+
+    path = routing_state_path(root, slug)
+    payload, error = load_routing_state(path, slug=slug)
+    if payload is None or error:
+        return False
+
+    from pipeline_pack import load_pack_module
+    from pipeline_status import resolve_artifact_paths
+
+    paths = resolve_artifact_paths(root, slug, pipeline_id)
+    if routing_state_is_stale(
+        paths,
+        stale_vs=stale_vs_for_pipeline(pipeline_id),
+        routing_path=path,
+    ):
+        return False
+
+    sync_mod = load_pack_module(pipeline_id, "routing_state_sync")
+    if sync_mod is None or not callable(getattr(sync_mod, "refresh_fields", None)):
+        return False
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    completion = dict(payload.get("step_completion") or {})
+    completion[step] = now
+    payload["step_completion"] = completion
+
+    fields = payload.setdefault("fields", {})
+    refreshed = sync_mod.refresh_fields(root, slug, paths, completion, dict(fields))
+    if isinstance(refreshed, dict):
+        fields.update(refreshed)
+
+    payload["generated_at"] = now
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
 def spec_overlay_collector(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
-    """Spec overlay. Live default: always apply JSON (collector_mode routing_state)."""
+    """Spec overlay. Live default: read JSON only (collector_mode routing_state).
+
+    Missing JSON → dispatch P5 analyze-routing (no baseline on live path).
+    Baseline parser is CI/replay only (`routing_state_baseline.py`).
+    Gate steps (no file change) stamp JSON via hook; mutating steps leave it
+    stale so analyze-routing rewrites the snapshot.
+    """
     if not spec_overlay_should_apply(root, task_id, paths):
         return
     path = _effective_routing_state_path(root, task_id, paths)

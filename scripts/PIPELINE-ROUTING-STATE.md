@@ -66,7 +66,8 @@ Analyzer populates the same names so overlay is 1:1.
 | `critical_major_mismatch` | JSON | `critical_major_mismatch_resolvable` |
 | `alignment_stale` | engine after overlay | mismatch / pending-apply alignment |
 | `stale` | engine stale[] | `alignment_missing_or_stale`; `routing_state` id → P5 |
-| `needs_check_feature` + `_reason` | JSON (analyzer / baseline) | invariant `needs-check-feature` |
+| `needs_check_feature` + `_reason` | JSON fields (hook sync + analyzer) | invariant `needs-check-feature` |
+| `step_completion` | JSON metadata (hook only) | not router overlay |
 
 Not used by spec dispatch: `open_questions`, `spec_lines`, `context_lines`,
 other `challenges.*` counts (display). Engine still computes **mtime** `stale[]`
@@ -84,8 +85,9 @@ Treat as “run analyzer” (`when: routing_state_needs_refresh`, spec P5):
 2. Invalid JSON or `schema_version` ≠ 1, or `fields` sets router-owned keys.
 3. `stale` rule `routing_state` older than spec / context / decisions /
    challenges / alignment / gaps_map / challenges_map (`stale_vs`).
-4. After any step that mutates those artifacts (write/check/resolve/challenge/
-   alignment / find-context).
+4. After any **mutating** step (write / resolve / challenge / alignment /
+   find-context). Gate steps (check-feature with no file change) do **not**
+   go here — the hook stamps JSON instead.
 
 Validate ids (pack `extra_advice`, **block** on spec): `routing-state-missing`,
 `routing-state-stale`. Invalid JSON is reported as missing. Dispatch also
@@ -97,21 +99,30 @@ routes to `analyze-routing`. POC validate stays **warn**.
 |---------|-----|
 | No `ROUTING_STATE` / stale / invalid | spec (and POC) router → step `analyze-routing` |
 | Orchestrator just finished a mutating step | next delegate; stale rule fires |
+| Gate step that still rewrote artifacts | hook skips stamp; stale rule fires |
 | Manual `/analyze-routing <slug>` | human |
 
 Do **not** call the analyzer from `pipeline_dispatch.py`.
 
-## needs_check_feature
+## Hook sync (gate steps only)
 
-**Choice:** analyzer writes `needs_check_feature` + `needs_check_feature_reason`
-into JSON (same algorithm as Phase 11 collectors, including run-log). Engine
-does **not** re-parse SPEC on the hot path. Invariant
-`needs-check-feature` is a thin reader of those overlay fields.
+Generic box — not spec-only. Hook **does not** rewrite JSON after mutating
+steps (that would clear `stale` and skip the LLM analyzer).
 
-Golden cases `03-spec-needs-check`, `04-spec-newer-gaps-map`,
-`16-graph-gate-run-log`, `18-spec-newer-challenges-map` encode the outcome in
-`routing_state` (option B). Run-log is not in `stale_vs` — the JSON must
-already contain the invariant result. See
+1. Pack `status.yaml`: `collector_mode: routing_state` + `routing_state_sync`.
+2. `sync_after_steps` — allowlist of **gate** steps (no artifact rewrite).
+   Spec: `check-feature`. Empty list = never stamp (routing-poc).
+3. `skip_after_steps` — extra deny (default: `analyze-routing`).
+4. Pack module `pipelines/<id>/routing_state_sync.py` → `refresh_fields(...)`
+   updates **invariants only** (e.g. `needs_check_feature`). No domain parse.
+5. If JSON is already stale vs `stale_vs`, hook **skips** so analyzer runs.
+6. Router reads `fields` only — no run-log on dispatch.
+
+Spec invariant `needs_check_feature`: pack config
+`routing_state_sync.invariants.needs_check_feature.satisfied_by_step` names
+which completed gate step clears the flag (default `check-feature`).
+
+Golden `25-check-feature-stamped-json`. See
 [fixtures/dispatch_golden/spec/COVERAGE.md](fixtures/dispatch_golden/spec/COVERAGE.md).
 
 ## Packs

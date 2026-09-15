@@ -1,5 +1,10 @@
 # POC status: routing-state.json overlay + spec file for stale mtime.
 task_kind: slug
+collector_mode: routing_state
+routing_state_sync:
+  skip_after_steps:
+    - analyze-routing
+  sync_after_steps: []
 artifacts:
   routing_state:
     path: Feature-writing/{task_id}/{task_id}-routing-state.json

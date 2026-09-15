@@ -44,6 +44,11 @@ Workspace пишется и гоняется в **Qwen Code CLI** (`qwen`). Об
   → /check-feature-code ↔ /resolve-code-alignment (≤3)
 ```
 
+Нет `<slug>-routing-state.json` → delegate всегда даст `analyze-routing` (P5),
+потом `find-context` / domain-шаги. После mutating step — снова delegate;
+устаревший JSON → снова `analyze-routing`. Check-feature без правок файлов
+не зовёт анализатор: хук ставит stamp в JSON.
+
 Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli qwen` →
 `action: task` → **только** `task.subagent_type` из JSON. После subagent — снова delegate.
 **Не завершай ход**, пока `must_continue: true`. Не спрашивай «запускать X?».

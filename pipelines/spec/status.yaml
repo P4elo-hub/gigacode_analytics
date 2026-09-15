@@ -13,11 +13,21 @@
 #   overlay fields                              collectors.routing_state (JSON)
 #   stale                                       stale[]
 #   alignment_stale                             alignment_stale
-#   needs_check_feature / _reason               JSON (analyzer / baseline etalon)
+#   needs_check_feature / _reason               JSON fields; hook stamp after gate steps
+#   step_completion                               JSON metadata (hook; not router overlay)
 # Core when names: not_has_<artifact> / {field}_gt_{n} from core_predicates.counters
-# Live overlay ALWAYS ON. Missing/stale JSON → dispatch analyze-routing (P5).
+# Live overlay ALWAYS ON. Missing JSON → P5 analyze-routing (no baseline on live path).
+# Stale/invalid JSON → dispatch analyze-routing (P5).
 task_kind: slug
 collector_mode: routing_state
+routing_state_sync:
+  skip_after_steps:
+    - analyze-routing
+  sync_after_steps:
+    - check-feature
+  invariants:
+    needs_check_feature:
+      satisfied_by_step: check-feature
 constants:
   alignment_max_iterations: 3
   verdict_pass: PASS

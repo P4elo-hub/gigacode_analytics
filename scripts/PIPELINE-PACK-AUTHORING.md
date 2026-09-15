@@ -189,6 +189,8 @@ PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec -
 `--init-pack <id> --template routing-state` adds `analyze-routing`, `routing_conditions.yaml`
 stub, overlay collector, and P5 `routing_state_needs_refresh`. `--from-json` with
 `status.collector_mode: routing_state` gets the same stub if `routing_conditions` is missing.
+Gate-step hook stamp is opt-in: `status.routing_state_sync.sync_after_steps` (spec:
+`check-feature`). Mutating steps are not listed — JSON stays stale → analyzer.
 
 ### Add one edge condition (no predicates.py)
 

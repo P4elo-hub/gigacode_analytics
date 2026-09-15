@@ -307,6 +307,13 @@
     },
     "routing-poc": {
       "task_kind": "slug",
+      "collector_mode": "routing_state",
+      "routing_state_sync": {
+        "skip_after_steps": [
+          "analyze-routing"
+        ],
+        "sync_after_steps": "[]"
+      },
       "artifacts": {
         "routing_state": {
           "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
@@ -350,6 +357,19 @@
     "spec": {
       "task_kind": "slug",
       "collector_mode": "routing_state",
+      "routing_state_sync": {
+        "skip_after_steps": [
+          "analyze-routing"
+        ],
+        "sync_after_steps": [
+          "check-feature"
+        ],
+        "invariants": {
+          "needs_check_feature": {
+            "satisfied_by_step": "check-feature"
+          }
+        }
+      },
       "constants": {
         "alignment_max_iterations": "3",
         "verdict_pass": "PASS",

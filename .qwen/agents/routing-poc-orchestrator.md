@@ -1,8 +1,8 @@
 ---
 name: routing-poc-orchestrator
 description: >-
-  Orchestrator for the routing-poc pipeline (Phase 10). Delegate-first;
-  analyzer writes routing-state.json, router reads it. Not spec-orchestrator.
+  Do NOT use for a feature brief. Only when the user explicitly says
+  routing-poc. Spec briefs stay on spec-orchestrator.
 model: inherit
 approvalMode: default
 tools:

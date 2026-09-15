@@ -1,7 +1,7 @@
 """Spec-pack extra validate rules (DECISIONS / challenge one-pass / check loop).
 
-Phase 12: routing-state-missing / routing-state-stale are block — dispatch
-already routes to analyze-routing (P5). See scripts/PIPELINE-ROUTING-STATE.md.
+Missing or stale routing-state.json is block — dispatch must run analyze-routing
+before domain steps. See scripts/PIPELINE-ROUTING-STATE.md.
 """
 
 from __future__ import annotations

@@ -4,7 +4,10 @@ Domain GAP/DECISIONS/CH/alignment parsing lives in:
 - skill analyze-routing (runtime LLM, routing_conditions.yaml)
 - scripts/routing_state_baseline.py (CI golden / replay etalon)
 
-INVARIANTS.needs-check-feature reads overlay fields — analyzer writes them.
+INVARIANTS.needs-check-feature reads overlay fields from JSON. SubagentStop hook
+stamps `step_completion` only after pack `sync_after_steps` (spec: check-feature).
+Mutating steps leave JSON stale so analyze-routing rewrites fields. Router reads
+fields only — no run-log on dispatch.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ COLLECTORS = {
 
 
 def needs_check_feature(_root: Path, _slug: str, status, _paths: dict[str, Path] | None = None):
-    """Thin reader: JSON overlay already set the fields. Do not re-parse SPEC."""
+    """Thin reader: gate-step hook stamp + analyzer keep JSON fields current."""
     return (
         bool(getattr(status, "needs_check_feature", False)),
         str(getattr(status, "needs_check_feature_reason", "") or ""),

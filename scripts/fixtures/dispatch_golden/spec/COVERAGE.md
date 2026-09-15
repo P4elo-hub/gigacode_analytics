@@ -13,19 +13,22 @@ injected after `touch_after` / run-log, JSON mtime newest so P5
 Domain parse for the etalon is `scripts/routing_state_baseline.py`
 (`routing_state_replay_from_collectors.py --golden`).
 
-`needs_check_feature` is stored in JSON (analyzer / baseline), including
-run-log cases `03`, `04`, `16`, `18`. Engine does not recompute it on the hot
-path. `stale` / `alignment_stale` are engine mtime after overlay.
+`needs_check_feature` lives in JSON fields; hook `sync_routing_state_after_step`
+stamps `step_completion` only after pack `sync_after_steps` (spec: check-feature)
+and pack `refresh_fields` clears the invariant. Mutating steps are not stamped —
+JSON stays stale → P5 `analyze-routing`. Golden `25-check-feature-stamped-json`.
+`stale` / `alignment_stale` are engine mtime after overlay.
 
-P5 `routing_state_needs_refresh` → `analyze-routing` is covered by routing-poc
-golden (`02-missing-json`, `03-stale-json`), not by renaming the 24 spec ids.
+P5 `routing_state_needs_refresh` → `analyze-routing` when JSON is missing,
+stale, or invalid (spec `00-no-json-no-context`, routing-poc `03-stale-json`).
+Live overlay does not use baseline; baseline is CI/replay only.
 
 ## Invariant (after P10–P30, before P40+)
 
 | Invariant | Fixtures | Effect |
 |-----------|----------|--------|
 | `needs-check-feature` | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` | `check-feature` |
-| (bypass when run-log ok) | `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
+| (JSON stamp / hook sync) | `25-check-feature-stamped-json`, `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
 
 Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — before P40+ branch rules.
 
@@ -33,9 +36,9 @@ Runs after `alignment_limit_exhausted`, `not_has_context`, `not_has_spec` — be
 
 | P | when | next | outcome | Fixture |
 |---|------|------|---------|---------|
-| 5 | `routing_state_needs_refresh` | analyze-routing | | routing-poc `02`/`03` (spec 24 cases inject fresh JSON) |
+| 5 | `routing_state_needs_refresh` | analyze-routing | | missing / stale / invalid JSON (`00-no-json-no-context`) |
 | 10 | `alignment_limit_exhausted` | — | stopped | `15-alignment-limit-stopped` |
-| 20 | `not_has_context` | find-context | | `01-no-context` |
+| 20 | `not_has_context` | find-context | | `01-no-context` (after JSON exists) |
 | 30 | `not_has_spec` | write-feature | | `02-no-spec` |
 | 40 | `needs_answer_with_gaps` | resolve-gaps | | `06-needs-answer-gaps` |
 | 45 | `needs_answer_alignment_only` | resolve-code-alignment | | `22-needs-answer-alignment-only` |

@@ -11,7 +11,7 @@ from typing import Any
 
 PACK_FILES = ("graph.yaml", "dispatch.yaml", "status.yaml", "registry.yaml")
 OPTIONAL_YAML = ("routing_conditions.yaml",)
-OPTIONAL_PY = ("collectors.py", "predicates.py", "validate.py")
+OPTIONAL_PY = ("collectors.py", "predicates.py", "validate.py", "routing_state_sync.py")
 DEFAULT_PIPELINE_ID = "spec"
 PACK_SCHEMA_RELPATH = "scripts/pipeline_pack_schema.json"
 CATALOG_VERSION = 2

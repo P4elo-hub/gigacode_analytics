@@ -52,7 +52,7 @@ come from pack `reason_for_predicate` (spec keeps the mapping) or `edge_conditio
 
 | when | kind | status fields |
 |------|------|----------------|
-| `routing_state_needs_refresh` | edge | invalid / missing JSON / `routing_state` in stale |
+| `routing_state_needs_refresh` | edge | missing / invalid JSON / `routing_state` in stale |
 | `not_has_context` | core + edge | `has_context` |
 | `not_has_spec` | core + edge | `has_spec` |
 | `alignment_limit_exhausted` | edge | `has_alignment`, `alignment_iteration`, `verdict` |

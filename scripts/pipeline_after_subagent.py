@@ -222,6 +222,18 @@ def after_subagent(
         if code != 0:
             return hook_output(f"append_run_log failed ({code}): {out[:500]}")
 
+    routing_sync_note = ""
+    if slug:
+        try:
+            from pipeline_routing_state import routing_state_sync_enabled, sync_routing_state_after_step
+
+            if routing_state_sync_enabled(pipeline_id) and sync_routing_state_after_step(
+                root, slug, step, result, pipeline_id=pipeline_id
+            ):
+                routing_sync_note = " routing-state.json synced"
+        except Exception as exc:  # noqa: BLE001 — hook must not crash orchestrator
+            routing_sync_note = f" routing-state sync warn: {exc!s}"[:120]
+
     sync_note = ""
     try:
         from sync_pipeline_session import sync_session
@@ -267,6 +279,8 @@ def after_subagent(
         clear_active_task(root, slug)
 
     context = format_hook_context(report, step=step, subagent=subagent, result=result)
+    if routing_sync_note:
+        context += routing_sync_note
     if sync_note:
         context += sync_note
     return hook_output(context)

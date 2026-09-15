@@ -188,18 +188,26 @@ def apply_alignment_frontmatter(status, paths: dict[str, Path]) -> None:
     status.critical_major_mismatch = mismatch
 
 
-def needs_check_feature(
-    root: Path,
-    slug: str,
-    status,
-    paths: dict[str, Path] | None = None,
-) -> tuple[bool, str]:
-    """Same algorithm as Phase 11 collectors.needs_check_feature (includes run-log)."""
-    if paths is None:
-        from pipeline_status import resolve_artifact_paths
+def parse_routing_snapshot_ts(iso: str | None) -> float | None:
+    """Parse ISO Z timestamps from routing-state JSON metadata."""
+    if not iso or not str(iso).strip():
+        return None
+    from pipeline_common import parse_run_log_ts
 
-        pid = getattr(status, "pipeline_id", None) or "spec"
-        paths = resolve_artifact_paths(root, slug, pid)
+    try:
+        return parse_run_log_ts(str(iso).strip())
+    except ValueError:
+        return None
+
+
+def needs_check_feature_from_completion(
+    status,
+    paths: dict[str, Path],
+    step_completion: dict[str, str] | None,
+    *,
+    satisfied_by_step: str | None = "check-feature",
+) -> tuple[bool, str]:
+    """Artifact mtimes + pack-config step in routing-state `step_completion`."""
     spec = _artifact(paths, "spec")
     if spec is None or not spec.is_file():
         return False, ""
@@ -208,11 +216,10 @@ def needs_check_feature(
     gaps_map = _artifact(paths, "gaps_map")
     challenges_map = _artifact(paths, "challenges_map")
 
-    from pipeline_common import last_successful_step_ts
-
-    last_check = last_successful_step_ts(root, slug, "check-feature")
-    if last_check is not None and last_check >= spec_mtime - 2:
-        return False, ""
+    if satisfied_by_step and step_completion:
+        last_check = parse_routing_snapshot_ts(step_completion.get(satisfied_by_step))
+        if last_check is not None and last_check >= spec_mtime - 2:
+            return False, ""
 
     if gaps_map is not None and gaps_map.is_file() and spec_mtime > gaps_map.stat().st_mtime + 1:
         return True, "SPEC новее GAPS_MAP — перепроверка после resolve-gaps"
@@ -224,14 +231,71 @@ def needs_check_feature(
     ):
         return True, "SPEC новее CHALLENGES_MAP — перепроверка после resolve-challenges"
 
-    if status.has_challenges or status.has_alignment:
+    if getattr(status, "has_challenges", False) or getattr(status, "has_alignment", False):
         challenges = _artifact(paths, "challenges")
         if challenges is not None and challenges.is_file() and spec_mtime <= challenges.stat().st_mtime + 1:
             return False, ""
         if gaps_map is not None and gaps_map.is_file() and spec_mtime <= gaps_map.stat().st_mtime + 1:
             return False, ""
 
-    if not status.has_gaps_map and not status.has_challenges and not status.has_alignment:
+    if (
+        not getattr(status, "has_gaps_map", False)
+        and not getattr(status, "has_challenges", False)
+        and not getattr(status, "has_alignment", False)
+    ):
+        return True, "spec не проходила check-feature"
+
+    return True, "нет check-feature после последней правки SPEC"
+
+
+def needs_check_feature(
+    root: Path,
+    slug: str,
+    status,
+    paths: dict[str, Path] | None = None,
+) -> tuple[bool, str]:
+    """CI / golden etalon (includes run-log when replaying fixtures)."""
+    if paths is None:
+        from pipeline_status import resolve_artifact_paths
+
+        pid = getattr(status, "pipeline_id", None) or "spec"
+        paths = resolve_artifact_paths(root, slug, pid)
+    spec = _artifact(paths, "spec")
+    if spec is None or not spec.is_file():
+        return False, ""
+
+    spec_mtime = spec.stat().st_mtime
+    from pipeline_common import last_successful_step_ts
+
+    last_check = last_successful_step_ts(root, slug, "check-feature")
+    if last_check is not None and last_check >= spec_mtime - 2:
+        return False, ""
+
+    gaps_map = _artifact(paths, "gaps_map")
+    challenges_map = _artifact(paths, "challenges_map")
+
+    if gaps_map is not None and gaps_map.is_file() and spec_mtime > gaps_map.stat().st_mtime + 1:
+        return True, "SPEC новее GAPS_MAP — перепроверка после resolve-gaps"
+
+    if (
+        challenges_map is not None
+        and challenges_map.is_file()
+        and spec_mtime > challenges_map.stat().st_mtime + 1
+    ):
+        return True, "SPEC новее CHALLENGES_MAP — перепроверка после resolve-challenges"
+
+    if getattr(status, "has_challenges", False) or getattr(status, "has_alignment", False):
+        challenges = _artifact(paths, "challenges")
+        if challenges is not None and challenges.is_file() and spec_mtime <= challenges.stat().st_mtime + 1:
+            return False, ""
+        if gaps_map is not None and gaps_map.is_file() and spec_mtime <= gaps_map.stat().st_mtime + 1:
+            return False, ""
+
+    if (
+        not getattr(status, "has_gaps_map", False)
+        and not getattr(status, "has_challenges", False)
+        and not getattr(status, "has_alignment", False)
+    ):
         return True, "spec не проходила check-feature"
 
     return True, "нет check-feature после последней правки SPEC"

@@ -4,11 +4,14 @@ alwaysApply: true
 ---
 # Pipeline enforcement
 
-Оркестратор (**spec-orchestrator**, **calibration-orchestrator**, будущие packs)
-**не выбирает** следующий шаг по intuition. Единственный источник истины перед `task`:
+Основная сессия — **spec-orchestrator**, pack `spec`. Не переключайся на
+`routing-poc-orchestrator` и не начинай с `analyze-routing`, если пользователь
+дал бриф фичи. Калибровка — только по `/calibrate`.
+
+Оркестратор **не выбирает** следующий шаг по intuition. Перед `task`:
 
 ```bash
-python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline <id>
+python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec
 ```
 
 `pipeline_dispatch.py` и `feature_status.py` — read-only для человека; оркестратор

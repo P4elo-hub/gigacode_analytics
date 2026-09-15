@@ -27,6 +27,7 @@ from pipeline_routing_state import (  # noqa: E402
     load_routing_state,
     overlay_collector,
     routing_state_path,
+    sync_routing_state_after_step,
     validate_payload,
 )
 
@@ -203,6 +204,178 @@ class PocValidateTest(unittest.TestCase):
             older = time.time() - 120
             os.utime(path, (older, older))
             self.assertEqual(self._advice_ids(tmp, slug, ["routing_state"]), {"routing-state-stale"})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class SpecDispatchMissingJsonTest(unittest.TestCase):
+    def test_empty_slug_goes_to_analyze_routing(self) -> None:
+        from pipeline_dispatch import build_dispatch
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-spec-empty-"))
+        slug = "demo"
+        try:
+            dispatch = build_dispatch(tmp, slug, "spec")
+            self.assertEqual(dispatch["next_step"], "analyze-routing")
+            self.assertEqual(dispatch["next_subagent"], "routing-analyzer")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_context_without_json_goes_to_analyze_routing(self) -> None:
+        from pipeline_dispatch import build_dispatch
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-spec-ctx-"))
+        slug = "demo"
+        try:
+            ctx = tmp / "Feature-context"
+            ctx.mkdir(parents=True)
+            (ctx / f"{slug}.md").write_text("# ctx\n\nVerified.\n", encoding="utf-8")
+            dispatch = build_dispatch(tmp, slug, "spec")
+            self.assertEqual(dispatch["next_step"], "analyze-routing")
+            self.assertEqual(dispatch["next_subagent"], "routing-analyzer")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class StepSyncTest(unittest.TestCase):
+    def test_check_feature_step_stamps_json_and_unblocks_dispatch(self) -> None:
+        from pipeline_dispatch import build_dispatch
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-sync-"))
+        slug = "demo"
+        try:
+            ctx = tmp / "Feature-context" / f"{slug}.md"
+            ctx.parent.mkdir(parents=True)
+            ctx.write_text("# context\n\nVerified.\n", encoding="utf-8")
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            spec = fw / f"{slug}.md"
+            gaps = fw / f"{slug}-gaps-resolved.md"
+            spec.write_text("# spec\n\n[GAP-1]\n", encoding="utf-8")
+            gaps.write_text("# gaps\n", encoding="utf-8")
+            decisions = fw / f"{slug}-decisions.md"
+            decisions.write_text(
+                "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n"
+                "|----|---------|--------|---------|----------|--------|------|\n"
+                "| D-01 | Q-01 | gap | A) one | pick | pending-apply | 2026-09-12 |\n",
+                encoding="utf-8",
+            )
+            spec_at = time.time() - 180
+            os.utime(spec, (spec_at, spec_at))
+            path = routing_state_path(tmp, slug)
+            payload = example_payload(slug, open_gaps=["GAP-1"])
+            payload["fields"]["has_decisions"] = True
+            payload["fields"]["has_gaps_map"] = True
+            payload["fields"]["decisions_pending_apply"] = 1
+            payload["fields"]["needs_check_feature"] = True
+            payload["fields"]["needs_check_feature_reason"] = "нет check-feature после последней правки SPEC"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            self.assertTrue(
+                sync_routing_state_after_step(tmp, slug, "check-feature", "ok", pipeline_id="spec")
+            )
+            stored, _ = load_routing_state(path, slug=slug)
+            assert stored is not None
+            self.assertFalse(stored["fields"]["needs_check_feature"])
+            self.assertEqual(stored["fields"]["needs_check_feature_reason"], "")
+            self.assertIn("check-feature", stored.get("step_completion") or {})
+
+            dispatch = build_dispatch(tmp, slug, "spec")
+            self.assertEqual(dispatch["next_step"], "resolve-gaps")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_sync_enabled_for_routing_poc_pack(self) -> None:
+        from pipeline_routing_state import routing_state_sync_enabled
+
+        self.assertTrue(routing_state_sync_enabled("spec"))
+        self.assertTrue(routing_state_sync_enabled("routing-poc"))
+
+    def test_analyze_routing_step_does_not_sync(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="rs-skip-"))
+        slug = "demo"
+        try:
+            path = routing_state_path(tmp, slug)
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(example_payload(slug)), encoding="utf-8")
+            before = path.read_text(encoding="utf-8")
+            self.assertFalse(
+                sync_routing_state_after_step(tmp, slug, "analyze-routing", "ok", pipeline_id="spec")
+            )
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_mutating_step_does_not_sync_and_dispatch_goes_to_analyzer(self) -> None:
+        from pipeline_dispatch import build_dispatch
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-mutate-"))
+        slug = "demo"
+        try:
+            ctx = tmp / "Feature-context" / f"{slug}.md"
+            ctx.parent.mkdir(parents=True)
+            ctx.write_text("# context\n\nVerified.\n", encoding="utf-8")
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            spec = fw / f"{slug}.md"
+            spec.write_text("# spec\n", encoding="utf-8")
+            path = routing_state_path(tmp, slug)
+            path.write_text(json.dumps(example_payload(slug)), encoding="utf-8")
+            older = time.time() - 120
+            os.utime(path, (older, older))
+            before = path.read_text(encoding="utf-8")
+            self.assertFalse(
+                sync_routing_state_after_step(tmp, slug, "write-feature", "ok", pipeline_id="spec")
+            )
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            dispatch = build_dispatch(tmp, slug, "spec")
+            self.assertEqual(dispatch["next_step"], "analyze-routing")
+            self.assertEqual(dispatch["next_subagent"], "routing-analyzer")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_check_feature_that_mutated_spec_leaves_json_for_analyzer(self) -> None:
+        from pipeline_dispatch import build_dispatch
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-gate-mutate-"))
+        slug = "demo"
+        try:
+            ctx = tmp / "Feature-context" / f"{slug}.md"
+            ctx.parent.mkdir(parents=True)
+            ctx.write_text("# context\n\nVerified.\n", encoding="utf-8")
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            spec = fw / f"{slug}.md"
+            spec.write_text("# spec\n", encoding="utf-8")
+            path = routing_state_path(tmp, slug)
+            path.write_text(json.dumps(example_payload(slug)), encoding="utf-8")
+            older = time.time() - 120
+            os.utime(path, (older, older))
+            self.assertFalse(
+                sync_routing_state_after_step(tmp, slug, "check-feature", "ok", pipeline_id="spec")
+            )
+            dispatch = build_dispatch(tmp, slug, "spec")
+            self.assertEqual(dispatch["next_step"], "analyze-routing")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_poc_resolve_gaps_does_not_sync(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="rs-poc-mutate-"))
+        slug = "demo"
+        try:
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            spec = fw / f"{slug}.md"
+            spec.write_text("# spec\n", encoding="utf-8")
+            path = routing_state_path(tmp, slug)
+            path.write_text(json.dumps(example_payload(slug)), encoding="utf-8")
+            before = path.read_text(encoding="utf-8")
+            self.assertFalse(
+                sync_routing_state_after_step(
+                    tmp, slug, "resolve-gaps", "ok", pipeline_id=PIPELINE_POC_ID
+                )
+            )
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

@@ -60,12 +60,11 @@ find-context → write-feature
 
 ## Маршрутизация и петли
 
-**Next step** считает только `scripts/feature_status.py` (оркестратор вызывает
-`pipeline_delegate.py`, не пересчитывает вручную). Если JSON
-`routing-state` нет или устарел — следующий шаг `analyze-routing` (refresh),
-затем снова delegate. Петли resolve → check,
-alignment ↔ code-audit, one-pass challenge — зашиты в скрипт и
-`scripts/pipeline_schema.json`.
+**Next step** считает только `pipeline_delegate.py` (внутри `feature_status`).
+Нет `routing-state.json` → `analyze-routing` (P5), затем domain-шаги.
+JSON устарел/битый (после mutating-шага) → снова `analyze-routing`.
+Check-feature без правок файлов → хук stamp в JSON, не анализатор. Петли resolve → check, alignment ↔ code-audit,
+one-pass challenge — в скрипте и `scripts/pipeline_schema.json`.
 
 `CHALLENGES` старше `SPEC` после apply — **информационно** (mtime), не триггер
 re-challenge. Повторный `/challenge-feature` — только по явной команде пользователя.
