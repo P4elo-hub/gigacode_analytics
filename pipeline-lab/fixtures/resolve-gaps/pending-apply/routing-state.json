@@ -15,6 +15,10 @@
     "decisions_pending_apply": 1,
     "decisions_needs_answer_alignment": 0,
     "decisions_pending_apply_alignment": 0,
+    "decisions_needs_answer_gaps": 0,
+    "decisions_pending_apply_gaps": 0,
+    "decisions_needs_answer_challenges": 0,
+    "decisions_pending_apply_challenges": 1,
     "open_gaps": [],
     "open_questions": [],
     "challenges": {

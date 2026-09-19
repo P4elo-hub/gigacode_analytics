@@ -44,6 +44,8 @@ SPEC_REQUIRED_CASE_IDS = frozenset(
         "22-needs-answer-alignment-only",
         "23-pending-apply-alignment-only",
         "24-mixed-pending-apply-align-ch",
+        "32-ch-pending-leftover-gaps",
+        "33-ch-needs-answer-leftover-gaps",
     }
 )
 SPEC_MIN_CASES = len(SPEC_REQUIRED_CASE_IDS)

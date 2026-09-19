@@ -45,8 +45,8 @@ def reason_for_predicate(when: str, status) -> str:
         )
     if when == "needs_answer_with_gaps":
         return (
-            f"{status.decisions_needs_answer} строк needs-answer в DECISIONS — "
-            "оркестратор опрашивает пользователя"
+            f"{status.decisions_needs_answer_gaps} строк needs-answer в DECISIONS "
+            "(GAP) — оркестратор опрашивает пользователя"
         )
     if when == "needs_answer_alignment_only":
         return (
@@ -54,21 +54,25 @@ def reason_for_predicate(when: str, status) -> str:
             "(ALIGNMENT) — оркестратор опрашивает пользователя"
         )
     if when == "needs_answer_challenges_only":
-        ch_only = status.decisions_needs_answer - status.decisions_needs_answer_alignment
         return (
-            f"{ch_only} строк needs-answer в DECISIONS (CH) — "
-            "оркестратор опрашивает пользователя"
+            f"{status.decisions_needs_answer_challenges} строк needs-answer в DECISIONS "
+            "(CH) — оркестратор опрашивает пользователя"
         )
     if when == "pending_apply_with_gaps":
-        return f"применить pending-apply из DECISIONS ({status.decisions_pending_apply} строк)"
+        return (
+            f"применить pending-apply из DECISIONS "
+            f"({status.decisions_pending_apply_gaps} строк, GAP)"
+        )
     if when == "pending_apply_alignment_only":
         return (
             f"применить pending-apply из DECISIONS "
             f"({status.decisions_pending_apply_alignment} строк, ALIGNMENT)"
         )
     if when == "pending_apply_challenges_only":
-        ch_only = status.decisions_pending_apply - status.decisions_pending_apply_alignment
-        return f"применить pending-apply из DECISIONS ({ch_only} строк, CH)"
+        return (
+            f"применить pending-apply из DECISIONS "
+            f"({status.decisions_pending_apply_challenges} строк, CH)"
+        )
     if when == "critical_major_mismatch_resolvable":
         return "spec противоречит коду"
     if when == "open_gaps":

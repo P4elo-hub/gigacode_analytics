@@ -48,26 +48,47 @@ def load_active_task(root: Path | None = None) -> dict | None:
 
 
 def load_active_task_latest(root: Path) -> dict | None:
-    """Best active-task marker: root if valid, else newest per-feature copy."""
+    """Workspace-level marker only.
+
+    Per-feature copies are ``load_active_task_for_slug``. Do not pick the newest
+    leftover marker from another slug — that sent write-feature to
+    ``pipeline-viewer-smoke`` after the BPH cycle marker was cleared.
+    """
     root_task = load_active_task(root)
-    if root_task and root_task.get("slug"):
-        found = load_active_task_for_slug(root, root_task["slug"])
-        if found:
-            return found
+    if not root_task or not root_task.get("slug"):
+        return None
+    found = load_active_task_for_slug(root, str(root_task["slug"]))
+    return found or root_task
 
-    latest: dict | None = None
-    latest_ts: datetime | None = None
-    from artifact_paths import list_feature_slugs
 
-    for slug in list_feature_slugs(root):
-        task = _read_active_task_file(feature_active_task_path(root, slug))
-        if not task or task.get("slug") != slug:
-            continue
-        ts = parse_active_ts(task.get("started_at"))
-        if latest is None or (ts and (latest_ts is None or ts >= latest_ts)):
-            latest = task
-            latest_ts = ts
-    return latest
+def write_cycle_still_open(root: Path, slug: str, active: dict | None) -> bool:
+    """True until assemble: part files remain, or result is missing/older than the cycle."""
+    if not active or not active.get("persistent"):
+        return False
+    if (active.get("slug") or "") != slug:
+        return False
+    from inner_cycle import (
+        cycle_artifacts_open,
+        cycle_config_for_step,
+        resolve_cycle_folder,
+        resolve_cycle_out,
+    )
+    from pipeline_pack import DEFAULT_PIPELINE_ID
+
+    pipeline_id = str(active.get("pipeline") or DEFAULT_PIPELINE_ID)
+    step = str(active.get("step") or "")
+    cycle = cycle_config_for_step(pipeline_id, step)
+    if not cycle:
+        if step != "write-feature":
+            return False
+        cycle = {
+            "folder": "Feature-writing/{slug}",
+            "out": "{slug}.md",
+            "item_file": "{slug}.part-{param}.md",
+        }
+    folder = resolve_cycle_folder(root, slug, cycle)
+    out = resolve_cycle_out(folder, slug, cycle)
+    return cycle_artifacts_open(folder, out, slug, cycle, active.get("started_at"))
 
 
 def parse_active_ts(raw: str | None) -> datetime | None:
@@ -103,6 +124,16 @@ def save_active_task(
     persistent: bool = False,
 ) -> dict:
     root = root.resolve()
+    started_at = utc_now_iso()
+    if persistent:
+        existing = load_active_task_for_slug(root, slug)
+        if (
+            existing
+            and existing.get("persistent")
+            and str(existing.get("step") or "") == step
+            and str(existing.get("started_at") or "")
+        ):
+            started_at = str(existing["started_at"])
     payload = {
         "slug": slug,
         "step": step,
@@ -110,7 +141,7 @@ def save_active_task(
         "cli": cli,
         "pipeline": pipeline,
         "session": session or None,
-        "started_at": utc_now_iso(),
+        "started_at": started_at,
         "persistent": persistent or None,
     }
     payload = {k: v for k, v in payload.items() if v is not None}

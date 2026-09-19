@@ -16,6 +16,19 @@ nodes:
     label: write-feature
     subagent: spec-writer
     kind: step
+    # Composite cell (frontend block): inner steps → assemble → close.
+    # `calls` optional (static agent+param queue). write-feature fills
+    # them from spec-catalog at runtime when omitted. `close: on_done`
+    # is the engine default: record_position(this node) + clear marker,
+    # then outer dispatch follows compiled edges. Compile copies `cycle`.
+    cycle:
+      persistent: true
+      assemble: write_feature
+      param: block_id
+      folder: Feature-writing/{slug}
+      out: "{slug}.md"
+      item_file: "{slug}.part-{param}.md"
+      close: on_done
   - id: analyze-routing
     label: analyze-routing
     subagent: routing-analyzer
@@ -28,6 +41,9 @@ nodes:
     label: resolve-gaps
     subagent: gap-resolver
     kind: step
+    # Human handshake on this cell: overlay ask_user_when counts questions;
+    # this flag keeps ask → apply on the node (no routing). Compile copies `ask`.
+    ask: true
   - id: challenge-feature
     label: challenge-feature
     subagent: spec-challenger
@@ -36,6 +52,7 @@ nodes:
     label: resolve-challenges
     subagent: challenge-resolver
     kind: step
+    ask: true
   - id: check-feature-code
     label: check-feature-code
     subagent: code-auditor
@@ -44,6 +61,7 @@ nodes:
     label: resolve-code-alignment
     subagent: alignment-resolver
     kind: step
+    ask: true
   - id: archive-session
     label: archive-session
     subagent: null

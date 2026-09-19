@@ -26,6 +26,90 @@ const RESULT_COLORS = {
   stale: "#57534e",
 };
 
+const ROUTING_STEP = "analyze-routing";
+const ROUTING_SATELLITE_DY = 50;
+const ROUTING_SAT_COLOR = "#4338ca";
+
+function isRoutingStep(step) {
+  return step === ROUTING_STEP;
+}
+
+function routingSatelliteId(hostStep) {
+  return `routing-after-${hostStep}`;
+}
+
+function lastDomainStepBefore(timeline, index) {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (!isRoutingStep(timeline[i]?.step)) {
+      return timeline[i].step || "spec-orchestrator";
+    }
+  }
+  return "spec-orchestrator";
+}
+
+function routingBurstsByHost(timeline) {
+  const byHost = {};
+  const rows = timeline || [];
+  let i = 0;
+  while (i < rows.length) {
+    if (!isRoutingStep(rows[i].step)) {
+      i += 1;
+      continue;
+    }
+    const host = lastDomainStepBefore(rows, i);
+    let last = rows[i];
+    let visitRows = 0;
+    while (i < rows.length && isRoutingStep(rows[i].step)) {
+      last = rows[i];
+      visitRows += 1;
+      i += 1;
+    }
+    const prev = byHost[host] || { bursts: 0, visitRows: 0, last: null };
+    prev.bursts += 1;
+    prev.visitRows += visitRows;
+    prev.last = last;
+    byHost[host] = prev;
+  }
+  return byHost;
+}
+
+function routingLiveHost(data) {
+  const current = data?.current;
+  const next = data?.dispatch?.next_step || data?.divergence?.summary?.expected_step;
+  if (current?.step !== ROUTING_STEP && next !== ROUTING_STEP) return null;
+  const timeline = data?.timeline || [];
+  for (let i = timeline.length - 1; i >= 0; i -= 1) {
+    if (!isRoutingStep(timeline[i].step)) return timeline[i].step;
+  }
+  return "spec-orchestrator";
+}
+
+function satelliteVisual(host, data, burst, liveHost) {
+  const running =
+    data?.current?.status === "running" &&
+    data?.current?.step === ROUTING_STEP &&
+    liveHost === host;
+  if (running) {
+    return { state: "active", color: RESULT_COLORS.active, label: "analyze-routing" };
+  }
+  const expected =
+    (data?.dispatch?.next_step || data?.divergence?.summary?.expected_step) ===
+      ROUTING_STEP && liveHost === host;
+  if (expected && data?.current?.status !== "running") {
+    return { state: "next", color: ROUTING_SAT_COLOR, label: "analyze-routing" };
+  }
+  if (burst?.last) {
+    const state = burst.last.result || "ok";
+    const extra = burst.bursts > 1 ? `\n×${burst.bursts}` : "";
+    return {
+      state,
+      color: RESULT_COLORS[state] || ROUTING_SAT_COLOR,
+      label: `analyze-routing${extra}`,
+    };
+  }
+  return { state: "pending", color: ROUTING_SAT_COLOR, label: "analyze-routing" };
+}
+
 function loadDismissedNotices() {
   try {
     const raw = sessionStorage.getItem(DISMISS_STORAGE_KEY);
@@ -41,7 +125,6 @@ const state = {
   pipeline: "spec",
   graphView: "target",
   staleCollapsed: true,
-  showRoutingLoops: false,
   source: null,
   graph: null,
   dismissedNotices: loadDismissedNotices(),
@@ -51,6 +134,7 @@ let cy = null;
 let nodeDetails = {};
 let graphInteractionsBound = false;
 let selectedNodeId = null;
+let selectedElementId = null;
 let selectedTimelineSeq = null;
 let pendingRestartPlan = null;
 let apiVersion = 0;
@@ -181,6 +265,16 @@ function initCytoscape() {
         },
       },
       {
+        selector: 'node[kind = "step"]',
+        style: {
+          shape: "round-rectangle",
+          width: 158,
+          height: 62,
+          "font-size": "12px",
+          "corner-radius": 6,
+        },
+      },
+      {
         selector: 'node[kind = "orchestrator"]',
         style: {
           width: 200,
@@ -209,15 +303,17 @@ function initCytoscape() {
         },
       },
       {
-        selector: 'node[kind = "routing-hub"]',
+        selector: 'node[kind = "routing-sat"]',
         style: {
-          width: 132,
-          height: 42,
-          "font-size": "10px",
-          shape: "round-hexagon",
-          "background-color": "#1e293b",
-          "border-color": "#475569",
-          color: "#cbd5e1",
+          width: 124,
+          height: 28,
+          "font-size": "8px",
+          shape: "ellipse",
+          "background-color": "data(color)",
+          "border-color": "#a5b4fc",
+          "border-width": 1.5,
+          color: "#eef2ff",
+          "text-max-width": "118px",
         },
       },
       {
@@ -357,6 +453,18 @@ function initCytoscape() {
         },
       },
       {
+        selector: 'edge[kind = "routing-sat"]',
+        style: {
+          width: 1.5,
+          "curve-style": "straight",
+          "line-color": "#818cf8",
+          "target-arrow-shape": "none",
+          "source-arrow-shape": "none",
+          opacity: 0.9,
+          label: "",
+        },
+      },
+      {
         selector: 'edge[kind = "loop"]',
         style: {
           width: 1.5,
@@ -379,6 +487,14 @@ function initCytoscape() {
         style: {
           width: 3,
           opacity: 1,
+        },
+      },
+      {
+        selector: 'edge[kind = "routing-sat"]',
+        style: {
+          width: 1.5,
+          "target-arrow-shape": "none",
+          opacity: 0.9,
         },
       },
       {
@@ -440,6 +556,7 @@ function formatNodeLabel(node) {
   const lines = [];
   lines.push(node.label || node.id);
   if (node.subagent) lines.push(`(${node.subagent})`);
+  if (node.ask) lines.push("ask");
   if (node.visit_count > 0) lines.push(`×${node.visit_count}`);
   return lines.join("\n");
 }
@@ -529,7 +646,7 @@ function renderStepVisits(stepId) {
     li.className = displayState;
     if (row.divergence_kinds?.length) li.classList.add("diverged");
     const sub = row.subagent ? ` → ${row.subagent}` : "";
-    const ts = row.ts ? row.ts.slice(0, 19).replace("T", " ") : "—";
+    const ts = formatLocalDateTime(row.ts);
     const staleTag = displayState === "stale" ? " · устарел" : "";
     li.textContent = `#${row.seq} · pass ${row.pass} · ${ts}${sub}${staleTag}`;
     list.appendChild(li);
@@ -999,73 +1116,328 @@ function setGraphViewTabs() {
   document.getElementById("timing-panel")?.classList.toggle("hidden", !isTiming);
   document.getElementById("legend")?.classList.toggle("hidden", isTiming);
   document.getElementById("stale-toggle")?.classList.toggle("hidden", isTiming || state.graphView !== "actual");
-  updateRoutingLoopsToggleUi();
-}
-
-function updateRoutingLoopsToggleUi() {
-  const btn = document.getElementById("routing-loops-toggle");
-  if (!btn) return;
-  const show =
-    state.graphView === "target" && state.pipeline === "spec" && state.graph?.pipeline === "spec";
-  btn.classList.toggle("hidden", !show);
-  if (!show) return;
-  btn.textContent = state.showRoutingLoops
-    ? "Скрыть refresh-петли"
-    : "Показать refresh-петли";
-  btn.classList.toggle("active", state.showRoutingLoops);
-}
-
-function setRoutingLoopsVisible(visible) {
-  state.showRoutingLoops = visible;
-  saveSelection();
-  updateRoutingLoopsToggleUi();
-  if (state.graph) renderGraph(state.graph);
-}
-
-function expectedRoutingTarget(data) {
-  const summary = data?.divergence?.summary;
-  const dispatch = data?.dispatch || {};
-  return (
-    summary?.expected_step ||
-    dispatch.next_step ||
-    data?.current?.step ||
-    ""
-  );
-}
-
-function shouldShowTargetEdge(edge, data) {
-  const kind = edge.kind || "main";
-  if (kind !== "loop" && edge.from !== "analyze-routing") return true;
-
-  if (state.showRoutingLoops) return true;
-
-  if (edge.from === "analyze-routing") {
-    const expected = expectedRoutingTarget(data);
-    if (edge.to === expected) return true;
-    if (edge.to === "done" && (data?.outcome?.ready || data?.dispatch?.ready)) return true;
-    return Boolean(edge.traversed);
-  }
-
-  if (kind === "loop") {
-    return Boolean(edge.traversed);
-  }
-
-  return true;
 }
 
 function targetEdgeLabel(edge) {
   const kind = edge.kind || "main";
-  if (kind === "loop" && !state.showRoutingLoops) return "";
   const label = edge.label || "";
   if (kind === "branch" && label.length > 28) return `${label.slice(0, 26)}…`;
   return label;
+}
+
+function parseUtcDate(ts) {
+  if (!ts) return null;
+  const raw = String(ts).trim();
+  const normalized = /Z$|[+-]\d{2}:\d{2}$/.test(raw) ? raw : `${raw}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function localTimeZoneLabel() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(
+      new Date()
+    );
+    const short = parts.find((part) => part.type === "timeZoneName")?.value || "";
+    if (tz && short && !short.includes(tz)) return `${tz} (${short})`;
+    return tz || short || "";
+  } catch {
+    return "";
+  }
+}
+
+function formatLocalDateTime(ts) {
+  const date = parseUtcDate(ts);
+  if (!date) return ts || "—";
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function formatLocalTime(ts) {
+  const date = parseUtcDate(ts);
+  if (!date) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function formatDurationSec(seconds) {
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total < 0) return "—";
+  if (total < 60) return `${Math.round(total)} с`;
+  const minutes = Math.floor(total / 60);
+  const secs = Math.round(total % 60);
+  if (minutes < 60) return secs ? `${minutes} мин ${secs} с` : `${minutes} мин`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatLocalRange(startTs, endTs) {
+  if (!startTs && !endTs) return "—";
+  if (startTs && endTs) {
+    return `${formatLocalDateTime(startTs)} → ${formatLocalTime(endTs)}`;
+  }
+  return formatLocalDateTime(startTs || endTs);
+}
+
+function staleReasonText(row) {
+  if (row?.stale_reason) return row.stale_reason;
+  const result = row?.result || "fail";
+  const by = row?.superseded_by ? ` (#${row.superseded_by})` : "";
+  return (
+    `Хук записал «${result}», позже этот же шаг завершился ok${by}. ` +
+    "Работа не отменялась — ложный fail/retry по тексту ответа."
+  );
+}
+
+const HOOK_PAIR_WINDOW_MS = 15000;
+
+function isSessionSyncRow(row) {
+  return (row?.source || "") === "session-sync";
+}
+
+function isWorkRow(row) {
+  if (!row) return false;
+  if (isSessionSyncRow(row)) return true;
+  if (row.duration_sec != null) return true;
+  if (row.call_id) return true;
+  return String(row.note || "").startsWith("sync:");
+}
+
+function isHookStampRow(row) {
+  if (!row || isWorkRow(row)) return false;
+  const src = row.source || "run-log";
+  return src === "run-log" || src === "merged" || src === "";
+}
+
+function syncWorkLabel(note) {
+  const text = String(note || "").trim();
+  if (!text) return "";
+  return text.replace(/^sync:[^\s·]+(?:\s*·\s*)?/i, "").trim();
+}
+
+function durationPassForInvocation(inv, timingPasses, used) {
+  if (!timingPasses?.length) return null;
+  const t = parseUtcDate(inv.ts);
+  let best = null;
+  let bestIdx = -1;
+  let bestDist = Infinity;
+  for (let index = 0; index < timingPasses.length; index += 1) {
+    const pass = timingPasses[index];
+    if (used.has(index)) continue;
+    if (pass.step !== inv.step) continue;
+    if (inv.callId && pass.call_id && pass.call_id === inv.callId) {
+      used.add(index);
+      return pass;
+    }
+    const start = parseUtcDate(pass.start_ts);
+    const end = parseUtcDate(pass.end_ts) || start;
+    if (!t || !start) continue;
+    if (t.getTime() < start.getTime() - 8000) continue;
+    if (t.getTime() > end.getTime() + 120000) continue;
+    const dist = Math.abs(end.getTime() - t.getTime());
+    if (dist < bestDist) {
+      best = pass;
+      bestIdx = index;
+      bestDist = dist;
+    }
+  }
+  if (bestIdx >= 0) used.add(bestIdx);
+  return best;
+}
+
+function groupAgentInvocations(timeline, timingPasses) {
+  const rows = timeline || [];
+  const used = new Set();
+  const clusters = [];
+
+  // Hook + session-sync (often source=merged after spawn join) are the same
+  // agent call a second apart. Pair same-step rows in a 15s window.
+  rows.forEach((row, index) => {
+    if (used.has(index)) return;
+    const t = parseUtcDate(row.ts);
+    const cluster = [row];
+    used.add(index);
+    rows.forEach((other, j) => {
+      if (used.has(j) || other.step !== row.step) return;
+      const otherT = parseUtcDate(other.ts);
+      if (!t || !otherT) return;
+      if (Math.abs(otherT.getTime() - t.getTime()) <= HOOK_PAIR_WINDOW_MS) {
+        cluster.push(other);
+        used.add(j);
+      }
+    });
+    clusters.push(cluster);
+  });
+
+  clusters.sort((a, b) => {
+    const ta = a.reduce((min, row) => (row.ts && row.ts < min ? row.ts : min), a[0]?.ts || "");
+    const tb = b.reduce((min, row) => (row.ts && row.ts < min ? row.ts : min), b[0]?.ts || "");
+    return (ta || "").localeCompare(tb || "");
+  });
+
+  const usedPasses = new Set();
+  const invocations = clusters.map((cluster, index) => {
+    const hook = cluster.find(isHookStampRow);
+    const sync = cluster.find(isWorkRow);
+    const timed = cluster.find((row) => row.duration_sec != null);
+    const step = hook?.step || sync?.step || cluster[0]?.step || "";
+    const hookResult = hook?.result || "";
+    const agentResult = sync || (timed && timed.result === "ok")
+      ? "ok"
+      : hookResult || cluster[0]?.result || "ok";
+    const inv = {
+      step,
+      subagent: hook?.subagent || sync?.subagent || cluster[0]?.subagent || "",
+      ts: sync?.ended_at || sync?.ts || timed?.ended_at || hook?.ts || cluster[0]?.ts,
+      startTs: sync?.started_at || timed?.started_at || hook?.spawn_ts || hook?.ts || cluster[0]?.ts,
+      endTs: sync?.ended_at || timed?.ended_at || sync?.ts || hook?.ts,
+      seconds: sync?.duration_sec ?? timed?.duration_sec,
+      callId: sync?.call_id || timed?.call_id || hook?.call_id || "",
+      work: syncWorkLabel(sync?.note || timed?.note || ""),
+      hook: hook || null,
+      hookResult,
+      agentResult,
+      seq: hook?.seq || sync?.seq || cluster[0]?.seq,
+      source: sync ? "session-sync" : hook?.source || cluster[0]?.source || "run-log",
+    };
+    if (inv.seconds == null) {
+      const matched = durationPassForInvocation(inv, timingPasses, usedPasses);
+      if (matched) {
+        inv.seconds = matched.seconds;
+        if (!inv.startTs) inv.startTs = matched.start_ts;
+        if (!inv.endTs) inv.endTs = matched.end_ts;
+        if (!inv.work) inv.work = matched.note || "";
+        if (!inv.subagent) inv.subagent = matched.subagent || "";
+        inv.source = matched.source || inv.source;
+      }
+    }
+    const next = clusters[index + 1];
+    if (next) {
+      const nextHook = next.find(isHookStampRow) || next[0];
+      const nextSync = next.find(isSessionSyncRow);
+      inv.nextStep = nextHook?.step || nextSync?.step || next[0]?.step || "";
+      inv.nextSubagent = nextHook?.subagent || nextSync?.subagent || "";
+    } else {
+      inv.nextStep = "";
+      inv.nextSubagent = "";
+    }
+    return inv;
+  });
+  const lastByStep = {};
+  for (const inv of invocations) {
+    const prev = lastByStep[inv.step];
+    inv.retriedAfterFail = Boolean(
+      prev && (prev.agentResult === "fail" || prev.agentResult === "retry")
+    );
+    lastByStep[inv.step] = inv;
+  }
+  return invocations;
 }
 
 function timingStepColor(stepId) {
   return TIMING_STEP_COLORS[stepId] || "#94a3b8";
 }
 
-function renderTimingsPanel(timings) {
+function nestRoutingUnderAgents(invocations) {
+  const groups = [];
+  for (const inv of invocations) {
+    if (isRoutingStep(inv.step)) {
+      const last = groups[groups.length - 1];
+      if (last) last.routings.push(inv);
+      else groups.push({ inv, routings: [], routingOnly: true });
+    } else {
+      groups.push({ inv, routings: [], routingOnly: false });
+    }
+  }
+  return groups;
+}
+
+function renderTimingHook(inv) {
+  if (!inv.hook) return "";
+  const mismatch = inv.hookResult && inv.hookResult !== inv.agentResult;
+  const led = inv.nextStep
+    ? `повёл к: ${inv.nextStep}${inv.nextSubagent ? ` → ${inv.nextSubagent}` : ""}`
+    : "повёл к: конец прогона / дальше по dispatch";
+  const note = (inv.hook.note || "").trim();
+  return (
+    `<div class="timing-hook${mismatch ? " is-mismatch" : ""}">` +
+    `<div class="timing-hook-title">хук SubagentStop · записал «${escapeHtml(inv.hookResult || "ok")}»</div>` +
+    `<div class="timing-hook-led">${escapeHtml(led)}</div>` +
+    (note ? `<p class="timing-hook-note">${escapeHtml(note)}</p>` : "") +
+    `</div>`
+  );
+}
+
+function renderTimingInvocation(inv, nested) {
+  const failed = inv.agentResult === "fail" || inv.agentResult === "retry";
+  const cls = [
+    nested ? "timing-routing" : "timing-pass",
+    failed ? `is-${inv.agentResult}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  let status = "";
+  if (failed) {
+    status =
+      `<span class="timing-badge is-${inv.agentResult}">` +
+      `${inv.agentResult === "retry" ? "агент: retry" : "агент: упал"}</span>`;
+  }
+  if (inv.retriedAfterFail) {
+    status += `<span class="timing-badge is-retry">retry после сбоя</span>`;
+  }
+  const sub = inv.subagent
+    ? `<span class="timing-pass-sub">${escapeHtml(inv.subagent)}</span>`
+    : "";
+  const title = nested ? "analyze-routing" : inv.step || "?";
+  const work = inv.work ? `<p class="timing-work">${escapeHtml(inv.work)}</p>` : "";
+  return (
+    `<li class="${cls}">` +
+    `<div class="timing-pass-head">` +
+    `<code>${escapeHtml(title)}</code>${sub}${status}` +
+    `<span class="timing-pass-dur">${escapeHtml(formatDurationSec(inv.seconds))}</span>` +
+    `</div>` +
+    `<div class="timing-pass-when">${escapeHtml(formatLocalRange(inv.startTs, inv.endTs))}</div>` +
+    work +
+    renderTimingHook(inv) +
+    `</li>`
+  );
+}
+
+function renderTimingGroup(group) {
+  const innerRoutings = group.routings
+    .map((inv) => renderTimingInvocation(inv, true))
+    .join("");
+  const nested = innerRoutings
+    ? `<ol class="timing-routings">${innerRoutings}</ol>`
+    : "";
+  const html = renderTimingInvocation(group.inv, group.routingOnly);
+  const close = html.lastIndexOf("</li>");
+  if (close < 0) return html + nested;
+  return html.slice(0, close) + nested + html.slice(close);
+}
+
+function renderTimingsPanel(timings, timeline) {
   const summaryEl = document.getElementById("timing-summary");
   const chartEl = document.getElementById("timing-chart");
   const notesEl = document.getElementById("timing-notes");
@@ -1082,16 +1454,29 @@ function renderTimingsPanel(timings) {
   }
 
   const steps = timings.steps || [];
+  const tz = localTimeZoneLabel();
   const range =
     timings.started_at && timings.ended_at
-      ? `${timings.started_at} → ${timings.ended_at}`
+      ? `${formatLocalDateTime(timings.started_at)} → ${formatLocalDateTime(timings.ended_at)}`
       : "—";
   const src = timings.primary_source || "—";
+  const invocations = groupAgentInvocations(timeline, timings.passes || []);
+  const groups = nestRoutingUnderAgents(invocations);
+  const failedN = invocations.filter(
+    (inv) => inv.agentResult === "fail" || inv.agentResult === "retry"
+  ).length;
   summaryEl.innerHTML =
-    `<p><strong>Σ ${timings.total_label || "—"}</strong> активной работы subagent` +
+    `<p><strong>Σ ${escapeHtml(timings.total_label || "—")}</strong> активной работы subagent` +
     (timings.wall_sec ? ` · на timeline ${Math.round(timings.wall_sec / 60)} мин` : "") +
-    `<br><span class="timing-range">${range}</span>` +
-    `<br><span class="timing-range">источник: ${src}</span></p>`;
+    `<br><span class="timing-range">${escapeHtml(range)}` +
+    (tz ? ` · ${escapeHtml(tz)}` : "") +
+    `</span>` +
+    `<br><span class="timing-range">источник: ${escapeHtml(src)}</span></p>` +
+    `<p class="timing-stale-hint">Строка — вызов агента шага` +
+    (groups.length ? ` (${groups.length})` : "") +
+    `. Под ним — analyze-routing, как овал на «Факт». Фиолетовое — хук: что записал и к кому повёл.` +
+    (failedN ? ` Красным/жёлтым — агент упал или retry.` : "") +
+    `</p>`;
 
   if (!steps.length) {
     chartEl.innerHTML = "<p class='timing-meta'>Run-log пуст — сначала прогоните пайплайн.</p>";
@@ -1119,26 +1504,38 @@ function renderTimingsPanel(timings) {
 
   if (notesEl) {
     notesEl.innerHTML = (timings.notes || [])
-      .map((note) => `<li>${note}</li>`)
+      .map((note) => `<li>${escapeHtml(note)}</li>`)
       .join("");
   }
 
-  const passes = timings.passes || [];
   if (passesEl && passesWrap) {
-    if (!passes.length) {
+    if (!invocations.length && !(timings.passes || []).length) {
       passesWrap.classList.add("hidden");
       passesEl.innerHTML = "";
     } else {
       passesWrap.classList.remove("hidden");
-      passesEl.innerHTML = passes
-        .map(
-          (row) =>
-            `<li><code>${row.step}</code> · ${row.seconds} с · ${row.source}` +
-            (row.start_ts ? ` · ${row.start_ts}` : "") +
-            (row.note ? ` — ${row.note}` : "") +
-            `</li>`
-        )
-        .join("");
+      const items = groups.length
+        ? groups
+        : (timings.passes || []).map((pass) => ({
+            inv: {
+              step: pass.step,
+              subagent: pass.subagent,
+              startTs: pass.start_ts,
+              endTs: pass.end_ts,
+              seconds: pass.seconds,
+              work: pass.note || "",
+              agentResult: "ok",
+              hookResult: "",
+              hook: null,
+              source: pass.source,
+              retriedAfterFail: false,
+              nextStep: "",
+              nextSubagent: "",
+            },
+            routings: [],
+            routingOnly: false,
+          }));
+      passesEl.innerHTML = items.map(renderTimingGroup).join("");
     }
   }
 }
@@ -1347,7 +1744,7 @@ function updateGraphViewHint(data) {
   const timeline = data?.timeline || [];
   const n = timeline.length;
   if (state.graphView === "timing") {
-    el.textContent = "Источник: agent-logs/subagent-passes.jsonl";
+    el.textContent = "Строка — агент шага · под ним routing, как овал на «Факт»";
   } else if (state.graphView === "actual") {
     const staleCount = staleTimelineRows(timeline).length;
     const activeCount = n - staleCount;
@@ -1362,9 +1759,9 @@ function updateGraphViewHint(data) {
     } else {
       el.textContent = `${n} шагов — реальный порядок вызовов subagent`;
     }
-  } else if (state.pipeline === "spec" && !state.showRoutingLoops) {
+  } else if (state.pipeline === "spec") {
     el.textContent =
-      "Основной поток и ветки · refresh analyze-routing скрыты (кнопка справа)";
+      "Квадрат — шаг агента · овал — analyze-routing после этого шага";
   } else {
     el.textContent = "Шаги spec; hook/validate — в «Инфраструктура» справа";
   }
@@ -1378,9 +1775,17 @@ function updateInfraPanel() {
 
 function buildTargetElements(data) {
   const elements = [];
+  const spec = data.pipeline === "spec";
+  const bursts = spec ? routingBurstsByHost(data.timeline || []) : {};
+  const liveHost = spec ? routingLiveHost(data) : null;
+  const satelliteHosts = new Set(spec ? Object.keys(bursts) : []);
+  if (liveHost) satelliteHosts.add(liveHost);
+
+  const nodeById = {};
   for (const node of data.nodes || []) {
+    nodeById[node.id] = node;
+    if (spec && node.id === ROUTING_STEP) continue;
     const pos = node.position || { x: 0, y: 0 };
-    const kind = node.id === "analyze-routing" ? "routing-hub" : node.kind;
     elements.push({
       group: "nodes",
       data: {
@@ -1389,19 +1794,60 @@ function buildTargetElements(data) {
         label: formatNodeLabel(node),
         color: node.color,
         state: node.state,
-        kind,
+        kind: node.kind,
+        ask: Boolean(node.ask),
       },
       position: pos,
     });
   }
+
+  for (const host of satelliteHosts) {
+    const parent = nodeById[host];
+    if (!parent?.position) continue;
+    const burst = bursts[host];
+    const visual = satelliteVisual(host, data, burst, liveHost);
+    elements.push({
+      group: "nodes",
+      data: {
+        id: routingSatelliteId(host),
+        stepId: ROUTING_STEP,
+        hostStep: host,
+        label: visual.label,
+        color: visual.color,
+        state: visual.state,
+        kind: "routing-sat",
+        seq: burst?.last?.seq || null,
+      },
+      position: {
+        x: parent.position.x,
+        y: parent.position.y + ROUTING_SATELLITE_DY,
+      },
+    });
+    elements.push({
+      group: "edges",
+      data: {
+        id: `e-sat-${host}`,
+        source: host,
+        target: routingSatelliteId(host),
+        label: "",
+        color: "#818cf8",
+        kind: "routing-sat",
+        traversed: burst ? "true" : "false",
+      },
+    });
+  }
+
   for (const edge of data.edges || []) {
-    if (!shouldShowTargetEdge(edge, data)) continue;
+    if (edge.from === ROUTING_STEP || edge.to === ROUTING_STEP) continue;
     const kind = edge.kind || "main";
+    const source = satelliteHosts.has(edge.from)
+      ? routingSatelliteId(edge.from)
+      : edge.from;
     elements.push({
       group: "edges",
       data: {
         id: edge.id,
-        source: edge.from,
+        source,
         target: edge.to,
         label: targetEdgeLabel(edge),
         color: edge.color,
@@ -1419,18 +1865,71 @@ function buildActualGraphElements(data) {
   const elements = [];
   const centerX = 360;
   const startY = 56;
-  const stepY = 78;
+  const domainStepY = 112;
+  const satDy = 42;
+  let y = startY;
   let prevNodeId = null;
+  let currentHostId = null;
+  let currentHostY = null;
+  let routingBuf = [];
 
-  sequence.forEach((item, index) => {
-    let nodeId;
-    let edgeMeta = { stale: false, diverged: false };
+  function pushEdge(source, target, meta) {
+    if (!source) return;
+    let edgeColor = "#64748b";
+    if (meta.stale) edgeColor = "#44403c";
+    else if (meta.diverged) edgeColor = "#f97316";
+    elements.push({
+      group: "edges",
+      data: {
+        id: `e-${source}-${target}`,
+        source,
+        target,
+        label: meta.diverged && !meta.stale ? "≠ schema" : "",
+        color: edgeColor,
+        stale: meta.stale ? "true" : "false",
+        traversed: "true",
+        kind: meta.kind || "main",
+      },
+    });
+  }
+
+  function flushRouting(meta) {
+    if (!routingBuf.length) return;
+    const last = routingBuf[routingBuf.length - 1];
+    const displayState = rowDisplayState(last);
+    const satId = currentHostId
+      ? `routing-after-visit-${currentHostId}`
+      : `routing-start-${last.seq}`;
+    const satY = currentHostY != null ? currentHostY + satDy : y;
+    elements.push({
+      group: "nodes",
+      data: {
+        id: satId,
+        stepId: ROUTING_STEP,
+        seq: last.seq,
+        hostStep: currentHostId,
+        label: "analyze-routing",
+        color: RESULT_COLORS[displayState] || ROUTING_SAT_COLOR,
+        state: displayState,
+        kind: "routing-sat",
+      },
+      position: { x: centerX, y: satY },
+    });
+    pushEdge(prevNodeId, satId, { ...meta, kind: "routing-sat", diverged: false });
+    prevNodeId = satId;
+    routingBuf = [];
+    if (currentHostY == null) y += 56;
+  }
+
+  sequence.forEach((item) => {
+    const edgeMeta = { stale: false, diverged: false };
 
     if (item.type === "bundle") {
+      flushRouting(edgeMeta);
       const count = item.rows.length;
       const fromSeq = item.rows[0]?.seq;
       const toSeq = item.rows[item.rows.length - 1]?.seq;
-      nodeId = "stale-collapsed";
+      const nodeId = "stale-collapsed";
       elements.push({
         group: "nodes",
         data: {
@@ -1444,16 +1943,29 @@ function buildActualGraphElements(data) {
           kind: "stale-bundle",
           staleCount: count,
         },
-        position: { x: centerX, y: startY + index * stepY },
+        position: { x: centerX, y },
       });
       edgeMeta.stale = true;
-    } else {
-      const row = item.row;
-      nodeId = `visit-${row.seq}`;
-      const step = row.step || "?";
-      const sub = row.subagent ? `\n${row.subagent}` : "";
-      const ts = row.ts ? row.ts.slice(11, 19) : "";
-      const pass = row.pass ? ` · pass ${row.pass}` : "";
+      pushEdge(prevNodeId, nodeId, edgeMeta);
+      prevNodeId = nodeId;
+      currentHostId = null;
+      currentHostY = null;
+      y += domainStepY;
+      return;
+    }
+
+    const row = item.row;
+    if (isRoutingStep(row.step)) {
+      routingBuf.push(row);
+      return;
+    }
+
+    flushRouting(edgeMeta);
+    const nodeId = `visit-${row.seq}`;
+    const step = row.step || "?";
+    const sub = row.subagent ? `\n${row.subagent}` : "";
+    const ts = formatLocalTime(row.ts);
+    const pass = row.pass ? ` · pass ${row.pass}` : "";
     const displayState = rowDisplayState(row);
     const staleLine =
       displayState === "stale"
@@ -1461,45 +1973,31 @@ function buildActualGraphElements(data) {
           ? `\n⛔ ${row.result} · устарел`
           : "\n⛔ устарел"
         : "";
-      const label = `#${row.seq} ${step}${pass}\n${ts}${sub}${staleLine}`;
-      const color = RESULT_COLORS[displayState] || RESULT_COLORS.ok;
-      edgeMeta.diverged = (row.divergence_kinds || []).includes("order_violation");
-      edgeMeta.stale = displayState === "stale";
+    const label = `#${row.seq} ${step}${pass}\n${ts}${sub}${staleLine}`;
+    edgeMeta.diverged = (row.divergence_kinds || []).includes("order_violation");
+    edgeMeta.stale = displayState === "stale";
 
-      elements.push({
-        group: "nodes",
-        data: {
-          id: nodeId,
-          stepId: step,
-          seq: row.seq,
-          label,
-          color,
-          state: displayState,
-          kind: "visit",
-        },
-        position: { x: centerX, y: startY + index * stepY },
-      });
-    }
-
-    if (prevNodeId) {
-      let edgeColor = "#64748b";
-      if (edgeMeta.stale) edgeColor = "#44403c";
-      else if (edgeMeta.diverged) edgeColor = "#f97316";
-      elements.push({
-        group: "edges",
-        data: {
-          id: `e-${prevNodeId}-${nodeId}`,
-          source: prevNodeId,
-          target: nodeId,
-          label: edgeMeta.diverged && !edgeMeta.stale ? "≠ schema" : "",
-          color: edgeColor,
-          stale: edgeMeta.stale ? "true" : "false",
-          traversed: "true",
-        },
-      });
-    }
+    elements.push({
+      group: "nodes",
+      data: {
+        id: nodeId,
+        stepId: step,
+        seq: row.seq,
+        label,
+        color: RESULT_COLORS[displayState] || RESULT_COLORS.ok,
+        state: displayState,
+        kind: "visit",
+        staleReason: displayState === "stale" ? staleReasonText(row) : "",
+      },
+      position: { x: centerX, y },
+    });
+    pushEdge(prevNodeId, nodeId, edgeMeta);
     prevNodeId = nodeId;
+    currentHostId = nodeId;
+    currentHostY = y;
+    y += domainStepY;
   });
+  flushRouting({ stale: false, diverged: false });
   return elements;
 }
 
@@ -1524,7 +2022,7 @@ function renderTimeline(data) {
       li.classList.add("selected");
     }
     const sub = row.subagent ? ` → ${row.subagent}` : "";
-    const ts = row.ts ? row.ts.slice(0, 19).replace("T", " ") : "—";
+    const ts = formatLocalDateTime(row.ts);
     const pass = row.pass ? `pass ${row.pass}` : "";
     const staleTag =
       displayState === "stale"
@@ -1532,8 +2030,13 @@ function renderTimeline(data) {
           ? ` · ${row.result} · устарел`
           : " · устарел"
         : "";
-    li.textContent = `#${row.seq || "?"} · ${pass} · ${row.step}${sub} · ${ts}${staleTag}`;
+    let line = `#${row.seq || "?"} · ${pass} · ${row.step}${sub} · ${ts}${staleTag}`;
+    if (displayState === "stale") {
+      line += `\n${staleReasonText(row)}`;
+    }
+    li.textContent = line;
     li.addEventListener("click", () => {
+      selectedElementId = null;
       selectedNodeId = row.step;
       selectedTimelineSeq = row.seq;
       highlightNode(selectedNodeId, selectedTimelineSeq);
@@ -1578,8 +2081,14 @@ function applyDivergenceHighlights(graph, data) {
   const alreadyRunning =
     cur?.status === "running" && cur?.step === expectedStep;
   if (expectedStep && summary.must_continue && !alreadyRunning) {
-    const expectedNode = graph.getElementById(expectedStep);
-    if (expectedNode.length) expectedNode.addClass("expected");
+    if (expectedStep === ROUTING_STEP) {
+      const host = routingLiveHost(data);
+      const sat = host ? graph.getElementById(routingSatelliteId(host)) : graph.collection();
+      if (sat.length) sat.addClass("expected");
+    } else {
+      const expectedNode = graph.getElementById(expectedStep);
+      if (expectedNode.length) expectedNode.addClass("expected");
+    }
   }
 
   const items = data.divergence?.items || [];
@@ -1592,6 +2101,7 @@ function applyDivergenceHighlights(graph, data) {
   for (const stepId of divergedSteps) {
     const node = graph.getElementById(stepId);
     if (node.length) node.addClass("diverged");
+    else graph.nodes(`[stepId = "${stepId}"]`).addClass("diverged");
   }
 
   const current = data.current;
@@ -1625,7 +2135,15 @@ function highlightNode(nodeId, timelineSeq) {
   const graph = cy;
   if (!graph) return;
   graph.nodes().removeClass("selected");
-  if (!nodeId && !timelineSeq) return;
+  if (!nodeId && !timelineSeq && !selectedElementId) return;
+
+  if (selectedElementId) {
+    const el = graph.getElementById(selectedElementId);
+    if (el.length) {
+      el.addClass("selected");
+      return;
+    }
+  }
 
   if (state.graphView === "actual") {
     if (nodeId === "stale-collapsed") {
@@ -1635,7 +2153,11 @@ function highlightNode(nodeId, timelineSeq) {
     }
     if (timelineSeq) {
       const el = graph.getElementById(`visit-${timelineSeq}`);
-      if (el.length) el.addClass("selected");
+      if (el.length) {
+        el.addClass("selected");
+        return;
+      }
+      graph.nodes(`[seq = "${timelineSeq}"]`).addClass("selected");
     } else if (nodeId) {
       graph.nodes(`[stepId = "${nodeId}"]`).addClass("selected");
     }
@@ -1645,6 +2167,7 @@ function highlightNode(nodeId, timelineSeq) {
   if (nodeId) {
     const el = graph.getElementById(nodeId);
     if (el.length) el.addClass("selected");
+    else graph.nodes(`[stepId = "${nodeId}"]`).addClass("selected");
   }
 }
 
@@ -1660,6 +2183,7 @@ function bindGraphInteractions(graph) {
       return;
     }
     const stepId = node.data("stepId") || node.id();
+    selectedElementId = node.id();
     selectedNodeId = stepId;
     selectedTimelineSeq = node.data("seq") || null;
     highlightNode(selectedNodeId, selectedTimelineSeq);
@@ -1675,8 +2199,15 @@ function bindGraphInteractions(graph) {
     let text = detail?.tooltip || detail?.hint || stepId;
     if (cyNode?.data("kind") === "stale-bundle") {
       text = `Отменённые шаги · ${cyNode.data("staleCount")} проходов · клик — развернуть`;
+    } else if (cyNode?.data("kind") === "routing-sat") {
+      const host = cyNode.data("hostStep");
+      text = host
+        ? `analyze-routing после ${host}`
+        : "analyze-routing";
     } else if (cyNode?.data("kind") === "visit") {
       text = `#${cyNode.data("seq")} ${stepId} · ${text}`;
+      const reason = cyNode.data("staleReason");
+      if (reason) text += `\n${reason}`;
     } else if (node?.visit_count > 0) {
       text = `${node.visit_count} проход(ов) · ${text}`;
     }
@@ -1710,6 +2241,7 @@ function bindGraphInteractions(graph) {
   graph.on("tap", (evt) => {
     if (evt.target === graph) {
       selectedNodeId = null;
+      selectedElementId = null;
       selectedTimelineSeq = null;
       highlightNode(null, null);
       clearNodePanel();
@@ -1734,7 +2266,6 @@ function saveSelection() {
       pipeline: state.pipeline,
       graphView: state.graphView,
       staleCollapsed: state.staleCollapsed,
-      showRoutingLoops: state.showRoutingLoops,
     })
   );
 }
@@ -1788,16 +2319,16 @@ function renderGraph(data) {
     document.getElementById("stats").textContent = "—";
     clearNodePanel();
     renderTimingsPanel(null);
+
     if (cy) cy.elements().remove();
     return;
   }
 
   setGraphViewTabs();
   updateGraphViewHint(data);
-  updateRoutingLoopsToggleUi();
 
   if (state.graphView === "timing") {
-    renderTimingsPanel(data.timings);
+    renderTimingsPanel(data.timings, data.timeline);
     renderDispatchPanel(data);
     renderSessionOutcomeBanner(data);
     renderDivergenceBanner(data.divergence?.summary);
@@ -2029,17 +2560,12 @@ async function init() {
     state.pipeline = saved.pipeline || config.default_pipeline || "spec";
     state.graphView = ["actual", "timing"].includes(saved.graphView) ? saved.graphView : "target";
     state.staleCollapsed = saved.staleCollapsed !== false;
-    state.showRoutingLoops = saved.showRoutingLoops === true;
     setActiveTab(state.pipeline);
     setGraphViewTabs();
     state.slug = fillSlugSelect(payload, config, saved);
 
     document.getElementById("stale-toggle")?.addEventListener("click", () => {
       setStaleCollapsed(!state.staleCollapsed);
-    });
-
-    document.getElementById("routing-loops-toggle")?.addEventListener("click", () => {
-      setRoutingLoopsVisible(!state.showRoutingLoops);
     });
 
     document.querySelectorAll("#graph-view-tabs .tab").forEach((btn) => {

@@ -20,7 +20,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from pipeline_after_subagent import infer_result  # noqa: E402
+from pipeline_after_subagent import infer_result, infer_run_outcome  # noqa: E402
 from pipeline_routing_state import example_payload, load_routing_state, routing_state_path  # noqa: E402
 
 AGENT = SCRIPTS / "fixtures" / "spec_reviewer_fail_zero_agent.py"
@@ -48,14 +48,23 @@ class InferResultTest(unittest.TestCase):
             "ok",
         )
 
-    def test_real_failure_still_fail(self) -> None:
-        self.assertEqual(infer_result("Subagent failed: timeout"), "fail")
+    def test_quality_report_fail_count_is_finished_not_abort(self) -> None:
+        self.assertEqual(infer_result("quality_gates → FAIL · fail 3 · warn 0"), "ok")
 
-    def test_nonzero_fail_count_still_fail(self) -> None:
-        self.assertEqual(infer_result("quality_gates → FAIL · fail 3 · warn 0"), "fail")
+    def test_ask_parent_retry_word_is_finished(self) -> None:
+        self.assertEqual(infer_result("ASK_PARENT — retry after needs-answer"), "ok")
+
+    def test_cli_timeout_wrapper_is_aborted(self) -> None:
+        self.assertEqual(infer_result("Subagent failed: timeout"), "fail")
 
     def test_empty_is_ok(self) -> None:
         self.assertEqual(infer_result(""), "ok")
+
+    def test_structured_timeout_status_is_aborted(self) -> None:
+        self.assertEqual(infer_run_outcome({"status": "timeout"}), "fail")
+
+    def test_structured_error_is_aborted(self) -> None:
+        self.assertEqual(infer_run_outcome({"error": "killed"}), "fail")
 
 
 class SpecReviewerSubagentStopBattleTest(unittest.TestCase):
@@ -131,6 +140,7 @@ class SpecReviewerSubagentStopBattleTest(unittest.TestCase):
                 {
                     "hook_event_name": "SubagentStop",
                     "agent_type": "spec-reviewer",
+                    "status": "timeout",
                     "last_assistant_message": "Subagent failed: timeout",
                 },
                 extra_args=["--cli", "qwen", "--pipeline", "spec"],
@@ -250,6 +260,187 @@ class SpecReviewerSubagentStopBattleTest(unittest.TestCase):
         self.assertIn("quality_gates rc=", proc.stderr)
         self.assertTrue((proc.stdout or "").strip(), msg="agent produced empty last message")
         return proc.stdout
+
+
+class WriteFeatureCycleSubagentStopTest(unittest.TestCase):
+    """One spec-writer block must not close write-feature or steal another slug."""
+
+    SLUG = "write-cycle-hook"
+
+    def test_mid_cycle_keeps_marker_and_position(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="hook-write-cycle-"))
+        try:
+            self._materialize_cycle(tmp)
+            smoke = tmp / "Feature-writing" / "pipeline-viewer-smoke"
+            smoke.mkdir(parents=True)
+            (smoke / ".pipeline-active-task.json").write_text(
+                json.dumps(
+                    {
+                        "slug": "pipeline-viewer-smoke",
+                        "step": "resolve-gaps",
+                        "subagent": "gap-resolver",
+                        "started_at": "2099-01-01T00:00:00Z",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            after = self._run_hook(
+                tmp,
+                SCRIPTS / "pipeline_after_subagent.py",
+                {
+                    "hook_event_name": "SubagentStop",
+                    "agent_type": "spec-writer",
+                    "last_assistant_message": "Блок goal записан в part-файл.",
+                },
+                extra_args=["--cli", "qwen", "--pipeline", "spec"],
+            )
+            context = after["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("cycle open", context, msg=context)
+
+            from pipeline_active_task import load_active_task, load_active_task_latest
+
+            active = load_active_task(tmp)
+            self.assertIsNotNone(active)
+            self.assertEqual(active["slug"], self.SLUG)
+            self.assertEqual(active["step"], "write-feature")
+            self.assertTrue(active.get("persistent"))
+            latest = load_active_task_latest(tmp)
+            self.assertEqual(latest["slug"], self.SLUG)
+
+            stored, err = load_routing_state(routing_state_path(tmp, self.SLUG), slug=self.SLUG)
+            self.assertEqual(err, "")
+            assert stored is not None
+            self.assertEqual((stored.get("position") or {}).get("step"), "analyze-routing")
+            self.assertEqual((stored.get("position") or {}).get("result"), "ok")
+
+            before = self._run_hook(
+                tmp,
+                SCRIPTS / "pipeline_before_subagent.py",
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "task",
+                    "tool_input": {"subagent_type": "spec-writer"},
+                },
+            )
+            decision = before["hookSpecificOutput"]["permissionDecision"]
+            reason = before["hookSpecificOutput"].get("permissionDecisionReason") or ""
+            self.assertEqual(decision, "allow", msg=reason)
+            self.assertNotIn("pipeline-viewer-smoke", reason)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_assemble_closes_cycle_and_stamps_position(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="hook-write-assemble-"))
+        try:
+            self._materialize_cycle(tmp)
+            folder = tmp / "Feature-writing" / self.SLUG
+            (folder / f"{self.SLUG}.part-goal.md").unlink()
+            spec = folder / f"{self.SLUG}.md"
+            spec.write_text(f"# {self.SLUG}\n", encoding="utf-8")
+            after = self._run_hook(
+                tmp,
+                SCRIPTS / "pipeline_after_subagent.py",
+                {
+                    "hook_event_name": "SubagentStop",
+                    "agent_type": "spec-writer",
+                    "last_assistant_message": "Assemble готов. SPEC записан.",
+                },
+                extra_args=["--cli", "qwen", "--pipeline", "spec"],
+            )
+            context = after["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("position recorded", context, msg=context)
+
+            from pipeline_active_task import load_active_task
+
+            self.assertIsNone(load_active_task(tmp))
+            stored, _ = load_routing_state(routing_state_path(tmp, self.SLUG), slug=self.SLUG)
+            assert stored is not None
+            self.assertEqual((stored.get("position") or {}).get("step"), "write-feature")
+            self.assertEqual((stored.get("position") or {}).get("result"), "ok")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def _materialize_cycle(self, root: Path) -> None:
+        ctx = root / "Feature-context" / f"{self.SLUG}.md"
+        ctx.parent.mkdir(parents=True)
+        ctx.write_text("# context\n\nVerified.\n", encoding="utf-8")
+        fw = root / "Feature-writing" / self.SLUG
+        fw.mkdir(parents=True)
+        (fw / f"{self.SLUG}.part-goal.md").write_text("### goal\n\nЦель.\n", encoding="utf-8")
+        payload = example_payload(self.SLUG)
+        payload["fields"]["has_spec"] = False
+        payload["fields"]["has_context"] = True
+        payload["position"] = {
+            "step": "analyze-routing",
+            "result": "ok",
+            "updated_at": "2026-09-16T07:45:00Z",
+        }
+        path = routing_state_path(root, self.SLUG)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self._seed_run_log(root, step="analyze-routing", subagent="routing-analyzer", result="ok")
+        from pipeline_active_task import save_active_task
+
+        save_active_task(
+            root,
+            slug=self.SLUG,
+            step="write-feature",
+            subagent="spec-writer",
+            cli="qwen",
+            pipeline="spec",
+            persistent=True,
+        )
+
+    def _seed_run_log(self, root: Path, *, step: str, subagent: str, result: str) -> None:
+        slug = self.SLUG
+        run_dir = root / "agent-logs" / slug / "runs" / "run-001"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        manifest = {
+            "slug": slug,
+            "current_run": "run-001",
+            "runs": ["run-001"],
+            "cli": "qwen",
+        }
+        (run_dir.parent.parent / "manifest.json").write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+        row = {
+            "ts": "2026-09-16T07:45:00Z",
+            "step": step,
+            "subagent": subagent,
+            "result": result,
+            "attempt": 1,
+            "pipeline": "spec",
+        }
+        (run_dir / "run-log.jsonl").write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    def _hook_env(self, root: Path) -> dict[str, str]:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(SCRIPTS)
+        env["QWEN_PROJECT_DIR"] = str(root)
+        return env
+
+    def _run_hook(self, root: Path, script: Path, payload: dict, extra_args: list[str] | None = None) -> dict:
+        cmd = [sys.executable, str(script), "--workspace", str(root), *(extra_args or [])]
+        proc = subprocess.run(
+            cmd,
+            input=json.dumps(payload, ensure_ascii=False),
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=self._hook_env(root),
+        )
+        self.assertEqual(
+            proc.returncode,
+            0,
+            msg=f"{script.name} rc={proc.returncode}\nstdout={proc.stdout}\nstderr={proc.stderr}",
+        )
+        data = json.loads(proc.stdout)
+        self.assertIsInstance(data, dict)
+        return data
 
 
 if __name__ == "__main__":

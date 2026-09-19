@@ -29,9 +29,13 @@ PYTHONPATH=scripts python3 scripts/pipeline_delegate.py <slug> \
 
 Тонкие агенты в `pipeline-lab/.qwen/agents/` (боевой `.qwen/` не менять).
 Заготовки: `pipeline-lab/fixtures/<step>/{ok,fail,retry,empty,dirty,pending-apply}/`.
-Пять исходных вариантов сохраняют те же `last_message` / `infer_result`.
-`pending-apply` — шестой: DECISIONS + routing-state с `decisions_pending_apply > 0`
-и `needs_check_feature`, чтобы lab-06 брал resolve-* по P70 spec, не check-feature.
+Пять исходных вариантов сохраняют разные `last_message` (отчёт агента).
+Хук больше не выводит ok/fail/retry из этого текста: шаг «выполнился»,
+пока нет обрыва CLI. Качество шага — routing-state + dispatch.
+`pending-apply` — шестой: DECISIONS + routing-state + context/spec, чтобы lab-06
+брал resolve-challenges по P70, не check-feature и не find-context.
+`ch-apply-leftover-gaps` — седьмой: CH Relates + leftover `[GAP-…]`; lab-08
+не должен уходить в resolve-gaps (P60 Relates-steal).
 
 ```bash
 python3 pipeline-lab/apply_fixture.py --slug lab-demo --step check-feature --variant dirty
@@ -39,7 +43,7 @@ python3 pipeline-lab/apply_fixture.py --slug lab-demo --step check-feature --var
 
 Копирует канонические файлы в `pipeline-lab/Feature-writing/lab-demo/` и печатает
 `last_message.txt`. Variant `ok` / `empty` / `fail` / `retry` дают разный текст;
-`pipeline_after_subagent.infer_result` → `ok` / `ok` (пустой) / `fail` / `retry`.
+хук для всех ставит «выполнился» (`ok`). Обрыв — отдельный сигнал CLI, не слово в отчёте.
 `pending-apply` тоже `ok` (нет ASK_PARENT / timeout).
 
 Хуки стенда: `pipeline-lab/.qwen/hooks/` + `settings.hooks.json` — те же matcher,
@@ -48,7 +52,7 @@ python3 pipeline-lab/apply_fixture.py --slug lab-demo --step check-feature --var
 
 ## Сценарии (сессия 3)
 
-Семь детерминированных прогонов без Qwen. Драйвер: delegate → apply_fixture →
+Восемь детерминированных прогонов без Qwen. Драйвер: delegate → apply_fixture →
 синтетический SubagentStop → снова delegate.
 
 ```bash
@@ -80,7 +84,8 @@ qwen
 сравнить path с `expect_path.json` (`--compare`). Не спрашивать «запускать шаг?».
 
 Минимум живых углов графа: `lab-01-retry-same-step`, `lab-03-challenge-not-check`,
-`lab-06-pending-apply-beats-check`. Кладка прогона: `LIVE.md`.
+`lab-06-pending-apply-beats-check`, `lab-08-ch-apply-leftover-gaps`.
+Кладка прогона: `LIVE.md`.
 
 ## Чего не трогать
 

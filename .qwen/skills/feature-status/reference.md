@@ -137,7 +137,7 @@ mtime — эвристика: правка одной опечатки форм�
 ## Чеклист готовности к сдаче
 
 - [ ] `SPEC` полон по плану / `spec-catalog.yaml`
-- [ ] Открытых `[GAP-...]` нет **или** все осознанно отложены (в `GAPS_MAP`)
+- [ ] Открытых `[GAP-...]` нет (resolve-gaps закрыл все; отложенных не бывает)
 - [ ] `CH-*` со severity Critical/Major — нет в статусе `open`
 - [ ] `ALIGNMENT` verdict = PASS или PASS WITH GAPS
 - [ ] Нет Critical/Major MISMATCH

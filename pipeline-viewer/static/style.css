@@ -465,7 +465,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 720px;
+  max-width: none;
 }
 
 .timing-row {
@@ -506,16 +506,22 @@ main {
 .timing-notes {
   margin: 20px 0 0;
   padding-left: 1.2rem;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #94a3b8;
-  max-width: 720px;
+  max-width: none;
 }
 
 .timing-passes-wrap {
-  margin-top: 16px;
-  max-width: 720px;
-  font-size: 0.78rem;
+  margin-top: 20px;
+  max-width: none;
+  font-size: 0.86rem;
   color: #cbd5e1;
+}
+
+.timing-passes-wrap summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #e2e8f0;
 }
 
 .timing-passes-wrap.hidden {
@@ -523,17 +529,184 @@ main {
 }
 
 .timing-range {
-  font-size: 0.76rem;
-  color: #64748b;
+  font-size: 0.8rem;
+  color: #94a3b8;
 }
 
 .timing-passes {
-  margin: 8px 0 0;
-  padding-left: 1.2rem;
+  margin: 12px 0 24px;
+  padding: 0;
+  list-style: none;
 }
 
-.timing-passes li {
-  margin-bottom: 6px;
+.timing-pass {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.timing-pass-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.timing-pass-head code {
+  font-size: 0.92rem;
+  color: #f8fafc;
+}
+
+.timing-pass-sub {
+  color: #94a3b8;
+}
+
+.timing-pass-dur {
+  margin-left: auto;
+  color: #bbf7d0;
+  white-space: nowrap;
+}
+
+.timing-pass-when {
+  margin-top: 6px;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.timing-pass-meta {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.timing-pass-note {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.timing-stale-hint {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #818cf8;
+  color: #c7d2fe;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.timing-pass.is-fail {
+  border-color: #ef4444;
+  background: #1f1216;
+}
+
+.timing-pass.is-retry {
+  border-color: #eab308;
+  background: #1c1910;
+}
+
+.timing-routings {
+  margin: 10px 0 0;
+  padding: 0 0 0 10px;
+  list-style: none;
+  border-left: 2px dashed #6366f1;
+}
+
+.timing-routing {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  background: #172554;
+  border: 1px solid #4338ca;
+  border-radius: 14px;
+}
+
+.timing-routing.is-fail {
+  border-color: #ef4444;
+  background: #1f1216;
+}
+
+.timing-routing.is-retry {
+  border-color: #eab308;
+  background: #1c1910;
+}
+
+.timing-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: #e2e8f0;
+  background: #334155;
+}
+
+.timing-badge.is-fail {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.timing-badge.is-retry {
+  background: #713f12;
+  color: #fde68a;
+}
+
+.timing-badge.is-ok {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+.timing-pass.is-fail .timing-pass-dur,
+.timing-pass.is-retry .timing-pass-dur {
+  color: #fecaca;
+}
+
+.timing-work {
+  margin: 8px 0 0;
+  color: #e2e8f0;
+}
+
+.timing-hook {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #1e1b4b;
+  border: 1px solid #6366f1;
+  border-left: 4px solid #818cf8;
+  border-radius: 8px;
+  color: #e0e7ff;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.timing-hook-title {
+  font-weight: 600;
+  color: #c7d2fe;
+}
+
+.timing-hook-led {
+  margin-top: 4px;
+  color: #a5b4fc;
+}
+
+.timing-hook-note {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #c7d2fe;
+}
+
+.timing-hook.is-mismatch {
+  background: #2e1064;
+  border-color: #c084fc;
+  border-left-color: #e879f9;
+}
+
+.timing-hook-missing {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: #64748b;
 }
 
 .node-tooltip {
@@ -652,7 +825,8 @@ pre {
   border-radius: 6px;
   background: #0f172a;
   cursor: pointer;
-  line-height: 1.3;
+  line-height: 1.35;
+  white-space: pre-wrap;
 }
 
 .timeline-list li:hover {
@@ -669,9 +843,7 @@ pre {
 .timeline-list li.stale,
 .visit-list li.stale {
   color: #a8a29e;
-  opacity: 0.82;
-  text-decoration: line-through;
-  text-decoration-color: #78716c;
+  opacity: 0.9;
 }
 .timeline-list li.redo,
 .visit-list li.redo { color: #f0abfc; }

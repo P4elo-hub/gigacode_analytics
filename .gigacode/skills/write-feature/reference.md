@@ -11,11 +11,12 @@
 Базовые скиллы блока + `section_skills` только для активных разделов
 (поле `skills` / `section_skills` в каталоге).
 
-План печатает раздел **Задания spec-writer**: оркестратор копирует блок
-`### \`<id>\`` в task целиком (строка `skills:` — все скиллы).
+План печатает раздел **Задания spec-writer** (скиллы блока). Очередь, какой
+`block_id` сейчас, — `write_feature_cycle.py` / JSON `cycle`, не обход таблицы
+вручную. В task: `block_id` и `skills` из JSON.
 
 После записи фрагмента оркестратор гоняет `check-part` **один** раз
-(всегда `--block-id` и `--sections` утверждённого плана):
+(`cycle.check`: всегда `--block-id` и `--sections` утверждённого плана):
 
 ```bash
 python3 scripts/write_feature.py "<бриф>" --mode check-part --name <slug> \
@@ -99,13 +100,14 @@ python3 scripts/write_feature.py "<бриф>" --mode check-part --name <slug> \
 
 ## Сборка и проверка
 
+Очередь и склейка — скрипт клетки, не `spec-writer`:
+
 ```bash
-python3 scripts/write_feature.py "<бриф>" --mode assemble --name <slug> \
-  --part-dir Feature-writing/<slug> \
-  --out Feature-writing/<slug>/<slug>.md
+python3 scripts/write_feature_cycle.py <slug>
+python3 scripts/write_feature_cycle.py <slug> --assemble
 ```
 
-Успешный `--out` удаляет `*.part-*.md` и `*.context.md`.
+Успешный assemble удаляет `*.part-*.md` и `*.context.md`.
 Неполный assemble (нет фрагмента) рабочие файлы не трогает.
 
 Self-check перед финалом:

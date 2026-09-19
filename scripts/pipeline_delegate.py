@@ -14,6 +14,15 @@ from pathlib import Path
 
 from artifact_paths import resolve_slug
 from pipeline_active_task import save_active_task
+from inner_cycle import (
+    ACTION_DONE,
+    close_cycle_cell,
+    close_finished_cycle_marker,
+    cycle_closes_on_done,
+    cycle_config_for_step,
+    is_cycle_mode,
+    next_cycle_at,
+)
 from pipeline_common import subagent_for_step, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
@@ -48,8 +57,21 @@ def build_delegate(
     pipeline_id: str = DEFAULT_PIPELINE_ID,
     from_step: str | None = None,
     to_step: str | None = None,
+    _cycle_closed: bool = False,
 ) -> dict:
     pipe_id = normalize_pipeline_id(pipeline_id)
+    if not _cycle_closed:
+        closed = close_finished_cycle_marker(root, slug, pipeline_id=pipe_id)
+        if closed:
+            return build_delegate(
+                root,
+                slug,
+                cli=cli,
+                pipeline_id=pipe_id,
+                from_step=from_step,
+                to_step=to_step,
+                _cycle_closed=True,
+            )
     dispatch = build_dispatch(root, slug, pipeline_id=pipe_id)
     schema = load_pipeline_schema(pipe_id)
     mode = dispatch.get("orchestrator_mode") or ""
@@ -102,16 +124,67 @@ def build_delegate(
     if mode == "ask_user":
         payload["action"] = "ask_user"
         payload["ok"] = True
-        payload["instruction"] = (
-            "НЕ вызывай `task`. Прочитай DECISIONS → `ask_user_question` по строкам "
-            "`needs-answer` → запиши Decision/Status → снова `pipeline_delegate.py`."
-        )
+        # Handshake stays on this step: ask → apply. Do not re-enter the router
+        # between the answer and apply — overlay JSON would still say needs-answer.
+        if next_step and next_subagent:
+            active = save_active_task(
+                root,
+                slug=slug,
+                step=next_step,
+                subagent=next_subagent,
+                cli=cli,
+                pipeline=pipe_id,
+                persistent=True,
+            )
+            payload["task"] = {
+                "subagent_type": next_subagent,
+                "run_in_background": False,
+                "step": next_step,
+            }
+            payload["active_task"] = active
+            payload["instruction"] = (
+                "Сейчас НЕ вызывай `task`. Прочитай DECISIONS → `ask_user_question` "
+                "по строкам `needs-answer` → запиши Decision и Status "
+                "`pending-apply` или `deferred`. "
+                f"После ответа сразу `task` → `{next_subagent}` "
+                f"(step `{next_step}`, apply). "
+                "НЕ вызывай `pipeline_delegate.py` между ответом и apply — "
+                "`task` уже в этом JSON. "
+                "После возврата apply — снова `pipeline_delegate.py`."
+            )
+        else:
+            payload["instruction"] = (
+                "НЕ вызывай `task`. Прочитай DECISIONS → `ask_user_question` "
+                "по строкам `needs-answer`."
+            )
         return payload
 
-    if mode == "write_feature_cycle":
-        cycle = write_cycle_config(pipe_id)
-        cycle_step = cycle.get("step") or ""
-        cycle_subagent = cycle.get("subagent") or ""
+    if is_cycle_mode(mode):
+        cycle = cycle_config_for_step(pipe_id, next_step) or write_cycle_config(pipe_id)
+        cycle_step = str(cycle.get("step") or next_step or "")
+        cycle_subagent = str(cycle.get("subagent") or "")
+        try:
+            cycle_next = next_cycle_at(
+                slug, root=root, pipeline_id=pipe_id, step=cycle_step
+            )
+        except Exception:  # noqa: BLE001 — cycle hint must not break delegate
+            cycle_next = None
+        if (
+            isinstance(cycle_next, dict)
+            and cycle_next.get("action") == ACTION_DONE
+            and cycle_closes_on_done(cycle)
+            and not _cycle_closed
+        ):
+            close_cycle_cell(root, slug, cycle_step, pipeline_id=pipe_id)
+            return build_delegate(
+                root,
+                slug,
+                cli=cli,
+                pipeline_id=pipe_id,
+                from_step=from_step,
+                to_step=to_step,
+                _cycle_closed=True,
+            )
         active = save_active_task(
             root,
             slug=slug,
@@ -119,20 +192,36 @@ def build_delegate(
             subagent=cycle_subagent,
             cli=cli,
             pipeline=pipe_id,
-            persistent=bool(cycle.get("persistent")),
+            persistent=bool(cycle.get("persistent", True)),
         )
         payload["action"] = "write_feature_cycle"
         payload["active_task"] = active
+        payload["cycle"] = cycle_next
         follow_step = ""
         for edge in schema.get("edges") or []:
             if edge.get("from") == cycle_step and (edge.get("kind") or "main") == "main":
                 follow_step = str(edge.get("to") or "")
                 break
         follow_agent = subagent_for_step(follow_step, pipe_id) if follow_step else ""
+        cycle_hint = ""
+        if isinstance(cycle_next, dict) and cycle_next.get("action") == "task":
+            cycle_hint = (
+                f" Сейчас `task {cycle_next.get('subagent')}` "
+                f"param=`{cycle_next.get('param') or cycle_next.get('block_id')}`."
+            )
+        elif isinstance(cycle_next, dict) and cycle_next.get("action") == "assemble":
+            cycle_hint = (
+                " Сейчас сборка скриптом клетки (не task агента)."
+            )
+        elif isinstance(cycle_next, dict) and cycle_next.get("action") == ACTION_DONE:
+            cycle_hint = (
+                " Клетка закрыта. Не вызывай агента клетки — смотри next_step снаружи."
+            )
         payload["instruction"] = (
-            f"Цикл {cycle_step} ({cycle_subagent} по блокам). Не делегируй resolve/check/code "
-            "пока assemble не завершён. После assemble — снова `pipeline_delegate.py` → "
-            f"`task {follow_agent or follow_step}`."
+            f"Цикл {cycle_step} (очередь вызовов внутри клетки). JSON `cycle`: "
+            f"`task` / `assemble` / `done`. Routing между пунктами не вызывай. "
+            f"После assemble — снова `pipeline_delegate.py` → "
+            f"`task {follow_agent or follow_step}`.{cycle_hint}"
         )
         return payload
 

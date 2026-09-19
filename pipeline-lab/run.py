@@ -22,7 +22,7 @@ PACK_DIR = LAB_ROOT / "pack"
 sys.path.insert(0, str(LAB_ROOT))
 sys.path.insert(0, str(SCRIPTS))
 
-from apply_fixture import STEP_TO_SUBAGENT, apply_fixture, cursor_file, parse_cursor_doc, save_cursor  # noqa: E402
+from apply_fixture import STEP_TO_SUBAGENT, apply_fixture, cursor_file, hook_input_for, parse_cursor_doc, save_cursor  # noqa: E402
 from pipeline_after_subagent import after_subagent  # noqa: E402
 from pipeline_delegate import build_delegate  # noqa: E402
 from pipeline_divergence import is_allowed_transition  # noqa: E402
@@ -233,16 +233,24 @@ def compare_scenario(scenario_id: str, *, workspace: Path | None = None) -> dict
             )
     if scenario_id == "lab-01-retry-same-step":
         steps = [row["step"] for row in actual if row.get("action") == "task"]
-        if len(steps) < 3 or steps[-1] != steps[-2]:
+        if len(steps) < 3 or steps[-1] != "analyze-routing":
             raise AssertionError(
-                f"lab-01: retry did not repeat the same step: {steps}"
+                f"lab-01: after ASK_PARENT text expected analyze-routing, got {steps}"
             )
+        if steps[-2] != "challenge-feature":
+            raise AssertionError(f"lab-01: expected challenge-feature before refresh: {steps}")
     if scenario_id == "lab-06-pending-apply-beats-check":
         steps = [row["step"] for row in actual if row.get("action") == "task"]
         if "check-feature" in steps:
             raise AssertionError("lab-06: path included check-feature")
         if "resolve-challenges" not in steps:
             raise AssertionError("lab-06: path never reached resolve-challenges")
+    if scenario_id == "lab-08-ch-apply-leftover-gaps":
+        steps = [row["step"] for row in actual if row.get("action") == "task"]
+        if "resolve-gaps" in steps:
+            raise AssertionError("lab-08: leftover GAP stole to resolve-gaps")
+        if "resolve-challenges" not in steps:
+            raise AssertionError("lab-08: path never reached resolve-challenges")
     return {
         "ok": True,
         "scenario": scenario_id,
@@ -331,11 +339,12 @@ def run_scenario(
             applied = apply_fixture(slug, step, variant, workspace=workspace)
             after_subagent(
                 workspace,
-                {
-                    "hook_event_name": "SubagentStop",
-                    "agent_type": STEP_TO_SUBAGENT[step],
-                    "last_assistant_message": applied.get("last_message") or "",
-                },
+                hook_input_for(
+                    step,
+                    variant,
+                    last_message=applied.get("last_message") or "",
+                    subagent=STEP_TO_SUBAGENT[step],
+                ),
                 cli=CLI,
                 pipeline_arg=PIPELINE_ID,
             )
@@ -358,6 +367,12 @@ def run_scenario(
             raise AssertionError("lab-03: path included check-feature")
         if "resolve-challenges" not in steps:
             raise AssertionError("lab-03: path never reached resolve-challenges")
+    if scenario_id == "lab-08-ch-apply-leftover-gaps":
+        steps = [row["step"] for row in path if row.get("action") == "task"]
+        if "resolve-gaps" in steps:
+            raise AssertionError("lab-08: leftover GAP stole to resolve-gaps")
+        if "resolve-challenges" not in steps:
+            raise AssertionError("lab-08: path never reached resolve-challenges")
     return {"ok": True, "scenario": scenario_id, "path": path}
 
 

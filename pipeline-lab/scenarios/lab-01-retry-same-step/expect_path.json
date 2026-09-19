@@ -1,5 +1,5 @@
 [
   {"action": "task", "step": "analyze-routing"},
   {"action": "task", "step": "challenge-feature"},
-  {"action": "task", "step": "challenge-feature"}
+  {"action": "task", "step": "analyze-routing"}
 ]

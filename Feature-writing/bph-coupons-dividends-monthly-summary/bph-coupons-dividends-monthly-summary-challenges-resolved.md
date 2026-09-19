@@ -4,7 +4,7 @@ slug: bph-coupons-dividends-monthly-summary
 source_document: Feature-writing/bph-coupons-dividends-monthly-summary/bph-coupons-dividends-monthly-summary.md
 challenges_document: Feature-writing/bph-coupons-dividends-monthly-summary/bph-coupons-dividends-monthly-summary-challenges.md
 context_document: Feature-context/bph-coupons-dividends-monthly-summary.md
-generated_at: 2026-08-30
+generated_at: 2026-09-16
 session: 1
 language: ru
 ---
@@ -12,34 +12,50 @@ language: ru
 # Карта закрытых вопросов: bph-coupons-dividends-monthly-summary
 
 ## Сводка
-- Resolved: 20 · Covered: 1 · Deferred: 0
-- Open осталось: 0
+- Resolved: 19 · Covered: 2 · Needs-answer: 0 · Deferred: 0
 
-## Сессия 1 (2026-08-30)
+## Сессия 1 (2026-09-16)
 
 | ID | Verdict | Выбор | Решение | Затронутые § | Источник | Связанный Q |
 |----|---------|-------|---------|--------------|----------|-------------|
-| CH-01 | MISSING → resolved | «Месяц из periodFilter ленты» | Месяц сводки = месяц `periodFilter` ленты (если включён и задан), иначе — текущий календарный месяц; `order=0` — секция в начале ленты, не привязана к пагинации/скроллу | §4.1.1, §4.2.2 шаг 4 | выбор пользователя | Q-03 |
-| CH-02 | PARTIAL → resolved | «Сводка независима» (согласовано: CH-03 побеждает) | Сводка показывается независимо от `bcDataComplete`; сбой прочих источников её не скрывает; скрывается только при сбое/пустом ответе самой ручки сводки [BR-07] | §4.2.2 alt 8a.2, §1.1 BR-07, §1.3 alt 8a | выбор пользователя | Q-08 |
-| CH-03 | MISSING → resolved | «Сводку показывать» | Пара «операции купонов/дивидендов не загрузились + сводка есть»: сводка показывается, pop-up показывается независимо [BR-07] | §1.3 alt 8a, §4.2.2 alt 8a, §1.1 BR-07 | выбор пользователя | Q-08 |
-| CH-04 | MISSING → resolved | «Сверка не требуется» | Сводка — независимый агрегат BPH; сверка с карточками операций не выполняется, расхождение допустимо [BR-08] | §1.1 BR-08, §1.3/§4.2.2 BR-таблицы | выбор пользователя | Q-11 |
-| CH-05 | MISSING → resolved | «Сводку показывать» | Пустая лента + непустая сводка: заглушка «перейти на Рынок» подавляется, сводка показывается | §1.3 alt 8d | выбор пользователя | — |
-| CH-06 | MISSING → resolved | «Сумма по инструменту» | `instrumentId` сужает агрегат до одного инструмента (целевой UX); `agreements` — перечень договоров, `instrumentId` — доп. фильтр | §4.1.1 «Условия обязательности», §4.2.2 шаг 4 | выбор пользователя | Q-09 |
-| CH-07 | MISSING → resolved | «Опциональны + дефолт месяц» | Даты опциональны; если опущены — BPH возвращает сводку за текущий календарный месяц | §4.1.1 (условия обязательности, примечание) | выбор пользователя | Q-03 |
-| CH-08 | MISSING → resolved | «Серверная таймзона history-ops» | Границы месяца вычисляются в серверной таймзоне (Europe/Moscow), передаются как UTC-инстанты; BPH считает `period` по инстантам [CN-13] | §2 CN-13, §4.1.1, §4.2.2 шаг 4.2 | выбор пользователя; код `BphConverter.printLocalDateTimeAtZeroTimeZone` | — |
-| CH-09 | PARTIAL → resolved | «onErrorResume → пустая сводка» | Новый Mono изолируется `onErrorResume` → пустая сводка, по образцу `AbstractOperationGateway.getOperationsSafe()`; ошибка не всплывает в `Mono.zip` | §4.1.1.1, §4.2.2 шаг 5b | выбор пользователя; код `AbstractOperationGateway.java:98-103` | Q-08 |
-| CH-10 | MISSING → resolved | «Инвариант как требование к BPH» | Инвариант `totalCouponsDividendsSum == totalCouponsSum + totalDividendsSum` (по валютам) — контрактное требование к BPH; history-ops без арифметики/валидации [BR-10] | §1.1 BR-10, §4.1.1, маппинг | выбор пользователя | — |
-| CH-11 | MISSING → resolved | «period по startSearchDate» | Нет ограничения «один месяц»; если диапазон пересекает месяцы — `period` соответствует месяцу `startSearchDate` | §4.1.1 | выбор пользователя | — |
-| CH-12 | MISSING → resolved | «Дополнить коды» | Добавлены 401/403/404/429; при 429 history-ops не ретраит, скрывает секцию | §4.1.1 коды ошибок | выбор пользователя | — |
-| CH-13 | MISSING → resolved | «Как пусто» | 200 + `data: null` трактуется как пустой результат (секция скрывается, INFO), не ошибка | §4.1.1 (примечание) | выбор пользователя | — |
-| CH-14 | MISSING → resolved | «agreements — опциональный фильтр» | `agreements` не обязателен: не передан/пуст → сводка по всем договорам клиента; передан → только указанные [CN-14] | §2 CN-14, §4.1.1, JSON Schema (`required: []`) | выбор пользователя | — |
-| CH-15 | MISSING → resolved | «Версионирование» | Контракт секций версионируется: старый клиент получает ответ без новой секции `history.feed.couponsDividendsSummary` [CN-06] | §2 CN-06, §5.5 Совместимость | выбор пользователя | — |
-| CH-16 | MISSING → resolved | «Только зачисления» | В агрегат входят только зачисления (положительные суммы); списания/налог не включаются [BR-09] | §1.1 BR-09, §4.1.1, маппинг | выбор пользователя | — |
-| CH-17 | COVERED | «Наследовать BphClient» | Отдельный таймаут не вводится; уже было в spec («наследует BphClient»); добавлена уточняющая формулировка про задержку ленты | §7.1.3 (уточнение) | spec (уже было) | — |
-| CH-18 | MISSING → resolved | «Toggle — мастер» | Матрица: toggle OFF → нет запроса; ON + нет ключа `feedRequestsDynamic` → лента как AS IS; карточка — через `instrumentFilterRequestsDynamic` | §5.5 Feature Toggles | выбор пользователя | Q-05 |
-| CH-19 | PARTIAL → resolved | «Отдельный gateway» | Отдельный gateway, не extends `AbstractOperationGateway`; только `enabled()` + `onErrorResume`; operation-фильтры не применяются | §4.1.1.1, §4.2.2 шаг 3 | выбор пользователя; код `AbstractOperationGateway.getOperations()` | — |
-| CH-20 | PARTIAL → resolved | «Принять сырое логирование» | Требование маскирования снято; суммы логируются в сыром виде как у остальных интеграций (`IntegrationLogService.toJson()` без redaction) | §5.1, §5.3.1 | выбор пользователя; код `IntegrationLogService.java:301-310` | — |
-| CH-21 | MISSING → resolved | «Добавить критерии приёмки» | Добавлена таблица критериев приёмки под ключевые edge-кейсы | §5.5 Критерии приёмки | выбор пользователя | — |
+| CH-01 | MISSING → resolved | A (D-17) | Окно UTC, полуинтервал `[start, start+1мес)`, `eventDate` в UTC | §4.1.1, §4.2.2.1 шаг 3 | выбор пользователя | — |
+| CH-02 | MISSING → resolved | A (D-18) | `dateForFilter=EVENT_DATE` (обязательное) | §4.1.1 | выбор пользователя | Q-04 |
+| CH-03 | MISSING → resolved | A (D-19) | Отдельный deadline `app-config.bph.monthlySummary.deadline` (1500–3000 мс) | §5.2 7.1.3, §4.2.2.1 шаг 4, §5.4 | выбор пользователя | — |
+| CH-04 | MISSING → resolved | C (D-20) | Одна секция со сводной таблицей; screen-api разворачивает `data[]` | §4.1.1.2, §4.2.2.4 | выбор пользователя | Q-05 |
+| CH-05 | MISSING → resolved | B (D-21) | null/пустые суммы → пустой агрегат → секция скрыта | §4.2.2.2 шаг 2, §4.2.2.4 шаг 3 | выбор пользователя | — |
+| CH-06 | MISSING → resolved | A (D-22) | Дубликат валюты недопустим (контрактное требование BPH) | §4.1.1, маппинг «Validation и rejection» | выбор пользователя | — |
+| CH-07 | MISSING → resolved | A (D-23) | Метрика только `SectionHidden` (без `SectionError`) | §5.3.2 | выбор пользователя | — |
+| CH-10 | MISSING → resolved | A (D-24) | Сводка только при явном `periodFilter` календарного месяца, иначе скрыть | §4.2.2.1 шаг 2 | выбор пользователя | Q-04 |
+| CH-11 | MISSING → resolved | C (D-25) | Без `maxItems`, риск размера тела задокументирован | §4.1.1 | выбор пользователя | — |
+| CH-12 | MISSING → resolved | A (D-26) | Согласование access-политики (allow-list `systemName=history_ops`) — предусловие go-live | §5.1, §2 CN-07 | выбор пользователя | — |
+| CH-14 | MISSING → resolved | A (D-27) | Единый `date-time` для `period.startDate`/`period.endDate` | §4.1.1 | выбор пользователя | — |
+| CH-15 | MISSING → resolved | A (D-28) | Таблица приёмочных сценариев (Given/When/Then) | §5.3 | выбор пользователя | — |
+| CH-13 | COVERED | — | `systemName=history_ops` уже зафиксирован (D-05) | §4.1.1, §2 CN-01 | spec | Q-10 |
+| CH-18 | COVERED | — | HTTP 200 + `status.code≠0` = бизнес-ошибка (§4.2.2.2 шаг 1) | §4.1.1, §4.2.2.2 | spec | — |
+
+## Needs-answer (батч 2, Minor) → закрыты в Сессии 2
+
+| ID | D-XX | Severity | Тип | Статус в банке |
+|----|------|----------|-----|----------------|
+| CH-08 | D-29 | Minor | nfr-hole | resolved |
+| CH-09 | D-30 | Minor | contract-edge | resolved |
+| CH-16 | D-31 | Minor | scope-ambiguity | resolved |
+| CH-17 | D-32 | Minor | corner-case | resolved |
+| CH-19 | D-33 | Minor | corner-case | resolved |
+| CH-20 | D-34 | Minor | nfr-hole | resolved |
+| CH-21 | D-35 | Minor | data-edge | resolved |
+
+## Сессия 2 (2026-09-16)
+
+| ID | Verdict | Выбор | Решение | Затронутые § | Источник | Связанный Q |
+|----|---------|-------|---------|--------------|----------|-------------|
+| CH-08 | MISSING → resolved | A (D-29) | `enabled()` = `enableServiceBPH && enableBphCouponsDividendsMonthlySummary` (AND с `ENABLE_BPH`) | §2 CN-04, §4.1.1, §4.2.2.1 шаг 1, §5.5 | выбор пользователя | — |
+| CH-09 | MISSING → resolved | A (D-30) | `types` обязательный (history-ops всегда передаёт 4 значения) | §4.1.1, §4.2.2.1 шаг 3 | выбор пользователя | — |
+| CH-16 | MISSING → resolved | A (D-31) | Сводка всегда по всем инструментам клиента (не зависит от фильтра/таба ленты) | §4.1.1, §4.2.2.1 шаг 3 | выбор пользователя | — |
+| CH-17 | MISSING → resolved | B (D-32) | Без дедупликации в запросе; контрактное требование BPH — один `data[]` на уникальный `isin` | §4.1.1, §4.2.2.1 шаг 3, маппинг «Validation и rejection» | выбор пользователя | — |
+| CH-19 | MISSING → resolved | A (D-33) | Сверка ответа с запросом: отсутствующий `isin` → WARN + метрика `missing_isin`, источник failed, секция скрыта | §4.2.2.2 шаг 3, маппинг «Validation и rejection», §5.3.2 | выбор пользователя | — |
+| CH-20 | MISSING → resolved | C (D-34) | Логировать число `isin` вместо полного списка (суммы без изменений) | §5.3.1 | выбор пользователя | — |
+| CH-21 | MISSING → resolved | A (D-35) | Округление по minor units ISO-4217 (RUB 2, JPY 0, KWD 3), банковское | маппинг «Хоп 3» | выбор пользователя | — |
 
 ## Отложено
 

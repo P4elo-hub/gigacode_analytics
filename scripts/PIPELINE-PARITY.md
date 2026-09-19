@@ -29,11 +29,15 @@ informational). Replay fixtures: `scripts/fixtures/routing_state_replay/`.
 | `has_challenges` | artifacts.challenges | `has_challenges` | `open_challenges`, `no_challenges_file` | P100 / P110 |
 | `has_challenges_map` | artifacts.challenges_map | `has_challenges_map` | `needs-check-feature` | invariant |
 | `has_alignment` | artifacts.alignment | `has_alignment` | limit, `alignment_missing_or_stale` | P10 / P120 |
-| `decisions_needs_answer` | decisions table | `decisions_needs_answer` | `needs_answer_with_gaps`, `_challenges_only`, ask_user | P40 / P50 + ask_user |
-| `decisions_pending_apply` | decisions table | `decisions_pending_apply` | `pending_apply_with_gaps`, `_challenges_only` | P60 / P70 |
-| `decisions_needs_answer_alignment` | decisions table | `decisions_needs_answer_alignment` | `_alignment_only`, `_challenges_only` | P45 / P50 |
-| `decisions_pending_apply_alignment` | decisions table | `decisions_pending_apply_alignment` | `_alignment_only`, `_challenges_only` | P65 / P70 |
-| `open_gaps` | spec gaps | `open_gaps` | `open_gaps`, `*_with_gaps` | P40 / P60 / P90 |
+| `decisions_needs_answer` | decisions table | `decisions_needs_answer` | totals (display / validate) | — |
+| `decisions_pending_apply` | decisions table | `decisions_pending_apply` | totals (display / validate) | — |
+| `decisions_needs_answer_gaps` | decisions table Relates | `decisions_needs_answer_gaps` | `needs_answer_with_gaps` | P40 ask_user |
+| `decisions_pending_apply_gaps` | decisions table Relates | `decisions_pending_apply_gaps` | `pending_apply_with_gaps` | P60 |
+| `decisions_needs_answer_alignment` | decisions table | `decisions_needs_answer_alignment` | `_alignment_only` | P45 |
+| `decisions_pending_apply_alignment` | decisions table | `decisions_pending_apply_alignment` | `_alignment_only` | P65 |
+| `decisions_needs_answer_challenges` | decisions table Relates | `decisions_needs_answer_challenges` | `needs_answer_challenges_only` | P50 ask_user |
+| `decisions_pending_apply_challenges` | decisions table Relates | `decisions_pending_apply_challenges` | `pending_apply_challenges_only` | P70 |
+| `open_gaps` | spec gaps | `open_gaps` | `open_gaps` (after Relates apply/ask) | P90 |
 | `open_questions` | context questions | `open_questions` | (display) | none |
 | `challenges.open` | challenges table | `challenges` | `open_challenges` | P100 |
 | `verdict` | alignment frontmatter | `verdict` | `alignment_pass`, limit | P10 / P130 |

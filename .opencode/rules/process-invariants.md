@@ -10,7 +10,11 @@ These rules apply to ALL work in the project, regardless of artifact type.
 
 Applies to **code, scripts, rules, skills and working artifacts**: target 100–200 lines per file; 300 is a hard cap, used only when splitting would hurt clarity. Long files degrade AI context quality. One file = one thing.
 
-**Feature deliverables are exempt.** `SPEC`, `CONTEXT_DOC` and `*-resolved.md` have no line limit. Section shape lives in kit `templates/` and `quality-gates/`; heading order is `kb-writing-kits/spec-catalog.yaml`. Never drop a subsection the kit requires and never compress wording to hit a line count. Completeness beats brevity; split only if the feature scope itself should be split.
+**Feature deliverables are exempt.** `SPEC`, `CONTEXT_DOC`, `*-decisions.md` and
+`*-resolved.md` have no line limit. Section shape lives in kit `templates/` and
+`quality-gates/`; heading order is `kb-writing-kits/spec-catalog.yaml`. Never drop a subsection the kit
+requires and never compress wording to hit a line count. Completeness beats
+brevity; split only if the feature scope itself should be split.
 
 ## Feature slug naming
 
@@ -28,8 +32,30 @@ Lower-layer artifacts reference facts from upper layers:
 3. Feature spec (`Feature-writing/`) — AS IS, TO BE, contracts, data, NFR
 4. Code alignment report — verification vs `repositories/`
 
-If a section has no source in context, analytics, or code — mark `[GAP-...]`, do not invent.
+If a section has no source in context, analytics, or code — mark `[GAP-...]`,
+do not invent. Writer stops there; `/resolve-gaps` asks the user and **closes**
+the marker. Do not leave Status `deferred`.
 
 ## Feature scope
 
 One feature spec = one initiative, completable in 1–4 weeks. If scope grows beyond that, split into separate specs with linked slugs.
+
+## CLI settings (permissions + hooks)
+
+**Never edit** `.qwen/settings.json` or `.gigacode/settings.json` directly — agents are
+denied; a bad overwrite drops `permissions` and breaks unattended runs.
+
+| File | Purpose |
+|------|---------|
+| `settings.base.json` | context, tools, permissions, model (source of truth) |
+| `settings.hooks.json` | PreToolUse / SubagentStop only |
+| `settings.json` | **generated** — do not hand-edit |
+
+After changing base or hooks:
+
+```bash
+python3 scripts/build_cli_settings.py
+python3 scripts/build_cli_settings.py --check
+```
+
+`pipeline_smoke_test.py` validates that `permissions.allow` and hooks are present.

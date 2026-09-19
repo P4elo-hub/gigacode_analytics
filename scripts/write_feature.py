@@ -144,13 +144,10 @@ def build_plan(
         "`--block-id` и `--sections` утверждённого плана. Writer сам не гоняет "
         "проверку на первом проходе.",
         "",
-        "После всех фрагментов — сборка. Успешный `--mode assemble --out` "
-        "удаляет `*.part-*.md` и `*.context.md`.",
-        "",
-        "```bash",
-        f'python3 scripts/write_feature.py "<бриф>" --mode assemble --name {feature_name} '
-        f'--part-dir {part_dir} --out {part_dir}/{feature_name}.md',
-        "```",
+        "Очередь клетки write-feature — `write_feature_cycle.py` "
+        f"(`task` / `assemble` / `done`). Сборка: "
+        f"`python3 scripts/write_feature_cycle.py {feature_name} --assemble`. "
+        "Успешный assemble удаляет `*.part-*.md` и `*.context.md`.",
     ])
     lines.extend(
         format_writer_assignments(

@@ -47,6 +47,8 @@ Workspace пишется и гоняется в **GigaCode CLI** (`gigacode`). �
 
 Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli gigacode` →
 `action: task` → **только** `task.subagent_type` из JSON. После subagent — снова delegate.
+Исключение: `action: ask_user` — после ответа `task` из того JSON, без повторного
+delegate; снова delegate после apply.
 **Не завершай ход**, пока `must_continue: true`. Не спрашивай «запускать X?».
 Не читай `pipelines/` и `scripts/pipeline_*`: повтор шага из delegate — не баг,
 снова `task` на тот же `subagent_type`.

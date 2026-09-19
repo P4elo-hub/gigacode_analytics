@@ -1,1 +1,2 @@
-variant=fail → повтор того же шага, только если так сказал delegate, без выдуманного агента.
+Слово timeout в отчёте — не обрыв CLI. После challenge-feature/fail
+следующий task — analyze-routing (refresh), не повтор challenge-feature.

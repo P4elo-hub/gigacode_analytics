@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""SubagentStop hook: append_run_log → ingest → validate → inject advice."""
+"""SubagentStop hook: append_run_log → ingest → validate → inject advice.
+
+Run-log result is finished (ok) vs aborted (fail). Step quality is routing + dispatch.
+"""
 
 from __future__ import annotations
 
@@ -13,29 +16,36 @@ from pathlib import Path
 
 from agent_logs import load_manifest, manifest_path, run_log_path
 from build_pipeline_graph import subagent_to_step
-from pipeline_active_task import SKIP_SUBAGENTS, clear_active_task, load_active_task_latest
-from pipeline_dispatch import build_dispatch
+from pipeline_active_task import (
+    SKIP_SUBAGENTS,
+    clear_active_task,
+    load_active_task_latest,
+    write_cycle_still_open,
+)
 from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, workspace_root_for_run
 from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
 from pipeline_validate import SEVERITY_BLOCK, SEVERITY_WARN, ValidationReport, validate_slug
 
-FAIL_HINTS = re.compile(
-    r"(?i)("
-    r"\bfailed\b|\bfailure\b|\bfail\b|"
-    r"\berror:|\bexception\b|"
-    r"не\s+удал|"
-    r"\btruncat|\btimeout\b|\babort\b"
-    r")"
-)
-RETRY_HINTS = re.compile(r"(?i)\bretry\b")
-# Not a subagent failure: skill table «FAIL alignment», quality-gates
-# «fail: 0» / «PASS · fail 0» (colon optional). Keep real failed/failure/timeout.
-_FALSE_FAIL_SNIPPETS = re.compile(
-    r"(?i)("
-    r"\|\s*fail alignment\s*\|"
-    r"|fail alignment\s*\|/resolve-code-alignment"
-    r"|fail\s*[:=]?\s*0\b"
-    r")"
+# Run-log keeps ok|fail: ok = step finished, fail = run aborted.
+# Quality (gaps, gates, ASK_PARENT) is analyze-routing + dispatch — not the hook.
+_ABORT_STATUS = {
+    "error",
+    "failed",
+    "fail",
+    "cancelled",
+    "canceled",
+    "timeout",
+    "timed_out",
+    "aborted",
+    "abort",
+}
+# CLI wrapper line only (short). Not a skill report that happens to say «fail».
+_CLI_ABORT_MESSAGE = re.compile(
+    r"(?is)^\s*("
+    r"subagent failed\b"
+    r"|agent (?:execution )?failed\b"
+    r"|task (?:was )?(?:cancelled|canceled|aborted)\b"
+    r").{0,200}$"
 )
 
 
@@ -49,14 +59,31 @@ def parse_hook_input(raw: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _is_aborted(hook_input: dict) -> bool:
+    for key in ("status", "result", "outcome", "error_type"):
+        value = str(hook_input.get(key) or "").strip().lower()
+        if value in _ABORT_STATUS:
+            return True
+    if hook_input.get("cancelled") or hook_input.get("canceled") or hook_input.get("timed_out"):
+        return True
+    if hook_input.get("error"):
+        return True
+    message = str(hook_input.get("last_assistant_message") or "").strip()
+    if message and len(message) <= 240 and _CLI_ABORT_MESSAGE.match(message):
+        return True
+    return False
+
+
+def infer_run_outcome(hook_input: dict) -> str:
+    """ok = finished; fail = aborted. Does not judge step quality."""
+    if not isinstance(hook_input, dict):
+        return "ok"
+    return "fail" if _is_aborted(hook_input) else "ok"
+
+
 def infer_result(last_message: str) -> str:
-    text = last_message or ""
-    scrubbed = _FALSE_FAIL_SNIPPETS.sub("", text)
-    if RETRY_HINTS.search(scrubbed):
-        return "retry"
-    if FAIL_HINTS.search(scrubbed):
-        return "fail"
-    return "ok"
+    """Compatibility: message text is not quality. Timeout-in-prose is still finished."""
+    return infer_run_outcome({"last_assistant_message": last_message})
 
 
 def resolve_step(schema: dict, *, step: str | None, subagent: str) -> str | None:
@@ -197,10 +224,13 @@ def after_subagent(
     if not slug:
         return noop_output("no active slug — run pipeline_set_active_task.py before task")
 
-    result = infer_result(str(hook_input.get("last_assistant_message") or ""))
+    result = infer_run_outcome(hook_input)
     note = ""
     if result != "ok":
-        note = (hook_input.get("last_assistant_message") or "")[:240]
+        note = (
+            str(hook_input.get("error") or hook_input.get("status") or "")
+            or str(hook_input.get("last_assistant_message") or "")
+        )[:240]
 
     manifest_exists = manifest_path(root, slug).is_file()
     run_log = run_log_path(root, slug, load_manifest(root, slug).get("current_run") or "run-001")
@@ -241,10 +271,17 @@ def after_subagent(
             from pipeline_position import record_position
             from pipeline_routing_state import routing_state_sync_enabled, sync_routing_state_after_step
 
-            if record_position(root, slug, step, result):
+            cycle_open = write_cycle_still_open(root, slug, active)
+            if cycle_open:
+                routing_sync_note = " cycle open — position not closed"
+            elif record_position(root, slug, step, result):
                 routing_sync_note = " position recorded"
-            if routing_state_sync_enabled(pipeline_id) and sync_routing_state_after_step(
-                root, slug, step, result, pipeline_id=pipeline_id
+            if (
+                not cycle_open
+                and routing_state_sync_enabled(pipeline_id)
+                and sync_routing_state_after_step(
+                    root, slug, step, result, pipeline_id=pipeline_id
+                )
             ):
                 routing_sync_note = (routing_sync_note + " routing-state.json synced").strip()
         except Exception as exc:  # noqa: BLE001 — hook must not crash orchestrator
@@ -282,15 +319,7 @@ def after_subagent(
     report = validate_slug(root, slug, pipeline=pipeline_id)
     save_validation(root, slug, report)
 
-    keep_active = False
-    if active and active.get("persistent") and active.get("step") == "write-feature":
-        try:
-            keep_active = (
-                build_dispatch(root, slug, pipeline_id=pipeline_id).get("orchestrator_mode")
-                == "write_feature_cycle"
-            )
-        except Exception:
-            keep_active = True
+    keep_active = write_cycle_still_open(root, slug, active)
     if not keep_active:
         clear_active_task(root, slug)
 

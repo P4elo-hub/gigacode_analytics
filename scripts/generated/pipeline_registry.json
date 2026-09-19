@@ -99,7 +99,16 @@
         "id": "write-feature",
         "label": "write-feature",
         "kind": "step",
-        "subagent": "spec-writer"
+        "subagent": "spec-writer",
+        "cycle": {
+          "persistent": true,
+          "assemble": "write_feature",
+          "param": "block_id",
+          "folder": "Feature-writing/{slug}",
+          "out": "{slug}.md",
+          "item_file": "{slug}.part-{param}.md",
+          "close": "on_done"
+        }
       },
       {
         "id": "analyze-routing",
@@ -117,7 +126,8 @@
         "id": "resolve-gaps",
         "label": "resolve-gaps",
         "kind": "step",
-        "subagent": "gap-resolver"
+        "subagent": "gap-resolver",
+        "ask": true
       },
       {
         "id": "challenge-feature",
@@ -129,7 +139,8 @@
         "id": "resolve-challenges",
         "label": "resolve-challenges",
         "kind": "step",
-        "subagent": "challenge-resolver"
+        "subagent": "challenge-resolver",
+        "ask": true
       },
       {
         "id": "check-feature-code",
@@ -141,7 +152,8 @@
         "id": "resolve-code-alignment",
         "label": "resolve-code-alignment",
         "kind": "step",
-        "subagent": "alignment-resolver"
+        "subagent": "alignment-resolver",
+        "ask": true
       },
       {
         "id": "archive-session",
@@ -518,7 +530,7 @@
         "ready_detail": "PASS / PASS WITH GAPS",
         "ready_fix": "Финальный ответ пользователю; калибровка — только по запросу.",
         "stopped": "Пайплайн остановлен.",
-        "ask_user": "НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.",
+        "ask_user": "Сейчас НЕ task. Опроси needs-answer → pending-apply → task из JSON ask_user (без delegate). После apply — снова delegate.",
         "write_cycle": "Цикл write-feature (spec-writer по блокам)."
       },
       "display": {

@@ -31,6 +31,10 @@ class FeatureStatus:
     decisions_pending_apply: int = 0
     decisions_needs_answer_alignment: int = 0
     decisions_pending_apply_alignment: int = 0
+    decisions_needs_answer_gaps: int = 0
+    decisions_pending_apply_gaps: int = 0
+    decisions_needs_answer_challenges: int = 0
+    decisions_pending_apply_challenges: int = 0
     has_challenges: bool = False
     has_challenges_map: bool = False
     has_alignment: bool = False

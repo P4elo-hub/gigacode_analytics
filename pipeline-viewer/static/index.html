@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pipeline Viewer</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=23" />
   <script src="/static/vendor/cytoscape.min.js"></script>
 </head>
 <body>
@@ -54,9 +54,6 @@
           <button type="button" class="tab" data-view="timing">Время</button>
         </nav>
         <span id="graph-view-hint" class="graph-view-hint">Содержательные шаги spec (не hook/validate)</span>
-        <button type="button" id="routing-loops-toggle" class="routing-loops-toggle hidden">
-          Показать refresh-петли
-        </button>
         <button type="button" id="stale-toggle" class="stale-toggle hidden">
           Развернуть отменённые
         </button>
@@ -74,8 +71,8 @@
         <div id="timing-summary" class="timing-summary"></div>
         <div id="timing-chart" class="timing-chart"></div>
         <ul id="timing-notes" class="timing-notes"></ul>
-        <details id="timing-passes-wrap" class="timing-passes-wrap">
-          <summary>Проходы (детализация)</summary>
+        <details id="timing-passes-wrap" class="timing-passes-wrap" open>
+          <summary>Вызовы агентов</summary>
           <ol id="timing-passes" class="timing-passes"></ol>
         </details>
       </div>
@@ -91,13 +88,14 @@
           <span class="dot diverged"></span> mismatch
           <span class="dot redo"></span> заново
           <span class="dot stale"></span> устарел (лог)
-          <span class="legend-edges"> · — основной · ╌ ветка · · refresh</span>
+          <span class="legend-edges"> · квадрат — шаг · овал — analyze-routing · — основной · ╌ ветка</span>
         </span>
         <span class="legend-actual hidden">
           <span class="dot ok"></span> шаг ok
           <span class="dot fail"></span> fail
           <span class="dot stale"></span> устарел
           <span class="dot diverged"></span> переход ≠ схема
+          <span class="legend-edges"> · овал — analyze-routing после шага</span>
         </span>
       </footer>
     </section>
@@ -115,8 +113,9 @@
        append_run_log → ingest → validate
   → dispatch → task …</pre>
         <p class="sidebar-hint infra-legend-note">
-          На графе: зелёный = шаг ok · серый = не было в логе · розовый = redo после
-          restart · фиолетовая рамка = dispatch next.
+          На графе: квадрат = шаг агента · овал = analyze-routing после шага ·
+          зелёный = ok · серый = не было в логе · розовый = redo после restart ·
+          фиолетовая рамка = dispatch next.
         </p>
       </details>
 
@@ -172,6 +171,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=14"></script>
+  <script src="/static/app.js?v=23"></script>
 </body>
 </html>

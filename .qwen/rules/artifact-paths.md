@@ -96,7 +96,10 @@ agent-logs/
 колонки Relates (`GAP-*`, `CH-*`, `Q-XX`).
 
 Статусы: `needs-answer` (варианты готовы) → оркестратор спрашивает →
-`pending-apply` или `deferred` → специалист патчит spec → `applied`.
+`pending-apply` → специалист патчит spec → `applied`.
+Для Relates с `GAP-*` статус `deferred` запрещён: нет факта → вопрос,
+ответ → маркер снят. `deferred` остаётся только для `CH-*`, если
+пользователь явно отложил challenge.
 
 ```markdown
 | ID | Relates | Prompt | Options | Decision | Status | Date |
@@ -108,8 +111,8 @@ agent-logs/
    оркестратору. Дубликат той же Relates не создавать.
 2. Оркестратор — единственный, кто зовёт `ask_user_question`; после ответов
    заполняет Decision и Status. Писать ему можно **только** `DECISIONS`.
-3. Специалист применяет все `pending-apply`, ставит `applied`. `deferred`
-   в spec не трогает.
+3. Специалист применяет все `pending-apply`, ставит `applied`, снимает
+   `[GAP-…]` батча. `deferred` для GAP не использовать.
 4. Есть готовое Decision по Relates — применить или пропустить вопрос, не
    изобретать факт.
 

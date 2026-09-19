@@ -27,7 +27,7 @@ Canonical artifact paths: rule `artifact-paths` (`.gigacode/rules/artifact-paths
 ## Process invariants
 
 - Feature specs follow `spec-catalog.yaml` block order and kb-writing-kits quality gates
-- Unclosed `[GAP-...]` stay visible for manual review — do not invent facts
+- Writer leaves `[GAP-...]` when there is no source fact — do not invent. `resolve-gaps` closes them (fact or user answer); do not defer
 - Files should stay under 200 lines for AI context quality where practical — except feature deliverables in `Feature-writing/` and `Feature-context/`, which have no line limit
 - Feature slugs: `kebab-case-descriptive`
 - One slug = one folder in `Feature-writing/`; nothing loose at the top level
@@ -62,7 +62,7 @@ It pauses only for real questions (write-feature section plan, `needs-answer` in
 | `write-feature` | Правила одного блока spec; план и цикл — у оркестратора |
 | `check-feature` | Review/fix feature spec vs sources |
 | `check-feature-code` | Audit spec vs `repositories/` |
-| `resolve-gaps` | Close spec `[GAP-...]` via `DECISIONS` + patch spec |
+| `resolve-gaps` | Close spec `[GAP-...]` via `DECISIONS` + patch spec (no defer) |
 | `challenge-feature` | Adversarial questions → `-challenges.md` (read-only spec) |
 | `resolve-challenges` | Close `CH-*` via `DECISIONS` + KB search → patch spec |
 | `resolve-code-alignment` | Close closable alignment gaps via `DECISIONS` |

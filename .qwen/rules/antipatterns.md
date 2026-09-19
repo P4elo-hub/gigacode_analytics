@@ -26,7 +26,9 @@ alwaysApply: true
 - **Partial contract tables** — list all fields (existing + new), mark new/changed columns.
 - **Figma as source of truth** — Figma is reference; behavior = spec, structure = catalog sections.
 - **Only happy path** — alternate flows, errors, and edge cases in use case tables.
-- **Closing gaps by invention** — if not in analytics/code/context, leave `[GAP-...]` for human review.
+- **Closing gaps by invention** — нет факта в analytics/code/context → не
+  выдумывать; `resolve-gaps` спрашивает пользователя и по ответу **снимает**
+  маркер. Агент не имеет права Status `deferred` / «Отложить».
 
 ## Code antipatterns (when reading repositories for context)
 

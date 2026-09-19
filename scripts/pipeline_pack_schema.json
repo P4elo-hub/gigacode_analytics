@@ -35,7 +35,42 @@
               "id": { "type": "string", "minLength": 1 },
               "label": { "type": "string" },
               "kind": { "type": "string" },
-              "subagent": { "type": ["string", "null"] }
+              "subagent": { "type": ["string", "null"] },
+              "ask": {
+                "type": "boolean",
+                "description": "This step may pause for a human: ask → same-agent apply, no routing. Overlay ask_user_when still counts the questions."
+              },
+              "cycle": {
+                "type": "object",
+                "description": "Composite graph cell: inner agent+param steps, assemble without routing, then close like any node.",
+                "additionalProperties": true,
+                "properties": {
+                  "persistent": { "type": "boolean" },
+                  "assemble": { "type": "string" },
+                  "param": { "type": "string" },
+                  "folder": { "type": "string" },
+                  "out": { "type": "string" },
+                  "item_file": { "type": "string" },
+                  "close": {
+                    "type": "string",
+                    "enum": ["on_done"],
+                    "description": "Exit: stamp graph position and drop the active-task marker, then outer dispatch. Engine default on_done."
+                  },
+                  "calls": {
+                    "type": "array",
+                    "description": "Static inner steps {agent, param}. Omitted → adapter fills at runtime (write-feature catalog).",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "agent": { "type": "string" },
+                        "param": { "type": "string" },
+                        "skills": { "type": "array" },
+                        "check": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         },

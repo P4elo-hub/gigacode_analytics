@@ -132,7 +132,7 @@ messages:
   ready_detail: PASS / PASS WITH GAPS
   ready_fix: Финальный ответ пользователю; калибровка — только по запросу.
   stopped: Пайплайн остановлен.
-  ask_user: НЕ вызывай task. Прочитай DECISIONS → ask_user_question по needs-answer.
+  ask_user: Сейчас НЕ task. Опроси needs-answer → pending-apply → task из JSON ask_user (без delegate). После apply — снова delegate.
   write_cycle: Цикл write-feature (spec-writer по блокам).
 display:
   heading: "Фича: {slug}"

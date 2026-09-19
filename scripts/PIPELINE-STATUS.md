@@ -83,7 +83,8 @@ Full catalog: [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md).
 ## Collectors
 
 `populate_status` resolves artifact paths, sets `exists_as` / `lines_as`, then
-calls each YAML collector:
+calls each YAML collector, then **re-applies `exists_as` from disk** so overlay
+JSON cannot hide a file that is on disk:
 
 ```python
 COLLECTORS = {

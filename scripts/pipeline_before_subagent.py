@@ -11,6 +11,7 @@ from pathlib import Path
 from artifact_paths import list_feature_slugs
 from build_pipeline_graph import subagent_to_step
 from pipeline_active_task import SKIP_SUBAGENTS, load_active_task_for_slug, load_active_task_latest
+from inner_cycle import is_cycle_mode
 from pipeline_common import delegate_mode_for_subagent, pipeline_gated_subagents, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
@@ -75,7 +76,7 @@ def write_feature_allowed(root: Path, slug: str, active: dict | None, pipeline_i
     if not slug:
         return False
     dispatch = build_dispatch(root, slug, pipeline_id=pipeline_id)
-    return dispatch.get("orchestrator_mode") == "write_feature_cycle"
+    return is_cycle_mode(dispatch.get("orchestrator_mode"))
 
 
 def validate_task(
@@ -103,7 +104,7 @@ def validate_task(
     if cycle_mode:
         mode_name, _block = cycle_mode
         if write_feature_allowed(root, slug, active, pipeline_id):
-            return allow_output(f"{mode_name}: {proposed} разрешён в write_feature_cycle")
+            return allow_output(f"{mode_name}: {proposed} разрешён в цикле клетки")
         return deny_output(
             f"{proposed} только внутри {mode_name}. "
             f"Сначала {DELEGATE_CMD.replace('<slug>', slug or '<slug>')}."

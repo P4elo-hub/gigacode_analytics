@@ -33,8 +33,9 @@ def extra_advice(root: Path, task_id: str, status, dispatch: dict, report, add) 
             title="Есть needs-answer в DECISIONS — нужен ask_user",
             detail=f"Строк: {status.decisions_needs_answer}",
             fix=(
-                "`pipeline_delegate.py` → action ask_user. НЕ `task`. "
-                "Опроси DECISIONS → pending-apply → delegate снова."
+                "`pipeline_delegate.py` → action ask_user. Сейчас НЕ `task`. "
+                "Опроси DECISIONS → pending-apply → `task` из JSON ask_user "
+                "(без delegate). После apply — снова delegate."
             ),
         )
 

@@ -49,6 +49,30 @@ delegate_modes:
 | `restartable_steps` | Restart from this step; compile fills `step_order` |
 | `delegate_modes` | Extra orchestrator modes (spec: `write_feature_cycle`) |
 
+A composite cell (same agent, many params, no routing between them) is
+`cycle:` on the **graph node**. The frontend draws that block; compile copies
+it into `pipeline_schema.json`; `inner_cycle.py` walks it.
+
+```yaml
+cycle:
+  persistent: true
+  assemble: write_feature   # or concat
+  param: block_id
+  folder: Feature-writing/{slug}
+  out: "{slug}.md"
+  item_file: "{slug}.part-{param}.md"
+  close: on_done            # engine default; cell finish = any graph node
+  # calls:                  # optional static queue (frontend-drawn cells)
+  #   - agent: spec-writer
+  #     param: goal
+```
+
+Inner steps: `task` (agent+param) until artifacts exist, then `assemble`
+(script, not a subagent). `close: on_done` stamps `position` on this node and
+clears the active-task marker, then outer dispatch follows compiled edges.
+write-feature is the first pack; omit `calls` and the catalog adapter fills
+them at runtime. Another cell is another `cycle:` block.
+
 ## Add a pack
 
 Prefer `--init-pack` / `--from-json` ([PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md)).

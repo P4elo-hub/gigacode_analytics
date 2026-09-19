@@ -190,7 +190,16 @@
           "id": "write-feature",
           "label": "write-feature",
           "subagent": "spec-writer",
-          "kind": "step"
+          "kind": "step",
+          "cycle": {
+            "persistent": true,
+            "assemble": "write_feature",
+            "param": "block_id",
+            "folder": "Feature-writing/{slug}",
+            "out": "{slug}.md",
+            "item_file": "{slug}.part-{param}.md",
+            "close": "on_done"
+          }
         },
         {
           "id": "analyze-routing",
@@ -208,7 +217,8 @@
           "id": "resolve-gaps",
           "label": "resolve-gaps",
           "subagent": "gap-resolver",
-          "kind": "step"
+          "kind": "step",
+          "ask": true
         },
         {
           "id": "challenge-feature",
@@ -220,7 +230,8 @@
           "id": "resolve-challenges",
           "label": "resolve-challenges",
           "subagent": "challenge-resolver",
-          "kind": "step"
+          "kind": "step",
+          "ask": true
         },
         {
           "id": "check-feature-code",
@@ -232,7 +243,8 @@
           "id": "resolve-code-alignment",
           "label": "resolve-code-alignment",
           "subagent": "alignment-resolver",
-          "kind": "step"
+          "kind": "step",
+          "ask": true
         },
         {
           "id": "archive-session",

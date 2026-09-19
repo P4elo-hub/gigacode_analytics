@@ -56,16 +56,15 @@ find-context → write-feature
 | **Завершение** | `verdict: PASS` или `PASS WITH GAPS` без Critical/Major MISMATCH |
 
 - **code-alignment** → doc: MISMATCH → fix; NOT FOUND для TO BE — ожидаемо до реализации
-- `[GAP-...]` в spec — закрывать через `/resolve-gaps` или вручную; не выдумывать факты
+- `[GAP-...]` в spec — закрывать через `/resolve-gaps` (факт или вопрос
+  пользователю); не выдумывать факты и не оставлять «отложено»
 
 ## Маршрутизация и петли
 
 **Next step** считает только `pipeline_delegate.py` (внутри `feature_status`).
 Нет `routing-state.json` → `analyze-routing` (P5), затем domain-шаги.
 JSON устарел/битый (после mutating-шага) → снова `analyze-routing`.
-Check-feature без правок файлов → хук stamp в JSON, не анализатор.
-`analyze-routing` — внутренний refresh JSON, только когда spec уже есть и
-routing-state устарел/битый. Петли resolve → check, alignment ↔ code-audit,
+Check-feature без правок файлов → хук stamp в JSON, не анализатор. Петли resolve → check, alignment ↔ code-audit,
 one-pass challenge — в скрипте и `scripts/pipeline_schema.json`.
 
 `CHALLENGES` старше `SPEC` после apply — **информационно** (mtime), не триггер

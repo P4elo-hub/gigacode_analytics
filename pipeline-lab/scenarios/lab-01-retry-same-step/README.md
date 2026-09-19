@@ -1,1 +1,2 @@
-Retry (ASK_PARENT) на шаге → следующий task тот же subagent, не сосед по графу.
+ASK_PARENT в тексте отчёта — не обрыв CLI. После challenge-feature/retry
+следующий task — analyze-routing (refresh), не повтор challenge-feature.

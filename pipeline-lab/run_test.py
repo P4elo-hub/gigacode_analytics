@@ -14,7 +14,7 @@ LAB = Path(__file__).resolve().parent
 sys.path.insert(0, str(LAB))
 sys.path.insert(0, str(LAB.parent / "scripts"))
 
-from apply_fixture import apply_fixture, cursor_file  # noqa: E402
+from apply_fixture import apply_fixture, cursor_file, hook_input_for  # noqa: E402
 from pipeline_after_subagent import after_subagent  # noqa: E402
 from pipeline_pack import reset_pack_dir, set_pack_dir  # noqa: E402
 from run import PACK_DIR, PIPELINE_ID, compare_scenario, live_tick, prepare_scenario  # noqa: E402
@@ -23,6 +23,7 @@ LIVE_IDS = (
     "lab-01-retry-same-step",
     "lab-03-challenge-not-check",
     "lab-06-pending-apply-beats-check",
+    "lab-08-ch-apply-leftover-gaps",
 )
 
 
@@ -49,11 +50,12 @@ class LiveTickCriterionTest(unittest.TestCase):
             try:
                 after_subagent(
                     self.tmp,
-                    {
-                        "hook_event_name": "SubagentStop",
-                        "agent_type": applied["subagent"],
-                        "last_assistant_message": applied.get("last_message") or "",
-                    },
+                    hook_input_for(
+                        applied["step"],
+                        applied["variant"],
+                        last_message=applied.get("last_message") or "",
+                        subagent=applied["subagent"],
+                    ),
                     cli="qwen",
                     pipeline_arg=PIPELINE_ID,
                 )
@@ -75,11 +77,17 @@ class LiveTickCriterionTest(unittest.TestCase):
         self.assertEqual(path[-1]["step"], "resolve-challenges")
         self.assertNotIn("check-feature", [row["step"] for row in path])
 
-    def test_lab_01_repeats_same_step_on_retry(self) -> None:
+    def test_lab_01_ask_parent_text_goes_to_analyze_routing(self) -> None:
         last = self._drive("lab-01-retry-same-step")
         steps = [row["step"] for row in last["path"]]
-        self.assertEqual(steps[-1], steps[-2])
-        self.assertEqual(steps[-1], "challenge-feature")
+        self.assertEqual(steps[-2], "challenge-feature")
+        self.assertEqual(steps[-1], "analyze-routing")
+
+    def test_lab_08_leftover_gap_does_not_steal_to_resolve_gaps(self) -> None:
+        last = self._drive("lab-08-ch-apply-leftover-gaps")
+        steps = [row["step"] for row in last["path"]]
+        self.assertNotIn("resolve-gaps", steps)
+        self.assertIn("resolve-challenges", steps)
 
     def test_cursor_advances_only_when_variant_omitted(self) -> None:
         prepare_scenario("lab-06-pending-apply-beats-check", workspace=self.tmp)

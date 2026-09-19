@@ -481,12 +481,15 @@ def _layout_vertical_chain(
 
 
 def _layout_spec_vertical(nodes: list[dict]) -> list[dict]:
-    """Top-to-bottom spec pipeline: main spine, side branches, routing hub on the left."""
+    """Top-to-bottom spec pipeline: main spine and side branches.
+
+    ``analyze-routing`` is parked off the hub slot — the viewer draws it as a
+    satellite oval under the domain step that just ran.
+    """
     center_x = 440.0
-    left_x = 150.0
-    routing_x = 40.0
-    right_x = 740.0
-    step_y = 112.0
+    left_x = 180.0
+    right_x = 720.0
+    step_y = 152.0
     main_chain = [
         "spec-orchestrator",
         "find-context",
@@ -503,15 +506,14 @@ def _layout_spec_vertical(nodes: list[dict]) -> list[dict]:
 
     cf_y = positions["check-feature"][1]
     cc_y = positions["check-feature-code"][1]
-    wf_y = positions["write-feature"][1]
     orch_y = positions["spec-orchestrator"][1]
 
     positions["resolve-gaps"] = (left_x, cf_y)
     positions["resolve-code-alignment"] = (left_x, cc_y)
-    positions["challenge-feature"] = (right_x, cf_y - 50)
-    positions["resolve-challenges"] = (right_x, cf_y + 50)
+    positions["challenge-feature"] = (right_x, cf_y - 56)
+    positions["resolve-challenges"] = (right_x, cf_y + 56)
     positions["archive-session"] = (right_x, orch_y + 18)
-    positions["analyze-routing"] = (routing_x, (wf_y + cf_y) / 2)
+    positions["analyze-routing"] = (left_x, orch_y)
 
     return _apply_positions(nodes, positions)
 
@@ -672,11 +674,19 @@ def mark_superseded_passes(timeline: list[dict]) -> None:
         latest_ok = (latest.get("result") or STATE_OK) not in (STATE_FAIL, STATE_RETRY)
         if not latest_ok:
             continue
+        latest_seq = latest.get("seq")
         for row in rows[:-1]:
             if (row.get("result") or STATE_OK) in (STATE_FAIL, STATE_RETRY):
                 if row.get("display_state") != STATE_STALE:
                     row["display_state"] = STATE_STALE
-                    row["superseded_by"] = latest.get("seq")
+                    row["superseded_by"] = latest_seq
+                if not row.get("stale_reason"):
+                    result = row.get("result") or "fail"
+                    row["stale_reason"] = (
+                        f"Хук записал «{result}», но позже этот же шаг завершился ok "
+                        f"(#{latest_seq}). Работа не отменялась — ложный fail/retry "
+                        "по формулировке ответа агента."
+                    )
 
 
 def apply_restart_state(
@@ -726,6 +736,9 @@ def apply_restart_state(
             row["display_state"] = base
         else:
             row["display_state"] = STATE_STALE
+            row["stale_reason"] = (
+                "Проход был до перезапуска пайплайна. Этот шаг откатили и идут заново."
+            )
 
     if marker_ts:
         post_marker: dict[str, list[dict]] = {}
@@ -741,6 +754,10 @@ def apply_restart_state(
             if latest_ok and len(rows) > 1:
                 for row in rows[:-1]:
                     row["display_state"] = STATE_STALE
+                    if not row.get("stale_reason"):
+                        row["stale_reason"] = (
+                            "Проход перекрыт более поздним ok после перезапуска пайплайна."
+                        )
 
     pending_redo = redo_steps - completed_after
     for step in redo_steps:

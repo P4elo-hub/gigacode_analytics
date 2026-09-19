@@ -56,7 +56,8 @@ find-context → write-feature
 | **Завершение** | `verdict: PASS` или `PASS WITH GAPS` без Critical/Major MISMATCH |
 
 - **code-alignment** → doc: MISMATCH → fix; NOT FOUND для TO BE — ожидаемо до реализации
-- `[GAP-...]` в spec — закрывать через `/resolve-gaps` или вручную; не выдумывать факты
+- `[GAP-...]` в spec — закрывать через `/resolve-gaps` (факт или вопрос
+  пользователю); не выдумывать факты и не оставлять «отложено»
 
 ## Маршрутизация и петли
 

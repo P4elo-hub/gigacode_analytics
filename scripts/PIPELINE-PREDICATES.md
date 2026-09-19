@@ -56,12 +56,12 @@ come from pack `reason_for_predicate` (spec keeps the mapping) or `edge_conditio
 | `not_has_context` | core + edge | `has_context` |
 | `not_has_spec` | core + edge | `has_spec` |
 | `alignment_limit_exhausted` | edge | `has_alignment`, `alignment_iteration`, `verdict` |
-| `needs_answer_with_gaps` | edge | `decisions_needs_answer`, `open_gaps` |
+| `needs_answer_with_gaps` | edge | `decisions_needs_answer_gaps` |
 | `needs_answer_alignment_only` | edge | `decisions_needs_answer_alignment`, `open_gaps` |
-| `needs_answer_challenges_only` | edge | `decisions_needs_answer*` , `open_gaps` |
-| `pending_apply_with_gaps` | edge | `decisions_pending_apply`, `open_gaps` |
+| `needs_answer_challenges_only` | edge | `decisions_needs_answer_challenges` |
+| `pending_apply_with_gaps` | edge | `decisions_pending_apply_gaps` |
 | `pending_apply_alignment_only` | edge | `decisions_pending_apply_alignment`, mismatch, iteration |
-| `pending_apply_challenges_only` | edge | `decisions_pending_apply*` , `open_gaps` |
+| `pending_apply_challenges_only` | edge | `decisions_pending_apply_challenges` |
 | `critical_major_mismatch_resolvable` | edge | `critical_major_mismatch`, iteration, stale |
 | `open_gaps` | edge | `open_gaps` |
 | `open_challenges` | edge | `has_challenges`, `challenges.open` |

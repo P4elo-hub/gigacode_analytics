@@ -78,6 +78,16 @@ def outgoing_steps(schema: dict, from_step: str) -> set[str]:
     }
 
 
+def node_asks_user(pipeline_id: str, step: str) -> bool:
+    """True when the graph node declares ``ask: true`` (human handshake on this cell)."""
+    if not step:
+        return False
+    for node in load_pipeline_schema(pipeline_id).get("nodes") or []:
+        if str(node.get("id") or "") == step:
+            return bool(node.get("ask"))
+    return False
+
+
 def load_pipeline_dispatch(pipeline_id: str) -> dict | None:
     """Compiled dispatch.<id>, or None when that pipeline has no rules."""
     registry = load_pipeline_registry()

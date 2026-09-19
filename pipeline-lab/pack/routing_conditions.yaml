@@ -98,6 +98,44 @@ status_fields:
     instruction: >
       Count DECISIONS rows whose Status is pending-apply. Example: one
       pending-apply → 1. Other statuses ignored.
+  decisions_needs_answer_gaps:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [needs_answer_with_gaps]
+    instruction: >
+      Subset of needs-answer whose Relates contains GAP-*. Q-only rows count
+      here only if SPEC still has leftover open_gaps. Engine recomputes from
+      DECISIONS after overlay — do not invent counts.
+  decisions_pending_apply_gaps:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [pending_apply_with_gaps]
+    instruction: >
+      Subset of pending-apply whose Relates contains GAP-*. Q-only + leftover
+      open_gaps counts as gaps. CH-* does not. Engine recomputes from DECISIONS.
+  decisions_needs_answer_challenges:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [needs_answer_challenges_only]
+    instruction: >
+      Subset of needs-answer whose Relates contains CH-*. Leftover GAP markers
+      do not move this count into gaps. Engine recomputes from DECISIONS.
+  decisions_pending_apply_challenges:
+    type: int
+    source: collectors.decisions_table
+    artifacts: [decisions]
+    collectors: [decisions_table]
+    predicates: [pending_apply_challenges_only]
+    instruction: >
+      Subset of pending-apply whose Relates contains CH-*. Leftover [GAP-…] in
+      SPEC must not steal this apply to resolve-gaps. Engine recomputes from
+      DECISIONS.
   decisions_needs_answer_alignment:
     type: int
     source: collectors.decisions_table
@@ -127,9 +165,9 @@ status_fields:
     predicates: [open_gaps, needs_answer_with_gaps, pending_apply_with_gaps]
     instruction: >
       From SPEC: every inline [GAP-ID] token, plus markdown table rows
-      starting with | GAP-ID |. Exclude an id if its table row contains
-      «закрыт», «closed», «отложено», or «deferred» — including leftover
-      inline tokens of that id. Return sorted unique ids without brackets.
+      starting with | GAP-ID |. Exclude an id only if its table row contains
+      «закрыт» or «closed» (legacy closed row). «отложено» / deferred still
+      counts as open. Return sorted unique ids without brackets.
       Example: [GAP-X] → ["GAP-X"]. Missing SPEC → [].
   open_questions:
     type: list
@@ -349,17 +387,14 @@ edge_conditions:
     label: no spec
   needs_answer_with_gaps:
     expr:
-      all:
-        - field: decisions_needs_answer
-          op: gt
-          value: 0
-        - field: open_gaps
-          op: non_empty
+      field: decisions_needs_answer_gaps
+      op: gt
+      value: 0
     dispatch:
       priority: 40
       next: resolve-gaps
     orchestrator: ask_user
-    label: needs-answer with gaps
+    label: needs-answer gaps Relates
   needs_answer_alignment_only:
     expr:
       all:
@@ -375,29 +410,23 @@ edge_conditions:
     label: needs-answer alignment only
   needs_answer_challenges_only:
     expr:
-      all:
-        - field: decisions_needs_answer
-          op: gt
-          other: decisions_needs_answer_alignment
-        - field: open_gaps
-          op: empty
+      field: decisions_needs_answer_challenges
+      op: gt
+      value: 0
     dispatch:
       priority: 50
       next: resolve-challenges
     orchestrator: ask_user
-    label: needs-answer challenges only
+    label: needs-answer challenges Relates
   pending_apply_with_gaps:
     expr:
-      all:
-        - field: decisions_pending_apply
-          op: gt
-          value: 0
-        - field: open_gaps
-          op: non_empty
+      field: decisions_pending_apply_gaps
+      op: gt
+      value: 0
     dispatch:
       priority: 60
       next: resolve-gaps
-    label: pending-apply with gaps
+    label: pending-apply gaps Relates
   pending_apply_alignment_only:
     expr:
       all:
@@ -418,16 +447,13 @@ edge_conditions:
     label: pending-apply alignment only
   pending_apply_challenges_only:
     expr:
-      all:
-        - field: decisions_pending_apply
-          op: gt
-          other: decisions_pending_apply_alignment
-        - field: open_gaps
-          op: empty
+      field: decisions_pending_apply_challenges
+      op: gt
+      value: 0
     dispatch:
       priority: 70
       next: resolve-challenges
-    label: pending-apply challenges only
+    label: pending-apply challenges Relates
   critical_major_mismatch_resolvable:
     expr:
       all:

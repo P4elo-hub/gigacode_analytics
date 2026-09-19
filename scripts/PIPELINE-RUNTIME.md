@@ -12,6 +12,12 @@ delegate (--pipeline <id>; внутри: dispatch)
   → append_run_log → ingest → validate
 ```
 
+`ask_user` is a pause **inside** the current step. Graph nodes declare
+`ask: true` (compile copies it). Overlay `ask_user_when` still counts
+questions; the flag only allows the handshake on that cell. After the human
+answers, orchestrator `task`s `task.subagent_type` from that same JSON (apply).
+Do **not** call delegate between answer and apply.
+
 ```bash
 python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline <id>
 # if action=task → task on task.subagent_type

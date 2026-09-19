@@ -127,7 +127,7 @@ class SpecOverlayAlwaysOnTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    def test_live_overlay_drops_deferred_json_gaps(self) -> None:
+    def test_live_overlay_keeps_deferred_json_gaps(self) -> None:
         from feature_status import FeatureStatus
         from pipeline_status import populate_status
 
@@ -148,7 +148,64 @@ class SpecOverlayAlwaysOnTest(unittest.TestCase):
             os.utime(path, (time.time() + 60, time.time() + 60))
             status = FeatureStatus(slug=slug)
             populate_status(status, tmp, slug, "spec")
-            self.assertEqual(status.open_gaps, ["GAP-KEEP"])
+            self.assertEqual(sorted(status.open_gaps), ["GAP-KEEP", "GAP-NFR-06"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_overlay_cannot_hide_existing_spec(self) -> None:
+        from feature_status import FeatureStatus
+        from pipeline_status import populate_status
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-has-spec-"))
+        slug = "demo"
+        try:
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            (fw / f"{slug}.md").write_text("# spec\n", encoding="utf-8")
+            payload = example_payload(slug)
+            payload["fields"]["has_spec"] = False
+            path = routing_state_path(tmp, slug)
+            path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            os.utime(path, (time.time() + 60, time.time() + 60))
+            status = FeatureStatus(slug=slug)
+            populate_status(status, tmp, slug, "spec")
+            self.assertTrue(status.has_spec)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_overlay_recomputes_relates_from_decisions_not_json(self) -> None:
+        from feature_status import FeatureStatus
+        from pipeline_status import populate_status
+
+        tmp = Path(tempfile.mkdtemp(prefix="rs-relates-"))
+        slug = "demo"
+        try:
+            fw = tmp / "Feature-writing" / slug
+            fw.mkdir(parents=True)
+            (tmp / "Feature-context").mkdir(parents=True, exist_ok=True)
+            (tmp / "Feature-context" / f"{slug}.md").write_text("# ctx\n", encoding="utf-8")
+            (fw / f"{slug}.md").write_text("# spec\n\n[GAP-LEFTOVER]\n", encoding="utf-8")
+            (fw / f"{slug}-decisions.md").write_text(
+                "# DECISIONS\n\n"
+                "| ID | Relates | Prompt | Options | Decision | Status | Date |\n"
+                "|----|---------|--------|---------|----------|--------|------|\n"
+                "| D-01 | CH-13 | leftover? | A) apply | A | pending-apply | 2026-09-19 |\n",
+                encoding="utf-8",
+            )
+            payload = example_payload(slug, open_gaps=["GAP-LEFTOVER"])
+            payload["fields"]["has_context"] = True
+            payload["fields"]["has_spec"] = True
+            payload["fields"]["has_decisions"] = True
+            payload["fields"]["decisions_pending_apply"] = 1
+            payload["fields"]["decisions_pending_apply_gaps"] = 1
+            payload["fields"]["decisions_pending_apply_challenges"] = 0
+            path = routing_state_path(tmp, slug)
+            path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            os.utime(path, (time.time() + 60, time.time() + 60))
+            status = FeatureStatus(slug=slug)
+            populate_status(status, tmp, slug, "spec")
+            self.assertEqual(status.decisions_pending_apply_gaps, 0)
+            self.assertEqual(status.decisions_pending_apply_challenges, 1)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

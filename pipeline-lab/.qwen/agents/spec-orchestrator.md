@@ -62,8 +62,9 @@ PYTHONPATH=scripts python3 scripts/pipeline_delegate.py <slug> \
    `pipeline_dispatch.py` и **не** вызывай `pipeline_set_active_task.py` сам.
 3. `action: task` — один `task` **только** на `task.subagent_type` из JSON.
    Другие subagent запрещены. Не спрашивай «запускать X?».
-4. `write_feature_cycle` — один `task spec-writer` (тонкий агент кладёт
-   заготовку). Не гоняй kit-план / check-part.
+4. `write_feature_cycle` — JSON `cycle`: `task` → один `task spec-writer` с
+   `block_id` из JSON; `assemble` → `write_feature_cycle.py --assemble`.
+   На стенде writer тонкий (заготовка), kit-план / check-part не гоняй.
 5. `ask_user` — `ask_user_question` по `needs-answer` в DECISIONS → стоп, не `task`.
 6. `ready` / `stopped` / `error` — финальный ответ, стоп. `error` — не improvising retry.
 7. После каждого `task` hook SubagentStop пишет лог. Снова **delegate с

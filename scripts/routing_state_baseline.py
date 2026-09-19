@@ -1,8 +1,8 @@
 """CI / replay baseline: parse spec artifacts the same way Phase 11 collectors did.
 
 Analyzer (LLM) follows routing_conditions.yaml. This module is the etalon for
---golden and routing_state_parity --replay. Live spec overlay uses
-`deferred_gap_ids` so «Отложено» rows do not re-queue resolve-gaps.
+--golden and routing_state_parity --replay. Live spec overlay strips only
+legacy closed GAP rows («закрыт» / closed), not «отложено».
 """
 
 from __future__ import annotations
@@ -18,7 +18,9 @@ DECISION_ROW_RE = re.compile(
     re.MULTILINE,
 )
 ALIGNMENT_RELATES_RE = re.compile(r"\b[FICTKAM]-\d+\b")
-CLOSED_GAP_MARKERS = ("закрыт", "closed", "отложено", "deferred")
+GAP_RELATES_RE = re.compile(r"\bGAP-[A-Z0-9-]+\b")
+CH_RELATES_RE = re.compile(r"\bCH-\d+\b")
+CLOSED_GAP_MARKERS = ("закрыт", "closed")
 QUESTION_ID_RE = re.compile(r"\bQ-\d+\b")
 CHALLENGE_ROW_RE = re.compile(
     r"^\|\s*(CH-\d+)\s*\|(?:[^|\n]*\|){3}\s*([^|]+)\|\s*([^|]+)\|",
@@ -60,7 +62,7 @@ def _section_after(text: str, heading_re: re.Pattern[str]) -> str:
 
 
 def deferred_gap_ids(spec_text: str) -> set[str]:
-    """GAP ids whose table row is closed / deferred — not dispatch-open."""
+    """GAP ids whose table row is legacy-closed — not dispatch-open."""
     found: set[str] = set()
     for match in TABLE_GAP_RE.finditer(spec_text):
         line_start = spec_text.rfind("\n", 0, match.start()) + 1
@@ -72,7 +74,7 @@ def deferred_gap_ids(spec_text: str) -> set[str]:
 
 
 def collect_open_gaps(spec_text: str) -> list[str]:
-    """Open gaps: inline [GAP-ID] + table rows, minus closed/deferred ids."""
+    """Open gaps: inline [GAP-ID] + table rows, minus legacy-closed ids."""
     deferred = deferred_gap_ids(spec_text)
     table_open: list[str] = []
     for match in TABLE_GAP_RE.finditer(spec_text):
@@ -143,26 +145,54 @@ def _artifact(paths: dict[str, Path] | None, key: str) -> Path | None:
     return path if isinstance(path, Path) else None
 
 
+def classify_relates(relates: str, *, leftover_gaps: bool) -> str:
+    """Bucket a DECISIONS Relates cell for dispatch (GAP vs CH vs alignment).
+
+    Q-only rows have no GAP/CH id: leftover SPEC markers count as gaps,
+    otherwise challenges (legacy goldens 07/17).
+    """
+    if GAP_RELATES_RE.search(relates):
+        return "gaps"
+    if ALIGNMENT_RELATES_RE.search(relates):
+        return "alignment"
+    if CH_RELATES_RE.search(relates):
+        return "challenges"
+    return "gaps" if leftover_gaps else "challenges"
+
+
 def apply_decisions_table(status, paths: dict[str, Path]) -> None:
     path = paths.get("decisions")
     if path is None or not path.is_file():
         return
+    leftover_gaps = bool(getattr(status, "open_gaps", None))
     status.decisions_needs_answer = 0
     status.decisions_pending_apply = 0
     status.decisions_needs_answer_alignment = 0
     status.decisions_pending_apply_alignment = 0
+    status.decisions_needs_answer_gaps = 0
+    status.decisions_pending_apply_gaps = 0
+    status.decisions_needs_answer_challenges = 0
+    status.decisions_pending_apply_challenges = 0
     for match in DECISION_ROW_RE.finditer(path.read_text(encoding="utf-8")):
         relates = match.group(1)
         flag = match.group(2).strip().lower()
-        from_alignment = bool(ALIGNMENT_RELATES_RE.search(relates))
+        kind = classify_relates(relates, leftover_gaps=leftover_gaps)
         if flag == "needs-answer":
             status.decisions_needs_answer += 1
-            if from_alignment:
+            if kind == "alignment":
                 status.decisions_needs_answer_alignment += 1
+            elif kind == "gaps":
+                status.decisions_needs_answer_gaps += 1
+            elif kind == "challenges":
+                status.decisions_needs_answer_challenges += 1
         elif flag == "pending-apply":
             status.decisions_pending_apply += 1
-            if from_alignment:
+            if kind == "alignment":
                 status.decisions_pending_apply_alignment += 1
+            elif kind == "gaps":
+                status.decisions_pending_apply_gaps += 1
+            elif kind == "challenges":
+                status.decisions_pending_apply_challenges += 1
 
 
 def apply_spec_gaps(status, paths: dict[str, Path]) -> None:

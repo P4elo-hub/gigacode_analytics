@@ -60,8 +60,12 @@ def _stub_status(fields: dict) -> SimpleNamespace:
         "critical_major_mismatch": 0,
         "decisions_needs_answer": 0,
         "decisions_needs_answer_alignment": 0,
+        "decisions_needs_answer_gaps": 0,
+        "decisions_needs_answer_challenges": 0,
         "decisions_pending_apply": 0,
         "decisions_pending_apply_alignment": 0,
+        "decisions_pending_apply_gaps": 0,
+        "decisions_pending_apply_challenges": 0,
         "challenges": SimpleNamespace(open=0),
     }
     base.update(fields)

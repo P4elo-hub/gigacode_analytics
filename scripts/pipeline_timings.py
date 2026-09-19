@@ -60,7 +60,7 @@ def _archived_passes(root: Path, slug: str, schema: dict) -> list[dict]:
                 "seconds": float(duration),
                 "source": "agent-logs",
                 "confidence": "high",
-                "note": (row.get("description") or "")[:120],
+                "note": row.get("description") or "",
                 "session_id": row.get("session_id"),
                 "call_id": row.get("call_id"),
             }
@@ -161,7 +161,7 @@ def _run_log_passes(schema: dict, run_log: list[dict]) -> tuple[list[dict], floa
                 "seconds": round(capped, 1),
                 "source": "run-log",
                 "confidence": "estimate",
-                "note": (row.get("note") or "")[:120],
+                "note": row.get("note") or "",
                 "agent_run_id": row.get("agent_run_id"),
             }
         )

@@ -63,7 +63,7 @@ find-context → write-feature
 | `action` | Действие |
 |---|---|
 | `task` | Один `task` **только** на `task.subagent_type` из JSON. Другие subagent **запрещены**. |
-| `ask_user` | `ask_user_question` по `needs-answer` в DECISIONS → **стоп**, не `task` |
+| `ask_user` | `ask_user_question` по `needs-answer` → **стоп**. После ответа `task` из этого JSON (apply), без delegate |
 | `write_feature_cycle` | Цикл write-feature ниже |
 | `ready` | Финальный ответ |
 | `stopped` | Сообщить причину, стоп |
@@ -79,6 +79,11 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
 
 **Запрещено завершать ход**, пока `must_continue: true`. Не спрашивай «продолжить?».
 После каждого `task` — hook SubagentStop → снова **`pipeline_delegate.py --pipeline spec`** → `task`.
+
+**Не отлаживай движок.** Не читай `pipelines/`, `scripts/pipeline_*`,
+`routing_conditions.yaml`, `predicates.py`. Повтор `next_step` из delegate —
+исполни `task` ещё раз. Если без человека нельзя — `ask_user_question`, не grep
+роутера.
 
 Правило **`run-until-done`**: выход **только** на `ready` (PASS / PASS WITH GAPS),
 `ask_user` (строки `needs-answer` в DECISIONS) или `stopped` (лимит alignment, нет
@@ -98,7 +103,7 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
 ❌ Запрещено после fail: вручную вызывать `resolve-challenges`, если delegate дал
 `check-feature`; удалять артефакты и «re-run» без dispatch.
 
-`pending-apply` — delegate вернёт `action: task` на resolver apply (без ask_user).
+`pending-apply` — `task` apply из JSON `ask_user`, без повторного delegate.
 
 # Шаги на каждом запросе
 
@@ -107,7 +112,8 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
    кандидатов несколько и выбрать нельзя. Запрещены имена `update`, `changes`,
    `wip`.
 2. `pipeline_delegate.py <slug> --cli qwen --pipeline spec` — **единственный** источник next step/subagent.
-   Не считай GAP/CH/Q и порядок шагов вручную. Не вызывай `task` без delegate в этом ходе.
+   Не считай GAP/CH/Q и порядок шагов вручную. Не вызывай `task` без delegate в этом ходе
+   (кроме apply после `ask_user` — `task` из того JSON).
 3. При `action: task` — **сразу** `task` на `task.subagent_type` из JSON.
    Не спрашивай «запускать X?». Шаг **write-feature** — цикл ниже.
 4. После каждого `task` — снова **`pipeline_delegate.py --pipeline spec`** и следующий шаг. Не запускай два
@@ -146,8 +152,8 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
   (пользователь может добавить / убрать). До ответа писателей не запускай;
 - субагент resolve-* вернул `ASK_PARENT` и строки `needs-answer` в `DECISIONS` —
   прочитай файл, вызови `ask_user_question` по этим `D-*`, запиши Decision и
-  Status `pending-apply` или `deferred`, сразу снова `task` того же специалиста
-  на apply. Не отвечай за пользователя;
+  Status `pending-apply` (для Relates с `GAP-*` — никогда `deferred`), сразу
+  снова `task` того же специалиста на apply. Не отвечай за пользователя;
 - `alignment_iteration` ≥ 3 и verdict всё ещё `FAIL`;
 - отказ по правам / сломанный путь у субагента.
 
@@ -164,9 +170,13 @@ PreToolUse hook блокирует `task` с неверным subagent.
 
 Исключение вне spec-pipeline: `doc-reviewer` (ревью правок артефактов).
 
-# write-feature (цикл, свежий контекст на блок)
+# write-feature (цикл внутри клетки графа)
 
-Не пиши spec сам. Один `task spec-writer` = один `block_id`.
+Не пиши spec сам. Очередь блоков — JSON `cycle` из `pipeline_delegate.py` или:
+
+`python3 scripts/write_feature_cycle.py <slug> [--sections "<план>"]`
+
+Один `task spec-writer` = один `cycle.block_id`. Сборку делает скрипт, не writer.
 
 1. Нет брифа → попроси и стоп. Папка: `mkdir -p Feature-writing/<slug>`
    (можно дать первому writer).
@@ -178,24 +188,26 @@ PreToolUse hook блокирует `task` с неверным subagent.
    какие блоки убрать из профиля SIHIST, что добавить (threat,
    acceptance, migration, async). UML AS IS/TO BE — в колонке, если активны
    `1.2-diagram` / `1.3-diagram`. Писателей до подтверждения не запускай.
-4. Сверху вниз по строкам плана: `task spec-writer`. В задание **скопируй
-   целиком** блок `### \`<block_id>\`` из раздела «Задания spec-writer»
-   (строка `skills:` — все скиллы, не первый). Плюс бриф, slug, протокол,
-   `--sections` утверждённого плана, пути `Feature-context/<slug>.md` и
-   `Feature-writing/<slug>/<slug>.context.md`. Не переписывай список скиллов.
-   Один блок за раз. Writer `check-part` не вызывает. После `part`-файла
-   **ровно один** раз, всегда с `--block-id` и `--sections` утверждённого плана
-   (без этих флагов не вызывать):
+   Сохрани план: `python3 scripts/write_feature_cycle.py <slug> --save-plan --sections "<утверждённый список>"`.
+4. Пока `cycle.action == task`: `task spec-writer` с `block_id` и `skills` из JSON
+   (плюс бриф, slug, протокол, `--sections`, пути `Feature-context/<slug>.md` и
+   `Feature-writing/<slug>/<slug>.context.md`). Не переписывай список скиллов.
+   Writer `check-part` не вызывает. После `part`-файла **ровно один** раз,
+   всегда с `--block-id` и `--sections` из `cycle.check` (без этих флагов не вызывать):
 
    `python3 scripts/write_feature.py "<бриф>" --mode check-part --name <slug> --block-id <id> --part-dir Feature-writing/<slug> --profile sihist --sections "<утверждённый список>"`
 
-   Код 0 — следующий блок. Код ≠ 0 — повтор `spec-writer` с текстом ошибки (до 3
-   попыток на блок). После 3 отказов — `ask_user_question` с текстом ошибки; assemble
+   Код 0 — снова `write_feature_cycle.py` (не `pipeline_delegate.py`). Код ≠ 0 —
+   повтор **тот же** `block_id` из последнего JSON, не читай cycle заново (до 3
+   попыток). После 3 отказов — `ask_user_question` с текстом ошибки; assemble
    не делай, пока блок не пройдёт check-part.
-5. Сборка — отдельный `task spec-writer` с заданием «только `--mode assemble`»:
-   те же `--sections`, `--part-dir`, `--out …/<slug>.md`. Не собирай сам.
-   Успешный assemble сам удаляет `*.part-*.md` и `*.context.md`.
-6. **`pipeline_delegate.py --pipeline spec`** → `task spec-reviewer` (`check-feature`). Не жди «да».
+5. `cycle.action == assemble` — сам:
+
+   `python3 scripts/write_feature_cycle.py <slug> --assemble`
+
+   Не вызывай `spec-writer` на сборку. Успешный assemble удаляет `*.part-*.md`
+   и `*.context.md`.
+6. `cycle.action == done` — **`pipeline_delegate.py --pipeline spec`**. Не жди «да».
 
 # resolve-gaps (task `gap-resolver`)
 
@@ -207,6 +219,8 @@ PreToolUse hook блокирует `task` с неверным subagent.
   `repositories/`;
 - если GAP > 15 — **батч 1** blockers только; после `needs-answer` subagent
   вернёт `ASK_PARENT` — опроси пользователя, не делегируй apply в том же ходе.
+  Батч 2 — снова опрос, потом apply. Нельзя `deferred` / «Отложить»: нет
+  факта → вопрос, ответ → маркер снят.
 
 # resolve-challenges (task `challenge-resolver`)
 
@@ -228,7 +242,7 @@ PreToolUse hook блокирует `task` с неверным subagent.
 
 1. в задании укажи путь `Feature-writing/<slug>/<slug>-decisions.md`;
 2. если `orchestrator_mode: ask_user` или в DECISIONS есть `needs-answer` — **сначала**
-   опроси по строкам файла (`ask_user_question`), потом dispatch → `task` на apply;
+   опроси по строкам файла (`ask_user_question`), потом `task` из JSON `ask_user` (без delegate);
    **не** запускай check-feature / code-audit, пока needs-answer не закрыты;
 3. если «применить pending-apply» — сразу `task` apply, не переспрашивай;
 4. не выдумывай Decision за пользователя;
@@ -265,6 +279,8 @@ PreToolUse hook блокирует `task` с неверным subagent.
 - Отказ по правам у субагента — не перезапускай его вслепую: разберись,
   какой путь или команда заблокированы, и сообщи пользователю.
 - Не спрашивать подтверждение next step («запускать check-feature?» и аналоги).
+- Не читать движок пайплайна (`pipelines/`, `scripts/pipeline_*`) — только
+  `pipeline_delegate.py` и артефакты фичи / `DECISIONS`.
 
 # Завершение
 

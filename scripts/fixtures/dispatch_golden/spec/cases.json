@@ -1958,5 +1958,147 @@
         "needs_check_feature_reason": "SPEC новее GAPS_MAP — перепроверка после resolve-gaps"
       }
     }
+  },
+  {
+    "id": "32-ch-pending-leftover-gaps",
+    "files": {
+      "Feature-context/dispatch-golden.md": "# Context\n\nVerified.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nLeftover after ask: [GAP-LEFTOVER]\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-13 | §1 | q | t | Minor | open |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | CH-13 | leftover? | A) apply | A | pending-apply | 2026-09-19 |\n"
+    },
+    "touch_after": [
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "resolve-challenges",
+      "next_subagent": "challenge-resolver",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "pending-apply",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 0,
+        "decisions_pending_apply": 1,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "decisions_needs_answer_gaps": 0,
+        "decisions_pending_apply_gaps": 1,
+        "decisions_needs_answer_challenges": 0,
+        "decisions_pending_apply_challenges": 0,
+        "open_gaps": [
+          "GAP-LEFTOVER"
+        ],
+        "open_questions": [],
+        "challenges": {
+          "open": 1,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": true,
+        "needs_check_feature_reason": "нет check-feature после последней правки SPEC"
+      }
+    }
+  },
+  {
+    "id": "33-ch-needs-answer-leftover-gaps",
+    "files": {
+      "Feature-context/dispatch-golden.md": "# Context\n\nVerified.\n",
+      "Feature-writing/dispatch-golden/dispatch-golden.md": "# dispatch-golden\n\nLeftover after ask: [GAP-LEFTOVER]\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md": "# GAPS_MAP\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-challenges.md": "# CH\n\n| ID | § | Q | type | severity | status |\n|----|---|----|-----|----------|--------|\n| CH-13 | §1 | q | t | Minor | open |\n",
+      "Feature-writing/dispatch-golden/dispatch-golden-decisions.md": "# DECISIONS\n\n| ID | Relates | Prompt | Options | Decision | Status | Date |\n|----|---------|--------|---------|----------|--------|------|\n| D-01 | CH-13 | leftover? | A) apply |  | needs-answer | 2026-09-19 |\n"
+    },
+    "touch_after": [
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-gaps-resolved.md"
+      ],
+      [
+        "Feature-writing/dispatch-golden/dispatch-golden.md",
+        "Feature-writing/dispatch-golden/dispatch-golden-challenges.md"
+      ]
+    ],
+    "expect": {
+      "ready": false,
+      "next_step": "resolve-challenges",
+      "next_subagent": "challenge-resolver",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "needs-answer",
+    "routing_state": {
+      "schema_version": 1,
+      "slug": "dispatch-golden",
+      "generated_at": "2026-09-14T17:57:13Z",
+      "fields": {
+        "has_context": true,
+        "has_spec": true,
+        "has_decisions": true,
+        "has_gaps_map": true,
+        "has_challenges": true,
+        "has_challenges_map": false,
+        "has_alignment": false,
+        "decisions_needs_answer": 1,
+        "decisions_pending_apply": 0,
+        "decisions_needs_answer_alignment": 0,
+        "decisions_pending_apply_alignment": 0,
+        "decisions_needs_answer_gaps": 1,
+        "decisions_pending_apply_gaps": 0,
+        "decisions_needs_answer_challenges": 0,
+        "decisions_pending_apply_challenges": 0,
+        "open_gaps": [
+          "GAP-LEFTOVER"
+        ],
+        "open_questions": [],
+        "challenges": {
+          "open": 1,
+          "deferred": 0,
+          "resolved": 0,
+          "covered": 0,
+          "open_critical": 0,
+          "open_major": 0
+        },
+        "verdict": "",
+        "alignment_iteration": 0,
+        "critical_major_mismatch": 0,
+        "alignment_stale": false,
+        "stale": [
+          "context-newer-than-spec"
+        ],
+        "needs_check_feature": false,
+        "needs_check_feature_reason": ""
+      }
+    }
   }
 ]

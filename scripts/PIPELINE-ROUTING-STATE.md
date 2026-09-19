@@ -48,9 +48,9 @@ Analyzer populates the same names so overlay is 1:1.
 
 | Field | Source | Predicates / invariant |
 |-------|--------|------------------------|
-| `has_context` | artifacts.context (exists) + JSON | `not_has_context` |
-| `has_spec` | artifacts.spec + JSON | `not_has_spec` |
-| `has_alignment` | artifacts.alignment + JSON | `alignment_limit_exhausted`, `alignment_missing_or_stale` |
+| `has_context` | artifacts.context (engine after overlay) | `not_has_context` |
+| `has_spec` | artifacts.spec (engine after overlay) | `not_has_spec` |
+| `has_alignment` | artifacts.alignment (engine after overlay) | `alignment_limit_exhausted`, `alignment_missing_or_stale` |
 | `has_challenges` | artifacts.challenges + JSON | `open_challenges`, `no_challenges_file` |
 | `has_gaps_map` | artifacts.gaps_map + JSON | invariant `needs-check-feature` |
 | `has_challenges_map` | artifacts.challenges_map + JSON | invariant |
@@ -72,6 +72,9 @@ Analyzer populates the same names so overlay is 1:1.
 Not used by spec dispatch: `open_questions`, `spec_lines`, `context_lines`,
 other `challenges.*` counts (display). Engine still computes **mtime** `stale[]`
 and `alignment_stale` from `status.yaml` after the overlay (`ENGINE_RECOMPUTED_FIELDS`).
+Artifact `exists_as` (`has_spec`, `has_context`, …) is also re-applied from disk
+after overlay so a stale JSON snapshot cannot hide a file (e.g. `has_spec: false`
+must not re-queue write-feature when SPEC exists).
 
 Full mapping: `pipelines/spec/routing_conditions.yaml` (`status_fields` SSOT for the skill;
 `edge_conditions` SSOT for `when:` bodies — Phase 13).

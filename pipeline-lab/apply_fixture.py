@@ -14,7 +14,16 @@ LAB_ROOT = Path(__file__).resolve().parent
 FIXTURES_DIR = LAB_ROOT / "fixtures"
 SCENARIOS_DIR = LAB_ROOT / "scenarios"
 CURSOR_NAME = ".lab-cursor.json"
-VARIANTS = ("ok", "fail", "retry", "empty", "dirty", "pending-apply")
+VARIANTS = (
+    "ok",
+    "fail",
+    "retry",
+    "empty",
+    "dirty",
+    "pending-apply",
+    "ch-apply-leftover-gaps",
+)
+CH_PENDING_VARIANTS = frozenset({"pending-apply", "ch-apply-leftover-gaps"})
 
 STEP_TO_SUBAGENT = {
     "find-context": "context-researcher",
@@ -151,16 +160,27 @@ def last_message_for(step: str, variant: str) -> str:
         return ""
     if variant == "dirty":
         return f"{step} completed with gaps. Quality gates PASS · fail 0.\n"
-    if variant == "pending-apply":
+    if variant in CH_PENDING_VARIANTS:
         return f"{step} completed. DECISIONS pending-apply is ready; apply before check-feature.\n"
     raise ValueError(f"unknown variant: {variant}")
+
+
+def hook_input_for(step: str, variant: str, *, last_message: str, subagent: str) -> dict:
+    """Lab SubagentStop payload. Text ASK_PARENT/timeout is not a CLI abort."""
+    del step, variant
+    return {
+        "hook_event_name": "SubagentStop",
+        "agent_type": subagent,
+        "last_assistant_message": last_message,
+    }
 
 
 def _routing_state(*, slug: str, variant: str, step: str) -> str:
     if variant == "empty":
         return ""
-    gaps = ["GAP-LAB-01"] if variant == "dirty" else []
-    pending = variant == "pending-apply"
+    leftover = variant == "ch-apply-leftover-gaps"
+    gaps = ["GAP-LAB-01"] if variant == "dirty" or leftover else []
+    pending = variant in CH_PENDING_VARIANTS
     has_challenges = pending or (
         step in {"challenge-feature", "resolve-challenges"}
         and variant not in {"empty", "retry", "fail"}
@@ -197,6 +217,11 @@ def _routing_state(*, slug: str, variant: str, step: str) -> str:
             "decisions_pending_apply": 1 if pending else 0,
             "decisions_needs_answer_alignment": 0,
             "decisions_pending_apply_alignment": 0,
+            "decisions_needs_answer_gaps": 0,
+            # Leftover variant JSON lies (P60 steal) — overlay recomputes Relates.
+            "decisions_pending_apply_gaps": 1 if leftover else 0,
+            "decisions_needs_answer_challenges": 0,
+            "decisions_pending_apply_challenges": 0 if leftover else (1 if pending else 0),
             "open_gaps": gaps,
             "open_questions": ["Q-01"] if variant == "dirty" and step == "find-context" else [],
             "challenges": {
@@ -216,7 +241,7 @@ def _routing_state(*, slug: str, variant: str, step: str) -> str:
             "needs_check_feature_reason": needs_reason,
         },
     }
-    if step == "check-feature" and variant != "pending-apply":
+    if step == "check-feature" and variant not in CH_PENDING_VARIANTS:
         payload["fields"]["needs_check_feature"] = variant == "fail"
         payload["fields"]["needs_check_feature_reason"] = "timeout" if variant == "fail" else ""
         if variant == "ok":
@@ -236,6 +261,11 @@ def _spec(*, slug: str, variant: str) -> str:
         )
     if variant == "retry":
         return f"# {slug}\n\nSpec ждёт ответ в DECISIONS (needs-answer).\n"
+    if variant == "ch-apply-leftover-gaps":
+        return (
+            f"# {slug}\n\n"
+            "CH pending-apply уже в DECISIONS. Leftover маркер: [GAP-LAB-01].\n"
+        )
     return f"# {slug}\n\nТребование стенда без открытых GAP.\n"
 
 
@@ -264,7 +294,7 @@ def _context(*, slug: str, variant: str) -> str:
 def _decisions(*, slug: str, variant: str) -> str:
     if variant == "empty":
         return ""
-    if variant == "pending-apply":
+    if variant in CH_PENDING_VARIANTS:
         status = "pending-apply"
         decision = "A: стенд"
     elif variant == "retry":
@@ -273,7 +303,7 @@ def _decisions(*, slug: str, variant: str) -> str:
     else:
         status = "applied"
         decision = "A: стенд"
-    relates = "CH-01" if variant == "pending-apply" else "GAP-LAB-01, Q-01"
+    relates = "CH-01" if variant in CH_PENDING_VARIANTS else "GAP-LAB-01, Q-01"
     return (
         f"# {slug}-decisions\n\n"
         "| ID | Relates | Prompt | Options | Decision | Status | Date |\n"
@@ -340,6 +370,7 @@ def library_contents(step: str, variant: str, *, slug: str = "__SLUG__") -> dict
         "ok",
         "dirty",
         "pending-apply",
+        "ch-apply-leftover-gaps",
         "retry",
         "fail",
     }:
@@ -347,14 +378,22 @@ def library_contents(step: str, variant: str, *, slug: str = "__SLUG__") -> dict
             "routing-state.json",
             _routing_state(slug=slug, variant=variant, step=step),
         )
-    # Sixth variant is not in the session-2 matrix; assemble DECISIONS + routing-state
-    # so overlay P60–70 can fire without changing ok/fail/retry/empty/dirty bodies.
-    if variant == "pending-apply":
+    # CH pending-apply variants: DECISIONS + routing-state + presence files.
+    # Overlay re-reads Relates; disk has_context/has_spec must match JSON.
+    if variant in CH_PENDING_VARIANTS:
         files.setdefault("decisions.md", _decisions(slug=slug, variant=variant))
         files.setdefault(
             "routing-state.json",
             _routing_state(slug=slug, variant=variant, step=step),
         )
+        files.setdefault("context.md", _context(slug=slug, variant=variant))
+        files.setdefault("spec.md", _spec(slug=slug, variant=variant))
+    if step == "analyze-routing" and variant not in {"empty"}:
+        files.setdefault("context.md", _context(slug=slug, variant=variant))
+        files.setdefault("spec.md", _spec(slug=slug, variant=variant))
+    if step == "challenge-feature" and variant in {"retry", "fail"}:
+        # No CH file → P110 repeats challenge-feature when position result != ok.
+        files.pop("challenges.md", None)
     return files
 
 

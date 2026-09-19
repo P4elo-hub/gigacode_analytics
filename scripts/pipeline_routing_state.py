@@ -32,6 +32,8 @@ SPEC_STALE_VS = (
 )
 POC_STALE_VS = ("spec",)
 ENGINE_RECOMPUTED_FIELDS = frozenset({"stale", "alignment_stale"})
+# Artifact exists_as (has_spec, has_context, …) is re-applied from disk after
+# overlay in populate_status — JSON cannot hide a file that is on disk.
 # Top-level JSON metadata (hook); router ignores — see step_completion / position.
 SYNC_METADATA_KEYS = frozenset({"step_completion", "position"})
 ROUTER_OWNED = frozenset(
@@ -66,6 +68,10 @@ INT_FIELDS = frozenset(
         "decisions_pending_apply",
         "decisions_needs_answer_alignment",
         "decisions_pending_apply_alignment",
+        "decisions_needs_answer_gaps",
+        "decisions_pending_apply_gaps",
+        "decisions_needs_answer_challenges",
+        "decisions_pending_apply_challenges",
         "alignment_iteration",
         "critical_major_mismatch",
     }
@@ -135,6 +141,10 @@ def example_payload(slug: str, *, open_gaps: list[str] | None = None) -> dict:
             "decisions_pending_apply": 0,
             "decisions_needs_answer_alignment": 0,
             "decisions_pending_apply_alignment": 0,
+            "decisions_needs_answer_gaps": 0,
+            "decisions_pending_apply_gaps": 0,
+            "decisions_needs_answer_challenges": 0,
+            "decisions_pending_apply_challenges": 0,
             "open_gaps": list(open_gaps or []),
             "open_questions": [],
             "challenges": {key: 0 for key in CHALLENGES_KEYS},
@@ -454,24 +464,27 @@ def sync_routing_state_after_step(
 
 
 def spec_overlay_collector(root: Path, task_id: str, status, paths: dict[str, Path]) -> None:
-    """Spec overlay: JSON fields, minus SPEC table-deferred GAP ids.
+    """Spec overlay: JSON fields, then Relates buckets from DECISIONS on disk.
 
-    Analyzer snapshot can still list leftover inline [GAP-NFR-…] after D-14.
-    Those ids stay in the spec for PASS WITH GAPS and must not re-queue
-    resolve-gaps. JSON remains source of truth for every other field.
+    Leftover «отложено» markers stay in open_gaps. Apply/ask dispatch uses
+    Relates (GAP-* vs CH-*), not «any pending-apply + any leftover marker».
     """
     if not spec_overlay_should_apply(root, task_id, paths):
         return
     path = _effective_routing_state_path(root, task_id, paths)
     apply_routing_state_file(status, path, slug=task_id)
     spec = paths.get("spec")
-    if spec is None or not spec.is_file():
-        return
-    from routing_state_baseline import deferred_gap_ids
+    if spec is not None and spec.is_file():
+        from routing_state_baseline import deferred_gap_ids
 
-    deferred = deferred_gap_ids(spec.read_text(encoding="utf-8"))
-    if deferred:
-        status.open_gaps = [gap_id for gap_id in (status.open_gaps or []) if gap_id not in deferred]
+        deferred = deferred_gap_ids(spec.read_text(encoding="utf-8"))
+        if deferred:
+            status.open_gaps = [
+                gap_id for gap_id in (status.open_gaps or []) if gap_id not in deferred
+            ]
+    from routing_state_baseline import apply_decisions_table
+
+    apply_decisions_table(status, paths)
 
 
 def serialize_status_fields(status) -> dict:

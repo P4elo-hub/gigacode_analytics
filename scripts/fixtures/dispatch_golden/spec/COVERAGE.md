@@ -58,6 +58,7 @@ Runs after needs-answer / pending-apply (P40–70). A SPEC edit must not skip ap
 | 60 | `pending_apply_with_gaps` | resolve-gaps | | `07-pending-apply-gaps` |
 | 65 | `pending_apply_alignment_only` | resolve-code-alignment | | `23-pending-apply-alignment-only`, `24-mixed-pending-apply-align-ch` |
 | 70 | `pending_apply_challenges_only` | resolve-challenges | | `17-pending-apply-challenges` |
+| 70 | leftover GAP must not steal CH Relates | resolve-challenges | | `32-ch-pending-leftover-gaps`, `33-ch-needs-answer-leftover-gaps` |
 | 80 | `critical_major_mismatch_resolvable` | resolve-code-alignment | | `14-alignment-fail-mismatch` |
 | 90 | `open_gaps` | resolve-gaps | | `05-open-gaps`, `16-graph-gate-run-log` |
 | 100 | `open_challenges` | resolve-challenges | | `09-open-challenges` |
@@ -80,7 +81,7 @@ These stay in `pipeline_smoke_test.py` or hooks — not dispatch routing:
 | Calibration pipeline graph | `graph:*:calibration` |
 | Exit policy (must_continue vs ask_user) | `run-until-done:*` |
 
-Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 30 cases + calibration 1 orchestrator_only)
+Phase 1+ (registry compile) must keep **dispatch-golden** green (spec 34 cases + calibration 1 orchestrator_only)
 and **golden-coverage:packs** (every `pipelines/<id>/` has a golden folder or waiver).
 
 Unit tests for `parse_alignment` / DECISIONS parsing: `scripts/feature_status_test.py`

@@ -19,8 +19,8 @@ user-invocable: false
 JSON сохрани top-level `position` и `step_completion`, если они уже есть.
 
 Граф: node `analyze-routing` в `pipelines/spec/graph.yaml` (и `routing-poc`).
-После mutating step оркестратор снова delegate; если JSON missing/stale —
-router выбирает этот шаг.
+После mutating step оркестратор снова delegate; если JSON missing/stale/invalid —
+router выбирает этот шаг (P5, всегда до domain-шагов).
 
 ## Когда
 
@@ -47,10 +47,12 @@ challenge-feature, check-feature-code, resolve-code-alignment, find-context
    - `AGENT_RUN_LOG` — нужен для `needs_check_feature` (последний ok check-feature vs SPEC mtime)
 3. Заполни `fields` по `routing_conditions.yaml`. Presence-флаги — существование
    файлов. Домен:
-   - `open_gaps`: inline `[GAP-…]` + табличные GAP; id с «закрыт»/«closed»/
-     «отложено»/«deferred» в строке таблицы — не открытый (и inline того же id тоже нет)
-   - DECISIONS Status `needs-answer` / `pending-apply`; alignment-subset если
-     Relates ~ `[FICTKAM]-<n>` (не Q-*, не CH-*)
+   - `open_gaps`: inline `[GAP-…]` + табличные GAP; id с «закрыт»/«closed»
+     в строке таблицы — не открытый. «отложено»/`deferred` **остаётся открытым**
+   - DECISIONS Status `needs-answer` / `pending-apply`. Relates → четыре счётчика:
+     GAP-* → `decisions_*_gaps`; `[FICTKAM]-<n>` (не Q-*, не CH-*) →
+     `*_alignment`; CH-* → `*_challenges`; Q-only: leftover `open_gaps` → gaps,
+     иначе challenges. Движок пересчитывает Relates с диска после overlay.
    - `challenges.*` из таблицы CH; dispatch смотрит `challenges.open`
    - ALIGNMENT frontmatter `verdict` / `alignment_iteration`; счётчик
      critical/major mismatch-строк

@@ -32,7 +32,9 @@ Lower-layer artifacts reference facts from upper layers:
 3. Feature spec (`Feature-writing/`) — AS IS, TO BE, contracts, data, NFR
 4. Code alignment report — verification vs `repositories/`
 
-If a section has no source in context, analytics, or code — mark `[GAP-...]`, do not invent.
+If a section has no source in context, analytics, or code — mark `[GAP-...]`,
+do not invent. Writer stops there; `/resolve-gaps` asks the user and **closes**
+the marker. Do not leave Status `deferred`.
 
 ## Feature scope
 

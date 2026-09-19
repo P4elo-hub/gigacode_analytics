@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Session 2 criterion: apply_fixture copies artifacts; last_message maps to infer_result."""
+"""Session 2 criterion: apply_fixture copies artifacts; hook no longer judges last_message quality."""
 
 from __future__ import annotations
 
@@ -25,12 +25,12 @@ EXPECTED_DIRTY = (
     "Feature-writing/lab-demo/last_message.txt",
 )
 
-# ok / empty → ok (empty message is ok); fail → fail; retry → retry
+# Fixtures still differ in text; hook treats all as finished unless CLI abort.
 VARIANT_RESULT = {
     "ok": "ok",
     "empty": "ok",
-    "fail": "fail",
-    "retry": "retry",
+    "fail": "ok",
+    "retry": "ok",
     "dirty": "ok",
 }
 
@@ -84,6 +84,27 @@ class ApplyFixtureCriterionTest(unittest.TestCase):
             self.tmp / "Feature-writing/lab-demo/lab-demo-decisions.md"
         ).read_text(encoding="utf-8")
         self.assertIn("pending-apply", decisions)
+        self.assertTrue((self.tmp / "Feature-context/lab-demo.md").is_file())
+        self.assertTrue((self.tmp / "Feature-writing/lab-demo/lab-demo.md").is_file())
+        leftover = apply_fixture(
+            "lab-demo", "analyze-routing", "ch-apply-leftover-gaps", workspace=self.tmp
+        )
+        self.assertEqual(infer_result(leftover["last_message"]), "ok")
+        leftover_spec = (self.tmp / "Feature-writing/lab-demo/lab-demo.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("[GAP-LAB-01]", leftover_spec)
+        leftover_decisions = (
+            self.tmp / "Feature-writing/lab-demo/lab-demo-decisions.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("CH-01", leftover_decisions)
+        leftover_json = json.loads(
+            (self.tmp / "Feature-writing/lab-demo/lab-demo-routing-state.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(leftover_json["fields"]["open_gaps"], ["GAP-LAB-01"])
+        self.assertEqual(leftover_json["fields"]["decisions_pending_apply_gaps"], 1)
         ok = apply_fixture("lab-demo", "check-feature", "ok", workspace=self.tmp)
         self.assertIn("fail 0", ok["last_message"])
         self.assertNotIn("pending-apply", ok["last_message"])

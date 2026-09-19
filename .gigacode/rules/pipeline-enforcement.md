@@ -57,8 +57,8 @@ python3 scripts/pipeline_delegate.py <task_id> --assert-subagent <имя> --pipe
 | action | Действие |
 |--------|----------|
 | `task` | Один `task` **только** на `task.subagent_type` из JSON |
-| `ask_user` | `ask_user_question`, **без** `task` |
-| `write_feature_cycle` | Цикл оркестратора (spec: spec-writer по блокам) |
+| `ask_user` | `ask_user_question` (сейчас без `task`); после ответа — `task` из JSON, без delegate |
+| `write_feature_cycle` | Цикл write-feature: JSON `cycle` (`task` / `assemble` / `done`) |
 | `orchestrator_only` | Dispatch нет — шаги по markdown; delegate проверяет рёбра (`--from-step` / `--to-step`) |
 | `ready` | Финальный ответ пользователю |
 | `stopped` | Сообщить причину, стоп |
@@ -76,6 +76,8 @@ python3 scripts/pipeline_delegate.py <task_id> --assert-subagent <имя> --pipe
 ## Запреты
 
 - ❌ `task` без предшествующего `pipeline_delegate.py` в том же ходе
+  (кроме следующих блоков внутри уже открытого `write_feature_cycle`
+  и apply после `ask_user` по `task` из того JSON)
 - ❌ Subagent ≠ `task.subagent_type` из delegate JSON
 - ❌ Ручной re-run resolver после fail, если delegate указал другой шаг
 - ❌ Отдельный вызов `pipeline_set_active_task.py` (делает delegate)
@@ -85,8 +87,9 @@ python3 scripts/pipeline_delegate.py <task_id> --assert-subagent <имя> --pipe
 
 ## Spec pack
 
-- `ask_user` — строки `needs-answer` в DECISIONS
-- `write_feature_cycle` — после assemble снова delegate → `task spec-reviewer`
+- `ask_user` — строки `needs-answer` в DECISIONS. После ответа: `task` из JSON
+  ask_user (apply), **без** delegate. После apply — снова delegate.
+- `write_feature_cycle` — читай JSON `cycle`: `task` → `spec-writer` с `block_id`; `assemble` → `write_feature_cycle.py --assemble` (не LLM); `done` → снова delegate. Между блоками **без** delegate.
 - Не писать/править `SPEC` и отчёты — только через субагентов (`DECISIONS` — исключение)
 
 ## Calibration pack

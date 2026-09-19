@@ -263,16 +263,22 @@ def validate_status(pipeline_id: str, spec: object) -> list[str]:
 
 
 def _nodes_meta(pipe: dict) -> list[dict]:
-    return [
-        {
+    nodes: list[dict] = []
+    for node in pipe.get("nodes", []):
+        if not isinstance(node, dict) or not node.get("id"):
+            continue
+        item = {
             "id": node["id"],
             "label": node.get("label", node["id"]),
             "kind": node.get("kind"),
             "subagent": node.get("subagent"),
         }
-        for node in pipe.get("nodes", [])
-        if isinstance(node, dict) and node.get("id")
-    ]
+        if isinstance(node.get("cycle"), dict):
+            item["cycle"] = node["cycle"]
+        if node.get("ask"):
+            item["ask"] = True
+        nodes.append(item)
+    return nodes
 
 
 def _normalize_dispatch(spec: dict) -> dict:

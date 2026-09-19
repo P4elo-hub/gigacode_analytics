@@ -75,6 +75,17 @@ def _mtime(path: Path | None) -> float | None:
     return path.stat().st_mtime
 
 
+def apply_artifact_presence(status, paths: dict[str, Path], artifacts: dict) -> None:
+    """Disk is SSOT for exists_as / lines_as. Overlay JSON cannot hide a file."""
+    for art_id, path in paths.items():
+        art = artifacts.get(art_id) if isinstance(artifacts.get(art_id), dict) else {}
+        exists_as = (art or {}).get("exists_as") or f"has_{art_id}"
+        setattr(status, exists_as, path.is_file())
+        lines_as = (art or {}).get("lines_as")
+        if lines_as:
+            setattr(status, lines_as, _line_count(path))
+
+
 def evaluate_stale_rule(rule: dict, paths: dict[str, Path]) -> bool:
     when = rule.get("when")
     left = _mtime(paths.get(str(rule.get("left") or "")))
@@ -96,13 +107,7 @@ def populate_status(status, root: Path, task_id: str, pipeline_id: str = DEFAULT
         status.pipeline_id = pipeline_id
     paths = resolve_artifact_paths(root, task_id, pipeline_id)
     artifacts = spec.get("artifacts") or {}
-    for art_id, path in paths.items():
-        art = artifacts.get(art_id) if isinstance(artifacts.get(art_id), dict) else {}
-        exists_as = (art or {}).get("exists_as") or f"has_{art_id}"
-        setattr(status, exists_as, path.is_file())
-        lines_as = (art or {}).get("lines_as")
-        if lines_as:
-            setattr(status, lines_as, _line_count(path))
+    apply_artifact_presence(status, paths, artifacts)
 
     registry = collectors_for(pipeline_id)
     for item in spec.get("collectors") or []:
@@ -111,6 +116,8 @@ def populate_status(status, root: Path, task_id: str, pipeline_id: str = DEFAULT
         fn = registry.get(item.get("id"))
         if fn:
             fn(root, task_id, status, paths)
+
+    apply_artifact_presence(status, paths, artifacts)
 
     stale: list[str] = []
     for rule in spec.get("stale") or []:
@@ -134,6 +141,12 @@ def finalize_orchestrator_mode(status, pipeline_id: str = DEFAULT_PIPELINE_ID) -
         status.orchestrator_mode = "stopped"
         status.must_continue = False
         return
+    from inner_cycle import cycle_config_for_step
+
+    if cycle_config_for_step(pipeline_id, status.next_step):
+        status.orchestrator_mode = "write_feature_cycle"
+        status.must_continue = True
+        return
     write_step = orch.get("write_cycle_step")
     if write_step and status.next_step == write_step:
         status.orchestrator_mode = "write_feature_cycle"
@@ -141,9 +154,12 @@ def finalize_orchestrator_mode(status, pipeline_id: str = DEFAULT_PIPELINE_ID) -
         return
     ask_field = orch.get("ask_user_when")
     if ask_field and getattr(status, ask_field, 0):
-        status.orchestrator_mode = "ask_user"
-        status.must_continue = False
-        return
+        from pipeline_runtime import node_asks_user
+
+        if node_asks_user(pipeline_id, status.next_step):
+            status.orchestrator_mode = "ask_user"
+            status.must_continue = False
+            return
     status.orchestrator_mode = "delegate"
     status.must_continue = True
 
