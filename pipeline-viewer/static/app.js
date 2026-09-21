@@ -153,6 +153,7 @@ const state = {
   catalogAgents: [],
   catalogSkills: [],
   agentsByCli: {},
+  writeFeatureCycle: { profile: "", calls: [] },
   dismissedNotices: loadDismissedNotices(),
 };
 
@@ -170,6 +171,8 @@ const SCHEMA_UNDO_LIMIT = 40;
 const schemaUndoByPack = {};
 const SCHEMA_NODE_KINDS = ["orchestrator", "step", "terminal", "ask", "cycle", "meta"];
 const SCHEMA_EDGE_KINDS = ["main", "branch", "loop"];
+const CYCLE_CLOSE = "on_done";
+const FORBIDDEN_CYCLE_AGENTS = new Set(["analyze-routing", "routing-analyzer"]);
 let pendingRestartPlan = null;
 let apiVersion = 0;
 
@@ -351,6 +354,17 @@ function initCytoscape() {
         style: {
           "border-color": "#2dd4bf",
           "border-width": 3,
+          width: 168,
+          height: 74,
+          "text-max-width": "156px",
+        },
+      },
+      {
+        selector: 'node[cycleFlag = "true"][expanded = "true"]',
+        style: {
+          width: 220,
+          "text-max-width": "208px",
+          "font-size": "11px",
         },
       },
       {
@@ -2250,6 +2264,10 @@ function highlightNode(nodeId, timelineSeq) {
       const src = graph.getElementById(schemaConnectFrom);
       if (src.length) src.addClass("connect-source");
     }
+    graph.nodes().forEach((el) => {
+      const node = packNodeById(el.id());
+      if (node) applyCycleNodePresentation(el, node);
+    });
     return;
   }
   if (!nodeId && !timelineSeq && !selectedElementId) return;
@@ -2477,6 +2495,7 @@ function emptyPackDraft() {
     nodeEdits: {},
     edgeEdits: {},
     orchestrator: "",
+    seededCycleCalls: {},
   };
 }
 
@@ -2512,6 +2531,7 @@ function getPackDraft(packId) {
     nodeEdits: objectMap(raw.nodeEdits),
     edgeEdits: objectMap(raw.edgeEdits),
     orchestrator: typeof raw.orchestrator === "string" ? raw.orchestrator : "",
+    seededCycleCalls: objectMap(raw.seededCycleCalls),
   };
 }
 
@@ -2613,14 +2633,73 @@ function nodeUiKind(node) {
   return node.kind === "step" ? "step" : node.kind || "step";
 }
 
+function defaultCycle() {
+  return { persistent: true, close: CYCLE_CLOSE };
+}
+
+function parseCycleCallSections(value) {
+  return String(value || "")
+    .replace(/^коды:\s*/i, "")
+    .split(/[,;]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function normalizeCycleCall(call) {
+  const item = {
+    agent: String(call?.agent || "").trim(),
+    param: String(call?.param || "").trim(),
+  };
+  const skills = Array.isArray(call?.skills)
+    ? call.skills.map((skill) => String(skill || "").trim()).filter(Boolean)
+    : String(call?.skills || "")
+        .split(",")
+        .map((skill) => skill.trim())
+        .filter(Boolean);
+  if (skills.length) item.skills = skills;
+  const label = String(call?.label || "").trim();
+  if (call && Object.prototype.hasOwnProperty.call(call, "label")) item.label = label;
+  const sections = Array.isArray(call?.sections)
+    ? call.sections.map((section) => String(section || "").trim()).filter(Boolean)
+    : typeof call?.sections === "string"
+      ? parseCycleCallSections(call.sections)
+      : null;
+  if (sections) item.sections = sections;
+  return item;
+}
+
+function isForbiddenCycleCall(call) {
+  const agent = String(call?.agent || "").trim().toLowerCase();
+  const param = String(call?.param || "").trim().toLowerCase();
+  return FORBIDDEN_CYCLE_AGENTS.has(agent) || param === "analyze-routing";
+}
+
+function normalizeCycle(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const cycle = { close: CYCLE_CLOSE };
+  cycle.persistent = src.persistent !== false;
+  for (const key of ["assemble", "param", "folder", "out", "item_file"]) {
+    const value = String(src[key] || "").trim();
+    if (value) cycle[key] = value;
+  }
+  if (src.ask_queue === true) cycle.ask_queue = true;
+  else if (src.ask_queue === false) cycle.ask_queue = false;
+  const calls = Array.isArray(src.calls)
+    ? src.calls.filter((call) => call && typeof call === "object").map(normalizeCycleCall)
+    : [];
+  if (calls.length) cycle.calls = calls;
+  return cycle;
+}
+
 function applyUiKindToNode(node, uiKind) {
   const next = { ...node };
   const kind = SCHEMA_NODE_KINDS.includes(uiKind) ? uiKind : "step";
   delete next.ask;
   if (kind === "cycle") {
     next.kind = "step";
-    next.cycle =
-      node.cycle && typeof node.cycle === "object" ? node.cycle : { close: "on_done" };
+    next.cycle = normalizeCycle(
+      node.cycle && typeof node.cycle === "object" ? node.cycle : defaultCycle()
+    );
     return next;
   }
   delete next.cycle;
@@ -2642,7 +2721,7 @@ function extraNodePayload(node) {
     subagent: node.subagent == null ? null : node.subagent,
   };
   if (node.ask) payload.ask = true;
-  if (node.cycle && typeof node.cycle === "object") payload.cycle = node.cycle;
+  if (node.cycle && typeof node.cycle === "object") payload.cycle = cloneJson(node.cycle);
   return payload;
 }
 
@@ -2654,9 +2733,9 @@ function applyNodeEditRecord(node, edit) {
     if (edit.kind != null) next.kind = edit.kind;
     if (edit.ask === true) next.ask = true;
     else if (edit.ask === false) delete next.ask;
-    if (edit.cycle && typeof edit.cycle === "object") next.cycle = edit.cycle;
-    else if (edit.cycle === null) delete next.cycle;
   }
+  if (edit.cycle && typeof edit.cycle === "object") next.cycle = cloneJson(edit.cycle);
+  else if (edit.cycle === null) delete next.cycle;
   if (edit.label != null) next.label = edit.label;
   if (edit.subagent !== undefined) next.subagent = edit.subagent;
   if (edit.id && String(edit.id).trim() && String(edit.id).trim() !== node.id) {
@@ -2828,7 +2907,7 @@ function setSchemaInspectorError(text) {
 
 function schemaKindHint(uiKind) {
   if (uiKind === "cycle") {
-    return "Флаг составной клетки. Очередь calls и handshake — фаза 4.";
+    return "Составная клетка: сначала очередь calls этой клетки, потом «спросить» или «зафиксировать» по ней же.";
   }
   if (uiKind === "ask") {
     return "Пауза на этой клетке; apply без смены шага. Детали handshake — фаза 5.";
@@ -2876,6 +2955,471 @@ function fillSubagentSelect(select, current) {
     select.appendChild(opt);
   }
   select.value = current || "";
+}
+
+function uniqueCycleCallParam(calls) {
+  const used = new Set((calls || []).map((call) => String(call.param || "")));
+  let i = 1;
+  let param = `call-${i}`;
+  while (used.has(param)) {
+    i += 1;
+    param = `call-${i}`;
+  }
+  return param;
+}
+
+function writeFeatureCatalogCalls() {
+  const raw = state.writeFeatureCycle?.calls;
+  if (!Array.isArray(raw) || !raw.length) return [];
+  return raw.map((call) => ({
+    agent: String(call.agent || "spec-writer"),
+    param: String(call.param || ""),
+    skills: Array.isArray(call.skills) ? [...call.skills] : [],
+    label: String(call.label || ""),
+    sections: Array.isArray(call.sections) ? [...call.sections] : [],
+  }));
+}
+
+async function loadWriteFeatureCycleFallback() {
+  if (writeFeatureCatalogCalls().length) return;
+  try {
+    const res = await fetch("/static/write-feature-cycle.json");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && Array.isArray(data.calls) && data.calls.length) {
+      state.writeFeatureCycle = data;
+    }
+  } catch {
+    /* catalog snapshot is optional; used only when pinning calls */
+  }
+}
+
+function catalogMetaForParam(param) {
+  const id = String(param || "");
+  return (state.writeFeatureCycle?.calls || []).find((call) => call.param === id) || null;
+}
+
+function cycleCallLabel(call) {
+  if (call && Object.prototype.hasOwnProperty.call(call, "label")) {
+    return String(call.label || "").trim();
+  }
+  return String(catalogMetaForParam(call?.param)?.label || "").trim();
+}
+
+function cycleCallSections(call) {
+  if (call && Array.isArray(call.sections)) {
+    return call.sections.map((section) => String(section || "").trim()).filter(Boolean);
+  }
+  const meta = catalogMetaForParam(call?.param);
+  return Array.isArray(meta?.sections)
+    ? meta.sections.map((section) => String(section || "").trim()).filter(Boolean)
+    : [];
+}
+
+function makeCycleCallEditable(field, text, placeholder) {
+  const el = document.createElement("span");
+  el.contentEditable = "true";
+  el.dataset.field = field;
+  el.spellcheck = false;
+  el.setAttribute("role", "textbox");
+  el.textContent = text || "";
+  if (placeholder) el.dataset.placeholder = placeholder;
+  return el;
+}
+
+function packCycleCalls(node) {
+  const cycle = node?.cycle && typeof node.cycle === "object" ? node.cycle : {};
+  return Array.isArray(cycle.calls) ? cycle.calls : [];
+}
+
+function cycleAskQueue(node) {
+  const cycle = node?.cycle && typeof node.cycle === "object" ? node.cycle : {};
+  return cycle.ask_queue;
+}
+
+function cycleQueueMode(node) {
+  const flag = cycleAskQueue(node);
+  if (flag === true) return "plan";
+  if (flag === false) return "pinned";
+  return packCycleCalls(node).length ? "pinned" : "plan";
+}
+
+function applyCycleQueueMode(cycle, mode) {
+  if (mode === "plan") cycle.ask_queue = true;
+  else cycle.ask_queue = false;
+  return cycle;
+}
+
+function syncCycleQueueChrome(node) {
+  const pinned = cycleQueueMode(node) === "pinned";
+  const planRadio = document.getElementById("schema-cycle-queue-plan");
+  const pinnedRadio = document.getElementById("schema-cycle-queue-pinned");
+  if (planRadio) planRadio.checked = !pinned;
+  if (pinnedRadio) pinnedRadio.checked = pinned;
+  document.getElementById("schema-cycle-pinned-wrap")?.classList.remove("hidden");
+}
+
+function refreshSelectedCycleCanvas(node) {
+  if (!cy || !node) return;
+  const el = cy.getElementById(node.id);
+  if (el.length) applyCycleNodePresentation(el, node);
+}
+
+function selectedCycleNode() {
+  if (!selectedNodeId) return null;
+  const node = packNodeById(selectedNodeId);
+  return node?.cycle ? node : null;
+}
+
+function commitSelectedCycle(cycle, opts = {}) {
+  const node = selectedCycleNode();
+  if (!node) return false;
+  const cleaned = normalizeCycle(cycle);
+  if (opts.discrete) {
+    pushSchemaUndo();
+    schemaInspectorUndoArmed = true;
+  }
+  applyNodeFieldPatch(node.id, { cycle: cleaned }, { rebuild: Boolean(opts.rebuild) });
+  if (opts.discrete) schemaInspectorUndoArmed = false;
+  return true;
+}
+
+function cycleFieldValue(id) {
+  return document.getElementById(id)?.value || "";
+}
+
+function readCycleFieldsFromForm(base) {
+  const cycle = normalizeCycle(base);
+  cycle.persistent = Boolean(document.getElementById("schema-cycle-persistent")?.checked);
+  const assemble = cycleFieldValue("schema-cycle-assemble").trim();
+  const param = cycleFieldValue("schema-cycle-param").trim();
+  const folder = cycleFieldValue("schema-cycle-folder").trim();
+  const out = cycleFieldValue("schema-cycle-out").trim();
+  const itemFile = cycleFieldValue("schema-cycle-item-file").trim();
+  if (assemble) cycle.assemble = assemble;
+  else delete cycle.assemble;
+  if (param) cycle.param = param;
+  else delete cycle.param;
+  if (folder) cycle.folder = folder;
+  else delete cycle.folder;
+  if (out) cycle.out = out;
+  else delete cycle.out;
+  if (itemFile) cycle.item_file = itemFile;
+  else delete cycle.item_file;
+  cycle.close = CYCLE_CLOSE;
+  return cycle;
+}
+
+function renderCycleCalls(cycle, node) {
+  const list = document.getElementById("schema-cycle-calls");
+  const hint = document.getElementById("schema-cycle-calls-hint");
+  if (!list) return;
+  const calls = packCycleCalls({ ...node, cycle });
+  const ask = cycleQueueMode({ ...node, cycle }) === "plan";
+  if (hint) {
+    if (!calls.length) {
+      hint.textContent = ask
+        ? "Очередь этой клетки пустая — спрашивать будет не о чем. Добавьте calls или «Из каталога»."
+        : "Очередь этой клетки пустая. Добавьте calls или «Из каталога».";
+    } else if (ask) {
+      hint.textContent = "Спросить при прогоне по этим calls клетки. Каталог сам не подставляется.";
+    } else {
+      hint.textContent = "Эти calls клетки идут по порядку, без вопроса. Между ними нет рёбер.";
+    }
+  }
+  const fillBtn = document.getElementById("schema-cycle-fill-catalog");
+  if (fillBtn) fillBtn.disabled = writeFeatureCatalogCalls().length === 0;
+  list.innerHTML = "";
+  if (!calls.length) {
+    const empty = document.createElement("li");
+    empty.className = "schema-cycle-call";
+    empty.textContent = "Calls этой клетки нет.";
+    list.appendChild(empty);
+    return;
+  }
+  calls.forEach((call, index) => {
+    const li = document.createElement("li");
+    li.className = "schema-cycle-call";
+    li.dataset.index = String(index);
+
+    const title = document.createElement("div");
+    title.className = "schema-cycle-call-title";
+    const num = document.createElement("span");
+    num.className = "schema-cycle-call-num";
+    num.textContent = `${index + 1}.`;
+    title.appendChild(num);
+    const paramEdit = makeCycleCallEditable("param", call.param || "", "param");
+    paramEdit.className = "schema-cycle-call-heading-param";
+    title.appendChild(paramEdit);
+    const dash = document.createElement("span");
+    dash.className = "schema-cycle-call-dash";
+    dash.textContent = "—";
+    title.appendChild(dash);
+    const labelEdit = makeCycleCallEditable("label", cycleCallLabel(call), "заголовок");
+    labelEdit.className = "schema-cycle-call-heading-label";
+    title.appendChild(labelEdit);
+    li.appendChild(title);
+
+    const codes = document.createElement("div");
+    codes.className = "schema-cycle-call-codes";
+    const codesPrefix = document.createElement("span");
+    codesPrefix.className = "schema-cycle-call-codes-prefix";
+    codesPrefix.textContent = "коды:";
+    codes.appendChild(codesPrefix);
+    const sectionsEdit = makeCycleCallEditable("sections", cycleCallSections(call).join(", "), "раздел");
+    sectionsEdit.className = "schema-cycle-call-codes-value";
+    codes.appendChild(sectionsEdit);
+    li.appendChild(codes);
+
+    const indexLine = document.createElement("div");
+    indexLine.className = "schema-cycle-call-index";
+    indexLine.textContent = `${index + 1} / ${calls.length}`;
+    li.appendChild(indexLine);
+
+    const agentLabel = document.createElement("label");
+    const agentSpan = document.createElement("span");
+    agentSpan.textContent = "agent";
+    const agentSelect = document.createElement("select");
+    agentSelect.dataset.field = "agent";
+    fillSubagentSelect(agentSelect, call.agent || node.subagent || "");
+    agentLabel.appendChild(agentSpan);
+    agentLabel.appendChild(agentSelect);
+    li.appendChild(agentLabel);
+
+    const paramLabel = document.createElement("label");
+    const paramSpan = document.createElement("span");
+    paramSpan.textContent = "param";
+    const paramInput = document.createElement("input");
+    paramInput.dataset.field = "param";
+    paramInput.value = call.param || "";
+    paramInput.spellcheck = false;
+    paramLabel.appendChild(paramSpan);
+    paramLabel.appendChild(paramInput);
+    li.appendChild(paramLabel);
+
+    const skillsLabel = document.createElement("label");
+    const skillsSpan = document.createElement("span");
+    skillsSpan.textContent = "skills";
+    const skillsInput = document.createElement("input");
+    skillsInput.dataset.field = "skills";
+    skillsInput.value = Array.isArray(call.skills) ? call.skills.join(", ") : "";
+    skillsInput.placeholder = "через запятую";
+    skillsInput.spellcheck = false;
+    skillsLabel.appendChild(skillsSpan);
+    skillsLabel.appendChild(skillsInput);
+    li.appendChild(skillsLabel);
+
+    const actions = document.createElement("div");
+    actions.className = "schema-cycle-call-actions";
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = "btn-secondary";
+    up.dataset.action = "up";
+    up.textContent = "↑";
+    up.disabled = index === 0;
+    const down = document.createElement("button");
+    down.type = "button";
+    down.className = "btn-secondary";
+    down.dataset.action = "down";
+    down.textContent = "↓";
+    down.disabled = index === calls.length - 1;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn-secondary";
+    remove.dataset.action = "remove";
+    remove.textContent = "Убрать";
+    actions.appendChild(up);
+    actions.appendChild(down);
+    actions.appendChild(remove);
+    li.appendChild(actions);
+    list.appendChild(li);
+  });
+}
+
+function fillSchemaCycleFields(node) {
+  const wrap = document.getElementById("schema-cycle-fields");
+  if (!wrap) return;
+  const isCycle = nodeUiKind(node) === "cycle";
+  wrap.classList.toggle("hidden", !isCycle);
+  if (!isCycle) return;
+  const cycle = normalizeCycle(node.cycle);
+  const persistent = document.getElementById("schema-cycle-persistent");
+  const assemble = document.getElementById("schema-cycle-assemble");
+  const param = document.getElementById("schema-cycle-param");
+  const folder = document.getElementById("schema-cycle-folder");
+  const out = document.getElementById("schema-cycle-out");
+  const itemFile = document.getElementById("schema-cycle-item-file");
+  if (persistent) persistent.checked = cycle.persistent !== false;
+  if (assemble) assemble.value = cycle.assemble || "";
+  if (param) param.value = cycle.param || "";
+  if (folder) folder.value = cycle.folder || "";
+  if (out) out.value = cycle.out || "";
+  if (itemFile) itemFile.value = cycle.item_file || "";
+  syncCycleQueueChrome(node);
+  renderCycleCalls(cycle, node);
+  loadWriteFeatureCycleFallback().then(() => {
+    if (selectedNodeId !== node.id) return;
+    const current = packNodeById(node.id) || node;
+    syncCycleQueueChrome(current);
+    renderCycleCalls(normalizeCycle(current.cycle), current);
+    refreshSelectedCycleCanvas(current);
+  });
+}
+
+function patchSelectedCycleCall(index, field, value) {
+  const node = selectedCycleNode();
+  if (!node) return;
+  const mode = cycleQueueMode(node);
+  const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), mode);
+  const calls = [...(cycle.calls || [])];
+  if (!calls[index]) return;
+  const next = { ...calls[index], [field]: value };
+  if (isForbiddenCycleCall(next)) {
+    setSchemaInspectorError("analyze-routing нельзя ставить между блоками cycle.");
+    fillSchemaCycleFields(node);
+    return;
+  }
+  calls[index] = normalizeCycleCall(next);
+  cycle.calls = calls;
+  setSchemaInspectorError("");
+  commitSelectedCycle(cycle);
+}
+
+function readCycleCallEditorValue(el) {
+  const field = el.dataset.field;
+  const raw = el.matches("input, select") ? el.value : el.textContent || "";
+  if (field === "sections") return parseCycleCallSections(raw);
+  return raw;
+}
+
+function handleCycleCallFieldEdit(event) {
+  if (schemaInspectorSyncing) return;
+  const el = event.target.closest("[data-field]");
+  if (!el || !el.dataset.field) return;
+  const row = el.closest(".schema-cycle-call");
+  if (!row) return;
+  const index = Number(row.dataset.index);
+  if (Number.isNaN(index)) return;
+  const field = el.dataset.field;
+  const value = readCycleCallEditorValue(el);
+  if (field === "param") {
+    const heading = row.querySelector('[contenteditable][data-field="param"]');
+    const input = row.querySelector('input[data-field="param"]');
+    const text = String(value || "");
+    if (el.isContentEditable && input && input !== el) input.value = text;
+    if (!el.isContentEditable && heading && heading !== document.activeElement) heading.textContent = text;
+  }
+  patchSelectedCycleCall(index, field, value);
+}
+
+function addSchemaCycleCall() {
+  const node = selectedCycleNode();
+  if (!node) return;
+  const mode = cycleQueueMode(node);
+  const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), mode);
+  const calls = [...(cycle.calls || [])];
+  const call = normalizeCycleCall({
+    agent: node.subagent || "",
+    param: uniqueCycleCallParam(calls),
+  });
+  if (isForbiddenCycleCall(call)) {
+    setSchemaInspectorError("analyze-routing нельзя ставить между блоками cycle.");
+    return;
+  }
+  calls.push(call);
+  cycle.calls = calls;
+  setSchemaInspectorError("");
+  commitSelectedCycle(cycle, { discrete: true, rebuild: true });
+}
+
+function moveSchemaCycleCall(index, delta) {
+  const node = selectedCycleNode();
+  if (!node) return;
+  const mode = cycleQueueMode(node);
+  const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), mode);
+  const calls = [...(cycle.calls || [])];
+  const nextIndex = index + delta;
+  if (nextIndex < 0 || nextIndex >= calls.length) return;
+  const swap = calls[index];
+  calls[index] = calls[nextIndex];
+  calls[nextIndex] = swap;
+  cycle.calls = calls;
+  commitSelectedCycle(cycle, { discrete: true, rebuild: true });
+}
+
+function removeSchemaCycleCall(index) {
+  const node = selectedCycleNode();
+  if (!node) return;
+  const mode = cycleQueueMode(node);
+  const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), mode);
+  const calls = [...(cycle.calls || [])];
+  calls.splice(index, 1);
+  if (calls.length) cycle.calls = calls;
+  else delete cycle.calls;
+  commitSelectedCycle(cycle, { discrete: true, rebuild: true });
+}
+
+async function fillSchemaCycleFromCatalog() {
+  const node = selectedCycleNode();
+  if (!node) return;
+  await loadWriteFeatureCycleFallback();
+  const preview = writeFeatureCatalogCalls();
+  if (!preview.length) {
+    setSchemaInspectorError("Каталог блоков недоступен.");
+    syncCycleQueueChrome(node);
+    return;
+  }
+  const mode = cycleQueueMode(node);
+  const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), mode);
+  cycle.calls = preview.map((call) =>
+    normalizeCycleCall({
+      agent: call.agent,
+      param: call.param,
+      skills: call.skills,
+      label: call.label,
+      sections: call.sections,
+    })
+  );
+  setSchemaInspectorError("");
+  commitSelectedCycle(cycle, { discrete: true, rebuild: true });
+}
+
+async function seedAuthoredCycleCalls(packId, basePack) {
+  const draft = getPackDraft(packId);
+  draft.seededCycleCalls = { ...(draft.seededCycleCalls || {}) };
+  const pending = (basePack?.graph?.nodes || []).filter(
+    (node) => node?.id && node.cycle && !packCycleCalls(node).length && !draft.seededCycleCalls[node.id]
+  );
+  if (!pending.length) return draft;
+  await loadWriteFeatureCycleFallback();
+  const preview = writeFeatureCatalogCalls();
+  if (!preview.length) return draft;
+  const calls = preview.map((call) =>
+    normalizeCycleCall({
+      agent: call.agent,
+      param: call.param,
+      skills: call.skills,
+      label: call.label,
+      sections: call.sections,
+    })
+  );
+  for (const node of pending) {
+    const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), "pinned");
+    cycle.calls = calls.map((call) => ({ ...call }));
+    draft.nodeEdits = { ...(draft.nodeEdits || {}) };
+    draft.nodeEdits[node.id] = { ...(draft.nodeEdits[node.id] || {}), cycle };
+    draft.seededCycleCalls[node.id] = true;
+  }
+  setPackDraft(packId, draft);
+  return getPackDraft(packId);
+}
+
+function setCycleQueueMode(mode) {
+  const node = selectedCycleNode();
+  if (!node) return;
+  const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), mode);
+  setSchemaInspectorError("");
+  commitSelectedCycle(cycle, { discrete: true, rebuild: true });
 }
 
 function resetSchemaInspectorForms() {
@@ -3098,7 +3642,7 @@ function applyNodeKindChange(nodeId, uiKind) {
     uiKind,
     kind: patched.kind,
     ask: patched.ask === true,
-    cycle: patched.cycle || null,
+    cycle: patched.cycle ? normalizeCycle(patched.cycle) : null,
     label: patched.label,
     subagent: patched.subagent,
   });
@@ -3181,6 +3725,7 @@ function refreshSchemaElementVisuals() {
     el.data("kind", node.kind || "step");
     el.data("askFlag", node.ask ? "true" : "false");
     el.data("cycleFlag", node.cycle ? "true" : "false");
+    applyCycleNodePresentation(el, node);
     el.removeClass("draft-added cli-missing");
     const classes = packNodeClasses(node);
     if (classes) el.addClass(classes);
@@ -3256,6 +3801,7 @@ function fillSchemaNodeForm(node) {
   if (kindEl) kindEl.value = SCHEMA_NODE_KINDS.includes(uiKind) ? uiKind : "step";
   if (hintEl) hintEl.textContent = schemaKindHint(uiKind);
   fillSubagentSelect(document.getElementById("schema-node-subagent"), node.subagent || "");
+  fillSchemaCycleFields(node);
   schemaInspectorSyncing = false;
 }
 
@@ -3361,12 +3907,58 @@ function packNodeById(nodeId) {
   return (state.pack?.graph?.nodes || []).find((node) => node.id === nodeId) || null;
 }
 
-function formatPackNodeLabel(node) {
+function formatPackNodeLabel(node, opts = {}) {
   const lines = [node.label || node.id];
-  if (node.cycle) lines.push("cycle");
-  else if (node.ask) lines.push("ask");
+  if (node.cycle) {
+    const calls = packCycleCalls(node);
+    const ask = cycleQueueMode(node) === "plan";
+    if (opts.expanded) {
+      lines.push("cycle");
+      lines.push(ask ? "спросить при прогоне" : "зафиксировать");
+      if (!calls.length) lines.push("calls: нет");
+      else {
+        calls.forEach((call, index) => {
+          lines.push(`${index + 1}. ${call.param || "—"}`);
+        });
+      }
+      lines.push("close: on_done");
+    } else if (ask) {
+      lines.push(calls.length ? `cycle · спросить · ${calls.length}` : "cycle · спросить");
+    } else {
+      lines.push(calls.length ? `cycle · ${calls.length}` : "cycle");
+    }
+  } else if (node.ask) lines.push("ask");
   if (node.kind === "meta") lines.push("meta");
   return lines.join("\n");
+}
+
+function applyCycleNodePresentation(el, node) {
+  if (!el || !node) return;
+  const expanded = Boolean(node.cycle) && selectedNodeId === node.id && isSchemaMode();
+  el.data("label", formatPackNodeLabel(node, { expanded }));
+  el.data("expanded", expanded ? "true" : "false");
+  if (!node.cycle) {
+    el.removeStyle("height");
+    el.removeStyle("width");
+    el.removeStyle("font-size");
+    el.removeStyle("text-max-width");
+    return;
+  }
+  const calls = packCycleCalls(node);
+  const n = calls.length;
+  if (expanded) {
+    const extra = cycleQueueMode(node) === "plan" ? 1 : 1;
+    const rows = 3 + Math.max(n, 1) + extra;
+    el.style("width", 228);
+    el.style("height", Math.min(420, 40 + rows * 16));
+    el.style("font-size", "11px");
+    el.style("text-max-width", "216px");
+  } else {
+    el.style("width", 168);
+    el.style("height", 74);
+    el.style("font-size", "12px");
+    el.style("text-max-width", "156px");
+  }
 }
 
 function packNodeTooltip(node) {
@@ -3379,10 +3971,26 @@ function packNodeTooltip(node) {
   if (node.ask) lines.push("ask: пауза на этой клетке; apply без смены шага");
   if (node.cycle && typeof node.cycle === "object") {
     const cycle = node.cycle;
-    lines.push("cycle: составная клетка (внутренности — фаза 4)");
+    lines.push("cycle: как в YAML, одна клетка");
     if (cycle.assemble) lines.push(`assemble: ${cycle.assemble}`);
-    if (cycle.close) lines.push(`close: ${cycle.close}`);
     if (cycle.param) lines.push(`param: ${cycle.param}`);
+    if (cycle.folder) lines.push(`folder: ${cycle.folder}`);
+    if (cycle.out) lines.push(`out: ${cycle.out}`);
+    if (cycle.item_file) lines.push(`item_file: ${cycle.item_file}`);
+    lines.push("close: on_done");
+    const calls = packCycleCalls(node);
+    if (cycleQueueMode(node) === "plan") {
+      lines.push("очередь: спросить при прогоне по calls клетки");
+    } else {
+      lines.push("очередь: зафиксировать calls клетки");
+    }
+    if (!calls.length) lines.push("calls: нет");
+    else {
+      lines.push(`calls: ${calls.length}`);
+      calls.forEach((call, index) => {
+        lines.push(`  ${index + 1}. ${call.agent || "?"} · ${call.param || "—"}`);
+      });
+    }
   }
   return lines.join("\n");
 }
@@ -3491,11 +4099,14 @@ function buildPackGraphElements(pack) {
       group: "nodes",
       data: {
         id: node.id,
-        label: formatPackNodeLabel(node),
+        label: formatPackNodeLabel(node, {
+          expanded: Boolean(node.cycle) && selectedNodeId === node.id,
+        }),
         color: packNodeColor(node),
         kind,
         askFlag: node.ask ? "true" : "false",
         cycleFlag: node.cycle ? "true" : "false",
+        expanded: node.cycle && selectedNodeId === node.id ? "true" : "false",
       },
       position: positions[node.id] || { x: 80, y: 80 },
       grabbable: true,
@@ -3581,6 +4192,10 @@ function renderPackGraph(pack, opts = {}) {
   }
   graph.add(elements);
   graph.nodes().grabify();
+  graph.nodes().forEach((el) => {
+    const node = packNodeById(el.id());
+    if (node) applyCycleNodePresentation(el, node);
+  });
   resizeGraphCanvas(graph, "target");
   if (!opts.skipFit) {
     graph.fit(graph.nodes(), 48);
@@ -3632,7 +4247,9 @@ async function loadPackGraph() {
     }
     clearError();
     state.packBase = data;
-    renderPackGraph(applyDraftToPack(data, getPackDraft(packId)));
+    const draft = await seedAuthoredCycleCalls(packId, data);
+    if (seq !== packLoadSeq || state.packId !== packId) return;
+    renderPackGraph(applyDraftToPack(data, draft));
   } catch (err) {
     if (seq !== packLoadSeq || state.packId !== packId) return;
     state.pack = null;
@@ -3862,6 +4479,68 @@ function bindSchemaDraftActions() {
   document.getElementById("schema-node-subagent")?.addEventListener("change", (event) => {
     if (schemaInspectorSyncing || !selectedNodeId) return;
     applyNodeFieldPatch(selectedNodeId, { subagent: event.target.value || null });
+  });
+
+  document.getElementById("schema-cycle-persistent")?.addEventListener("change", () => {
+    if (schemaInspectorSyncing || !selectedCycleNode()) return;
+    commitSelectedCycle(readCycleFieldsFromForm(selectedCycleNode().cycle));
+  });
+  ["schema-cycle-assemble", "schema-cycle-param", "schema-cycle-folder", "schema-cycle-out", "schema-cycle-item-file"].forEach(
+    (id) => {
+      document.getElementById(id)?.addEventListener("input", () => {
+        if (schemaInspectorSyncing || !selectedCycleNode()) return;
+        commitSelectedCycle(readCycleFieldsFromForm(selectedCycleNode().cycle));
+      });
+    }
+  );
+  document.getElementById("schema-cycle-add-call")?.addEventListener("click", () => {
+    if (schemaInspectorSyncing) return;
+    addSchemaCycleCall();
+  });
+  document.getElementById("schema-cycle-fill-catalog")?.addEventListener("click", () => {
+    if (schemaInspectorSyncing) return;
+    fillSchemaCycleFromCatalog();
+  });
+  document.getElementById("schema-cycle-queue-mode")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing) return;
+    const radio = event.target.closest('input[name="schema-cycle-queue"]');
+    if (!radio) return;
+    setCycleQueueMode(radio.value);
+  });
+  document.getElementById("schema-cycle-calls")?.addEventListener("click", (event) => {
+    if (schemaInspectorSyncing) return;
+    const button = event.target.closest("button[data-action]");
+    const row = event.target.closest(".schema-cycle-call");
+    if (!button || !row) return;
+    const index = Number(row.dataset.index);
+    if (Number.isNaN(index)) return;
+    if (button.dataset.action === "up") moveSchemaCycleCall(index, -1);
+    else if (button.dataset.action === "down") moveSchemaCycleCall(index, 1);
+    else if (button.dataset.action === "remove") removeSchemaCycleCall(index);
+  });
+  document.getElementById("schema-cycle-calls")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing) return;
+    handleCycleCallFieldEdit(event);
+  });
+  document.getElementById("schema-cycle-calls")?.addEventListener("input", (event) => {
+    if (schemaInspectorSyncing) return;
+    const el = event.target.closest?.("[data-field]");
+    if (!el || el.dataset.field === "agent") return;
+    handleCycleCallFieldEdit(event);
+  });
+  document.getElementById("schema-cycle-calls")?.addEventListener("keydown", (event) => {
+    if (!event.target.closest("[contenteditable]")) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.target.blur();
+    }
+  });
+  document.getElementById("schema-cycle-calls")?.addEventListener("paste", (event) => {
+    const editor = event.target.closest("[contenteditable]");
+    if (!editor) return;
+    event.preventDefault();
+    const text = (event.clipboardData || window.clipboardData).getData("text/plain").replace(/\s+/g, " ");
+    document.execCommand("insertText", false, text);
   });
 
   document.getElementById("schema-edge-from")?.addEventListener("change", (event) => {
@@ -4316,6 +4995,10 @@ async function init() {
     state.catalogSkills = Array.isArray(catalog.skills) ? catalog.skills : [];
     state.agentsByCli =
       catalog.agents_by_cli && typeof catalog.agents_by_cli === "object" ? catalog.agents_by_cli : {};
+    state.writeFeatureCycle =
+      catalog.write_feature_cycle && typeof catalog.write_feature_cycle === "object"
+        ? catalog.write_feature_cycle
+        : { profile: "", calls: [] };
     fillPackTabs();
     bindSchemaPalette();
     bindSchemaDraftActions();

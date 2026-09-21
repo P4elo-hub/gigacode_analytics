@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pipeline Viewer</title>
-  <link rel="stylesheet" href="/static/style.css?v=29" />
+  <link rel="stylesheet" href="/static/style.css?v=40" />
   <script src="/static/vendor/cytoscape.min.js"></script>
 </head>
 <body class="screen-run">
@@ -112,7 +112,7 @@
       <footer id="legend" class="graph-legend" aria-label="Легенда графа">
         <span class="legend-schema schema-only">
           эллипс — оркестратор · квадрат — шаг · ромб — terminal
-          · — main · ╌ branch · ⋯ loop · cycle/ask — флаг на клетке · пунктир бирюза — с палитры
+          · — main · ╌ branch · ⋯ loop · cycle — очередь внутри клетки · ask — флаг · пунктир бирюза — с палитры
         </span>
         <span class="legend-target run-only">
           <span class="dot ok"></span> ok
@@ -210,6 +210,65 @@
             <span>subagent</span>
             <select id="schema-node-subagent" name="subagent"></select>
           </label>
+          <fieldset id="schema-cycle-fields" class="schema-cycle-fields hidden">
+            <legend>cycle</legend>
+            <p class="sidebar-hint">
+              Одна клетка. Внутри — очередь вызовов по порядку, без стрелок и analyze-routing.
+            </p>
+            <fieldset class="schema-cycle-queue-mode" id="schema-cycle-queue-mode">
+              <legend>Очередь вызовов</legend>
+              <label class="schema-cycle-check">
+                <input type="radio" name="schema-cycle-queue" id="schema-cycle-queue-plan" value="plan" />
+                <span>Спросить при прогоне</span>
+              </label>
+              <p class="sidebar-hint">
+                Спросить по calls этой клетки — тем, что перечислены ниже. Не каталог и не чужой профиль.
+              </p>
+              <label class="schema-cycle-check">
+                <input type="radio" name="schema-cycle-queue" id="schema-cycle-queue-pinned" value="pinned" />
+                <span>Зафиксировать в паке</span>
+              </label>
+              <p class="sidebar-hint">
+                Те же calls, без вопроса: всегда этот порядок.
+              </p>
+            </fieldset>
+            <div id="schema-cycle-pinned-wrap" class="schema-cycle-pinned-wrap">
+              <div class="schema-cycle-calls-head">
+                <span>calls</span>
+                <div class="schema-cycle-calls-actions">
+                  <button type="button" id="schema-cycle-fill-catalog" class="btn-secondary">Из каталога</button>
+                  <button type="button" id="schema-cycle-add-call" class="btn-secondary">Добавить call</button>
+                </div>
+              </div>
+              <p id="schema-cycle-calls-hint" class="sidebar-hint"></p>
+              <ol id="schema-cycle-calls" class="schema-cycle-calls"></ol>
+            </div>
+            <label class="schema-cycle-check">
+              <input id="schema-cycle-persistent" name="persistent" type="checkbox" />
+              <span>persistent</span>
+            </label>
+            <label>
+              <span>assemble</span>
+              <input id="schema-cycle-assemble" name="assemble" spellcheck="false" />
+            </label>
+            <label>
+              <span>param</span>
+              <input id="schema-cycle-param" name="param" spellcheck="false" />
+            </label>
+            <label>
+              <span>folder</span>
+              <input id="schema-cycle-folder" name="folder" spellcheck="false" />
+            </label>
+            <label>
+              <span>out</span>
+              <input id="schema-cycle-out" name="out" spellcheck="false" />
+            </label>
+            <label>
+              <span>item_file</span>
+              <input id="schema-cycle-item-file" name="item_file" spellcheck="false" />
+            </label>
+            <p class="sidebar-hint">close: <b>on_done</b> — как в паке, enum не редактируется.</p>
+          </fieldset>
         </form>
         <form id="schema-edge-form" class="schema-inspector-form hidden" autocomplete="off">
           <label>
@@ -285,6 +344,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=29"></script>
+  <script src="/static/app.js?v=40"></script>
 </body>
 </html>

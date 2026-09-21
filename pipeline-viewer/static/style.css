@@ -528,6 +528,233 @@ body.screen-schema #step-detail {
   letter-spacing: 0;
 }
 
+.schema-inspector-form .schema-cycle-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #e2e8f0;
+}
+
+.schema-inspector-form .schema-cycle-check input[type="checkbox"],
+.schema-inspector-form .schema-cycle-check input[type="radio"] {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: #14b8a6;
+}
+
+.schema-inspector-form .schema-cycle-check span {
+  min-width: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.schema-cycle-fields {
+  margin: 4px 0 0;
+  padding: 8px 8px 10px;
+  border: 1px solid #134e4a;
+  border-radius: 8px;
+  background: #042f2e;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schema-cycle-fields.hidden {
+  display: none;
+}
+
+.schema-cycle-fields legend {
+  padding: 0 4px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5eead4;
+}
+
+.schema-cycle-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.schema-cycle-calls-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.schema-cycle-calls-head .btn-secondary {
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.schema-cycle-calls-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.schema-cycle-call.is-catalog {
+  border-color: #0f766e;
+}
+
+.schema-cycle-call-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ccfbf1;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.35;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+}
+
+.schema-cycle-call-num {
+  flex: 0 0 auto;
+  color: #99f6e4;
+}
+
+.schema-cycle-call-dash {
+  flex: 0 0 auto;
+  color: #5eead4;
+  font-weight: 500;
+}
+
+.schema-cycle-call-heading-param,
+.schema-cycle-call-heading-label,
+.schema-cycle-call-codes-value {
+  min-width: 1ch;
+  border-radius: 3px;
+  cursor: text;
+  outline: none;
+}
+
+.schema-cycle-call-heading-label {
+  flex: 1 1 8rem;
+  font-weight: 600;
+}
+
+.schema-cycle-call-heading-param:focus,
+.schema-cycle-call-heading-label:focus,
+.schema-cycle-call-codes-value:focus {
+  outline: 1px solid #2dd4bf;
+  outline-offset: 1px;
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.schema-cycle-call-heading-label:empty::before,
+.schema-cycle-call-codes-value:empty::before {
+  content: attr(data-placeholder);
+  color: #64748b;
+  font-weight: 500;
+}
+
+.schema-cycle-call-codes {
+  font-size: 0.72rem;
+  color: #5eead4;
+  text-transform: none;
+  letter-spacing: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+}
+
+.schema-cycle-call-codes-prefix {
+  flex: 0 0 auto;
+}
+
+.schema-cycle-call-codes-value {
+  flex: 1 1 8rem;
+}
+
+.schema-cycle-queue-mode {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #115e59;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-cycle-queue-mode legend {
+  padding: 0 4px;
+  color: #5eead4;
+}
+
+.schema-cycle-catalog {
+  opacity: 0.85;
+}
+
+.schema-cycle-catalog .schema-cycle-call {
+  pointer-events: none;
+}
+
+.schema-cycle-pinned-wrap.hidden,
+.schema-cycle-catalog.hidden {
+  display: none;
+}
+
+.schema-cycle-calls {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schema-cycle-call {
+  padding: 8px;
+  border: 1px solid #115e59;
+  border-radius: 6px;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-cycle-call-index {
+  font-size: 0.7rem;
+  color: #5eead4;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.schema-cycle-call-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.schema-cycle-call-actions button {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .schema-edge-kind-notes {
   margin: 0;
   padding: 8px 10px;

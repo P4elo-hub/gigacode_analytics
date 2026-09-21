@@ -35,6 +35,36 @@ PIPELINES = ("spec", "calibration")
 CLI_AGENT_DIRS = (".qwen", ".gigacode", ".opencode")
 
 
+def write_feature_cycle_preview() -> dict:
+    """Default write-feature queue: spec-catalog blocks for the default profile (sihist)."""
+    try:
+        from pipeline_common import write_cycle_config
+        from section_profiles import DEFAULT_PROFILE, infer_sections
+        from write_feature import list_active_blocks
+    except ImportError:
+        return {"profile": "", "calls": []}
+    target = infer_sections("", None, DEFAULT_PROFILE)
+    cfg = write_cycle_config("spec") or {}
+    subagent = str(cfg.get("subagent") or "spec-writer")
+    calls = []
+    for block in list_active_blocks(target):
+        calls.append(
+            {
+                "agent": subagent,
+                "param": str(block.get("id") or ""),
+                "label": str(block.get("label") or block.get("id") or ""),
+                "skills": list(block.get("active_skills") or []),
+                "sections": list(block.get("active_sections") or []),
+            }
+        )
+    return {
+        "profile": DEFAULT_PROFILE,
+        "assemble": str(cfg.get("assemble") or "write_feature"),
+        "param": str(cfg.get("param") or "block_id"),
+        "calls": calls,
+    }
+
+
 def catalog_for_viewer(workspace: Path) -> dict:
     """GET /api/catalog: compile catalog plus per-CLI agent presence for the palette."""
     from pipeline_pack import build_catalog
@@ -49,6 +79,7 @@ def catalog_for_viewer(workspace: Path) -> dict:
         else:
             by_cli[name] = []
     catalog["agents_by_cli"] = by_cli
+    catalog["write_feature_cycle"] = write_feature_cycle_preview()
     return catalog
 
 
