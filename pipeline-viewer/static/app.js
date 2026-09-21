@@ -160,8 +160,16 @@ let cy = null;
 let nodeDetails = {};
 let graphInteractionsBound = false;
 let selectedNodeId = null;
+let selectedEdgeId = null;
 let selectedElementId = null;
 let selectedTimelineSeq = null;
+let schemaConnectFrom = null;
+let schemaInspectorSyncing = false;
+let schemaInspectorUndoArmed = false;
+const SCHEMA_UNDO_LIMIT = 40;
+const schemaUndoByPack = {};
+const SCHEMA_NODE_KINDS = ["orchestrator", "step", "terminal", "ask", "cycle", "meta"];
+const SCHEMA_EDGE_KINDS = ["main", "branch", "loop"];
 let pendingRestartPlan = null;
 let apiVersion = 0;
 
@@ -554,6 +562,22 @@ function initCytoscape() {
         },
       },
       {
+        selector: "edge.selected",
+        style: {
+          width: 3.5,
+          "line-color": "#fbbf24",
+          "target-arrow-color": "#fbbf24",
+          opacity: 1,
+        },
+      },
+      {
+        selector: "node.connect-source",
+        style: {
+          "border-color": "#22d3ee",
+          "border-width": 4,
+        },
+      },
+      {
         selector: "edge[traversed = 'true']",
         style: {
           width: 3,
@@ -733,6 +757,8 @@ function clearNodePanel() {
   document.getElementById("step-divergence").classList.add("hidden");
   document.getElementById("restart-actions").classList.add("hidden");
   setSchemaNodeActionsVisible(false);
+  setSchemaEdgeActionsVisible(false);
+  if (isSchemaMode()) resetSchemaInspectorForms();
 }
 
 function updateRestartActions(stepId) {
@@ -2209,6 +2235,23 @@ function highlightNode(nodeId, timelineSeq) {
   const graph = cy;
   if (!graph) return;
   graph.nodes().removeClass("selected");
+  graph.edges().removeClass("selected");
+  if (isSchemaMode()) {
+    if (selectedEdgeId) {
+      const edge = graph.getElementById(selectedEdgeId);
+      if (edge.length) edge.addClass("selected");
+    }
+    if (selectedNodeId) {
+      const node = graph.getElementById(selectedNodeId);
+      if (node.length) node.addClass("selected");
+    }
+    graph.nodes().removeClass("connect-source");
+    if (schemaConnectFrom) {
+      const src = graph.getElementById(schemaConnectFrom);
+      if (src.length) src.addClass("connect-source");
+    }
+    return;
+  }
   if (!nodeId && !timelineSeq && !selectedElementId) return;
 
   if (selectedElementId) {
@@ -2252,11 +2295,25 @@ function bindGraphInteractions(graph) {
   graph.on("tap", "node", (evt) => {
     const node = evt.target;
     if (isSchemaMode()) {
-      selectedElementId = node.id();
-      selectedNodeId = node.id();
+      const nodeId = node.id();
+      const shift = Boolean(evt.originalEvent?.shiftKey);
+      schemaInspectorUndoArmed = false;
+      if (schemaConnectFrom) {
+        finishSchemaConnect(nodeId);
+        hideTooltip();
+        return;
+      }
+      if (shift && selectedNodeId && selectedNodeId !== nodeId) {
+        addSchemaEdge(selectedNodeId, nodeId, { kind: "main" });
+        hideTooltip();
+        return;
+      }
+      selectedElementId = nodeId;
+      selectedNodeId = nodeId;
+      selectedEdgeId = null;
       selectedTimelineSeq = null;
       highlightNode(selectedNodeId, null);
-      showPackNodeSummary(selectedNodeId);
+      showSchemaInspector();
       hideTooltip();
       return;
     }
@@ -2325,6 +2382,43 @@ function bindGraphInteractions(graph) {
 
   graph.on("mouseout", "node", () => hideTooltip());
 
+  graph.on("mouseover", "edge", (evt) => {
+    if (!isSchemaMode()) return;
+    const edge = packEdgeById(evt.target.id());
+    if (!edge) return;
+    showTooltip(
+      packEdgeTooltip(edge),
+      evt.originalEvent.clientX,
+      evt.originalEvent.clientY
+    );
+  });
+  graph.on("mousemove", "edge", (evt) => {
+    if (!isSchemaMode()) return;
+    const edge = packEdgeById(evt.target.id());
+    if (!edge) return;
+    showTooltip(
+      packEdgeTooltip(edge),
+      evt.originalEvent.clientX,
+      evt.originalEvent.clientY
+    );
+  });
+  graph.on("mouseout", "edge", () => {
+    if (isSchemaMode()) hideTooltip();
+  });
+
+  graph.on("tap", "edge", (evt) => {
+    if (!isSchemaMode()) return;
+    cancelSchemaConnect();
+    schemaInspectorUndoArmed = false;
+    selectedEdgeId = evt.target.id();
+    selectedNodeId = null;
+    selectedElementId = selectedEdgeId;
+    selectedTimelineSeq = null;
+    highlightNode(null, null);
+    showSchemaInspector();
+    hideTooltip();
+  });
+
   graph.on("dragfree", "node", () => {
     if (!isSchemaMode()) return;
     captureSchemaPositions();
@@ -2332,7 +2426,12 @@ function bindGraphInteractions(graph) {
 
   graph.on("tap", (evt) => {
     if (evt.target === graph) {
+      if (isSchemaMode() && schemaConnectFrom) {
+        cancelSchemaConnect();
+        return;
+      }
       selectedNodeId = null;
+      selectedEdgeId = null;
       selectedElementId = null;
       selectedTimelineSeq = null;
       highlightNode(null, null);
@@ -2369,7 +2468,16 @@ function isSchemaMode() {
 }
 
 function emptyPackDraft() {
-  return { positions: {}, extraNodes: [], deletedIds: [] };
+  return {
+    positions: {},
+    extraNodes: [],
+    deletedIds: [],
+    extraEdges: [],
+    deletedEdgeIds: [],
+    nodeEdits: {},
+    edgeEdits: {},
+    orchestrator: "",
+  };
 }
 
 function loadDraftStore() {
@@ -2387,30 +2495,181 @@ function saveDraftStore(store) {
   localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(store));
 }
 
+function objectMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function getPackDraft(packId) {
   const store = loadDraftStore();
   const raw = store.packs?.[packId];
   if (!raw || typeof raw !== "object") return emptyPackDraft();
   return {
-    positions: raw.positions && typeof raw.positions === "object" ? raw.positions : {},
+    positions: objectMap(raw.positions),
     extraNodes: Array.isArray(raw.extraNodes) ? raw.extraNodes : [],
     deletedIds: Array.isArray(raw.deletedIds) ? raw.deletedIds : [],
+    extraEdges: Array.isArray(raw.extraEdges) ? raw.extraEdges : [],
+    deletedEdgeIds: Array.isArray(raw.deletedEdgeIds) ? raw.deletedEdgeIds : [],
+    nodeEdits: objectMap(raw.nodeEdits),
+    edgeEdits: objectMap(raw.edgeEdits),
+    orchestrator: typeof raw.orchestrator === "string" ? raw.orchestrator : "",
   };
 }
 
 function setPackDraft(packId, draft) {
   const store = loadDraftStore();
   store.packs = store.packs || {};
-  store.packs[packId] = {
-    positions: draft.positions || {},
-    extraNodes: draft.extraNodes || [],
-    deletedIds: draft.deletedIds || [],
-  };
+  store.packs[packId] = sanitizePackDraft(draft || emptyPackDraft());
   saveDraftStore(store);
 }
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function schemaUndoStack(packId) {
+  const id = packId || state.packId;
+  if (!schemaUndoByPack[id]) schemaUndoByPack[id] = { past: [] };
+  return schemaUndoByPack[id];
+}
+
+function updateSchemaUndoChrome() {
+  const btn = document.getElementById("schema-undo");
+  const n = schemaUndoStack(state.packId).past.length;
+  if (btn) {
+    btn.disabled = n === 0;
+    btn.title = n ? `Отменить последнее изменение (${n})` : "Нечего отменять";
+  }
+}
+
+function pushSchemaUndo() {
+  const stack = schemaUndoStack(state.packId);
+  stack.past.push(cloneJson(getPackDraft(state.packId)));
+  if (stack.past.length > SCHEMA_UNDO_LIMIT) stack.past.shift();
+  updateSchemaUndoChrome();
+}
+
+function undoSchemaDraft() {
+  if (!isSchemaMode()) return;
+  const stack = schemaUndoStack(state.packId);
+  if (!stack.past.length) return;
+  cancelSchemaConnect();
+  const prev = stack.past.pop();
+  setPackDraft(state.packId, prev);
+  state.pack = applyDraftToPack(
+    state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } },
+    prev
+  );
+  schemaInspectorUndoArmed = false;
+  renderPackGraph(state.pack, { skipFit: true });
+  updateSchemaUndoChrome();
+}
+
+function draftNodeIds(draft) {
+  const deleted = new Set(draft.deletedIds || []);
+  const ids = new Set();
+  for (const node of state.packBase?.graph?.nodes || []) {
+    if (!node?.id || deleted.has(node.id)) continue;
+    const edit = (draft.nodeEdits || {})[node.id];
+    ids.add(edit?.id && String(edit.id).trim() ? String(edit.id).trim() : node.id);
+  }
+  for (const extra of draft.extraNodes || []) {
+    if (extra?.id) ids.add(extra.id);
+  }
+  return ids;
+}
+
+function sanitizePackDraft(draft) {
+  const next = { ...emptyPackDraft(), ...(draft || {}) };
+  const ids = draftNodeIds(next);
+  next.extraEdges = (next.extraEdges || []).filter(
+    (edge) => edge && edge.from && edge.to && ids.has(edge.from) && ids.has(edge.to)
+  );
+  const edgeEdits = {};
+  for (const [edgeId, patch] of Object.entries(next.edgeEdits || {})) {
+    if (!patch || typeof patch !== "object") continue;
+    const fromOk = patch.from == null || (patch.from && ids.has(patch.from));
+    const toOk = patch.to == null || (patch.to && ids.has(patch.to));
+    if (!fromOk || !toOk) {
+      const cleaned = { ...patch };
+      if (!fromOk) delete cleaned.from;
+      if (!toOk) delete cleaned.to;
+      if (Object.keys(cleaned).length) edgeEdits[edgeId] = cleaned;
+      continue;
+    }
+    edgeEdits[edgeId] = patch;
+  }
+  next.edgeEdits = edgeEdits;
+  if (next.orchestrator && !ids.has(next.orchestrator)) next.orchestrator = "";
+  return next;
+}
+
+function nodeUiKind(node) {
+  if (!node) return "step";
+  if (node.kind === "orchestrator") return "orchestrator";
+  if (node.kind === "terminal") return "terminal";
+  if (node.kind === "meta") return "meta";
+  if (node.cycle) return "cycle";
+  if (node.ask) return "ask";
+  return node.kind === "step" ? "step" : node.kind || "step";
+}
+
+function applyUiKindToNode(node, uiKind) {
+  const next = { ...node };
+  const kind = SCHEMA_NODE_KINDS.includes(uiKind) ? uiKind : "step";
+  delete next.ask;
+  if (kind === "cycle") {
+    next.kind = "step";
+    next.cycle =
+      node.cycle && typeof node.cycle === "object" ? node.cycle : { close: "on_done" };
+    return next;
+  }
+  delete next.cycle;
+  if (kind === "orchestrator") next.kind = "orchestrator";
+  else if (kind === "terminal") next.kind = "terminal";
+  else if (kind === "meta") next.kind = "meta";
+  else if (kind === "ask") {
+    next.kind = "step";
+    next.ask = true;
+  } else next.kind = "step";
+  return next;
+}
+
+function extraNodePayload(node) {
+  const payload = {
+    id: node.id,
+    label: node.label || node.id,
+    kind: node.kind || "step",
+    subagent: node.subagent == null ? null : node.subagent,
+  };
+  if (node.ask) payload.ask = true;
+  if (node.cycle && typeof node.cycle === "object") payload.cycle = node.cycle;
+  return payload;
+}
+
+function applyNodeEditRecord(node, edit) {
+  if (!edit || typeof edit !== "object") return { ...node };
+  let next = { ...node };
+  if (edit.uiKind) next = applyUiKindToNode(next, edit.uiKind);
+  else {
+    if (edit.kind != null) next.kind = edit.kind;
+    if (edit.ask === true) next.ask = true;
+    else if (edit.ask === false) delete next.ask;
+    if (edit.cycle && typeof edit.cycle === "object") next.cycle = edit.cycle;
+    else if (edit.cycle === null) delete next.cycle;
+  }
+  if (edit.label != null) next.label = edit.label;
+  if (edit.subagent !== undefined) next.subagent = edit.subagent;
+  if (edit.id && String(edit.id).trim() && String(edit.id).trim() !== node.id) {
+    next.id = String(edit.id).trim();
+  }
+  return next;
+}
+
+function ensureEdgeId(edge, index, used) {
+  let id = edge.id || `e-${edge.from}-${edge.to}`;
+  if (used.has(id)) id = `e-${edge.from}-${edge.to}-${index}`;
+  used.add(id);
+  return { ...edge, id };
 }
 
 function kebabAgentId(name) {
@@ -2432,24 +2691,90 @@ function applyDraftToPack(basePack, draft) {
   const pack = cloneJson(basePack || { graph: { nodes: [], edges: [] } });
   pack.graph = pack.graph || {};
   const deleted = new Set(draft.deletedIds || []);
-  const nodes = (pack.graph.nodes || []).filter((node) => node && !deleted.has(node.id));
-  const existing = new Set(nodes.map((node) => node.id));
-  for (const extra of draft.extraNodes || []) {
-    if (!extra?.id || existing.has(extra.id)) continue;
-    nodes.push({
-      id: extra.id,
-      label: extra.label || extra.id,
-      kind: extra.kind || "step",
-      subagent: extra.subagent || extra.id,
-      draft: true,
-    });
-    existing.add(extra.id);
-    deleted.delete(extra.id);
+  const edits = draft.nodeEdits || {};
+  const idMap = {};
+  const nodes = [];
+  const existing = new Set();
+
+  for (const node of pack.graph.nodes || []) {
+    if (!node?.id || deleted.has(node.id)) continue;
+    const next = applyNodeEditRecord(node, edits[node.id]);
+    if (next.id !== node.id) idMap[node.id] = next.id;
+    if (existing.has(next.id)) continue;
+    nodes.push(next);
+    existing.add(next.id);
   }
+
+  for (const extra of draft.extraNodes || []) {
+    if (!extra?.id || existing.has(extra.id) || deleted.has(extra.id)) continue;
+    const node = applyNodeEditRecord(
+      {
+        id: extra.id,
+        label: extra.label || extra.id,
+        kind: extra.kind || "step",
+        subagent: extra.subagent === undefined ? extra.id : extra.subagent,
+        draft: true,
+        ...(extra.ask ? { ask: true } : {}),
+        ...(extra.cycle && typeof extra.cycle === "object" ? { cycle: extra.cycle } : {}),
+      },
+      edits[extra.id]
+    );
+    node.draft = true;
+    if (existing.has(node.id)) continue;
+    nodes.push(node);
+    existing.add(node.id);
+  }
+
+  const mapId = (id) => idMap[id] || id;
+  const deletedEdges = new Set(draft.deletedEdgeIds || []);
+  const edgeEdits = draft.edgeEdits || {};
+  const usedEdgeIds = new Set();
+  let edges = [];
+
+  (pack.graph.edges || []).forEach((edge, index) => {
+    if (!edge) return;
+    const mapped = {
+      ...edge,
+      from: mapId(edge.from),
+      to: mapId(edge.to),
+    };
+    const withId = ensureEdgeId(mapped, index, usedEdgeIds);
+    if (deletedEdges.has(withId.id)) return;
+    const patch = edgeEdits[withId.id] || {};
+    const next = { ...withId, ...patch };
+    if (!next.from || !next.to) return;
+    if (!existing.has(next.from) || !existing.has(next.to)) return;
+    edges.push(next);
+  });
+
+  for (const extra of draft.extraEdges || []) {
+    if (!extra?.from || !extra?.to) continue;
+    if (!existing.has(extra.from) || !existing.has(extra.to)) continue;
+    if (extra.id && deletedEdges.has(extra.id)) continue;
+    const withId = extra.id
+      ? extra
+      : ensureEdgeId({ ...extra }, edges.length, usedEdgeIds);
+    if (withId.id && usedEdgeIds.has(withId.id) && extra.id) {
+      /* keep explicit extra id even if pack already used it — skip duplicate */
+      if (edges.some((item) => item.id === withId.id)) continue;
+    }
+    if (withId.id) usedEdgeIds.add(withId.id);
+    const patch = edgeEdits[withId.id] || {};
+    const next = { ...withId, ...patch };
+    if (!next.from || !next.to) continue;
+    if (!existing.has(next.from) || !existing.has(next.to)) continue;
+    edges.push(next);
+  }
+
   pack.graph.nodes = nodes;
-  pack.graph.edges = (pack.graph.edges || []).filter(
-    (edge) => edge && existing.has(edge.from) && existing.has(edge.to)
-  );
+  pack.graph.edges = edges;
+
+  if (draft.orchestrator && existing.has(draft.orchestrator)) {
+    pack.graph.orchestrator = draft.orchestrator;
+  } else {
+    const orch = nodes.find((node) => node.kind === "orchestrator");
+    if (orch) pack.graph.orchestrator = orch.id;
+  }
   return pack;
 }
 
@@ -2487,6 +2812,523 @@ function captureSchemaPositions() {
 function setSchemaNodeActionsVisible(show) {
   const el = document.getElementById("schema-node-actions");
   if (el) el.classList.toggle("hidden", !show);
+}
+
+function setSchemaEdgeActionsVisible(show) {
+  const el = document.getElementById("schema-edge-actions");
+  if (el) el.classList.toggle("hidden", !show);
+}
+
+function setSchemaInspectorError(text) {
+  const el = document.getElementById("schema-inspector-error");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
+}
+
+function schemaKindHint(uiKind) {
+  if (uiKind === "cycle") {
+    return "Флаг составной клетки. Очередь calls и handshake — фаза 4.";
+  }
+  if (uiKind === "ask") {
+    return "Пауза на этой клетке; apply без смены шага. Детали handshake — фаза 5.";
+  }
+  if (uiKind === "orchestrator") {
+    return "Ровно одна клетка-оркестратор. Другой оркестратор станет шагом.";
+  }
+  if (uiKind === "terminal") return "Терминал (PASS / done).";
+  if (uiKind === "meta") return "Мета-шаг, не ask/cycle.";
+  return "Обычный шаг. YAML не пишется.";
+}
+
+function fillNodeIdOptions(select, selectedId) {
+  if (!select) return;
+  const nodes = state.pack?.graph?.nodes || [];
+  select.innerHTML = "";
+  for (const node of nodes) {
+    const opt = document.createElement("option");
+    opt.value = node.id;
+    opt.textContent = node.label && node.label !== node.id ? `${node.id} · ${node.label}` : node.id;
+    select.appendChild(opt);
+  }
+  if (selectedId && ![...select.options].some((opt) => opt.value === selectedId)) {
+    const opt = document.createElement("option");
+    opt.value = selectedId;
+    opt.textContent = selectedId;
+    select.appendChild(opt);
+  }
+  select.value = selectedId || select.options[0]?.value || "";
+}
+
+function fillSubagentSelect(select, current) {
+  if (!select) return;
+  const agents = [...state.catalogAgents];
+  if (current && !agents.includes(current)) agents.unshift(current);
+  select.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "(нет)";
+  select.appendChild(empty);
+  for (const name of agents) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  }
+  select.value = current || "";
+}
+
+function resetSchemaInspectorForms() {
+  document.getElementById("schema-inspector-empty")?.classList.remove("hidden");
+  document.getElementById("schema-node-form")?.classList.add("hidden");
+  document.getElementById("schema-edge-form")?.classList.add("hidden");
+  setSchemaInspectorError("");
+  schemaInspectorUndoArmed = false;
+}
+
+function schemaCanvasIssues(pack) {
+  const nodes = pack?.graph?.nodes || [];
+  const edges = pack?.graph?.edges || [];
+  const ids = new Set(nodes.map((node) => node.id));
+  const issues = [];
+  const orch = nodes.filter((node) => node.kind === "orchestrator");
+  if (orch.length === 0) issues.push("Нет оркестратора — нужен ровно один.");
+  else if (orch.length > 1) {
+    issues.push(`Оркестраторов ${orch.length} — нужен один (${orch.map((n) => n.id).join(", ")}).`);
+  }
+  const dangling = edges.filter((edge) => !edge.from || !edge.to || !ids.has(edge.from) || !ids.has(edge.to));
+  if (dangling.length) issues.push(`Рёбер в пустоту: ${dangling.length} (в черновик не пишем).`);
+  return issues;
+}
+
+function renderSchemaCanvasIssues(pack) {
+  const el = document.getElementById("schema-canvas-issues");
+  if (!el) return;
+  const issues = schemaCanvasIssues(pack);
+  el.textContent = issues.join(" ");
+  el.classList.toggle("hidden", !issues.length);
+}
+
+function packEdgeById(edgeId) {
+  return (state.pack?.graph?.edges || []).find((edge) => edge.id === edgeId) || null;
+}
+
+function packEdgeTooltip(edge) {
+  const lines = [`${edge.from} → ${edge.to}`, `kind: ${edge.kind || "main"}`];
+  if (edge.label) lines.push(`label: ${edge.label}`);
+  if (edge.condition) lines.push(`condition: ${edge.condition}`);
+  lines.push("черновик: YAML не пишется");
+  return lines.join("\n");
+}
+
+function commitSchemaDraft(draft, opts = {}) {
+  const cleaned = sanitizePackDraft(draft);
+  setPackDraft(state.packId, cleaned);
+  state.pack = applyDraftToPack(
+    state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } },
+    cleaned
+  );
+  if (opts.selectNode) {
+    selectedNodeId = opts.selectNode;
+    selectedEdgeId = null;
+    selectedElementId = opts.selectNode;
+  }
+  if (opts.selectEdge) {
+    selectedEdgeId = opts.selectEdge;
+    selectedNodeId = null;
+    selectedElementId = opts.selectEdge;
+  }
+  renderPackGraph(state.pack, { skipFit: opts.skipFit !== false });
+}
+
+function originalPackNodeId(currentId, draft) {
+  for (const [orig, edit] of Object.entries(draft.nodeEdits || {})) {
+    if (edit?.id === currentId) return orig;
+  }
+  return currentId;
+}
+
+function patchDraftNode(draft, nodeId, patch) {
+  const extras = draft.extraNodes || [];
+  const idx = extras.findIndex((node) => node.id === nodeId);
+  if (idx >= 0) {
+    extras[idx] = extraNodePayload({ ...extras[idx], ...patch });
+    draft.extraNodes = extras;
+    return;
+  }
+  const origId = originalPackNodeId(nodeId, draft);
+  draft.nodeEdits = { ...(draft.nodeEdits || {}) };
+  draft.nodeEdits[origId] = { ...(draft.nodeEdits[origId] || {}), ...patch };
+}
+
+function patchDraftEdge(draft, edgeId, patch) {
+  const ids = new Set((state.pack?.graph?.nodes || []).map((node) => node.id));
+  const extras = draft.extraEdges || [];
+  const idx = extras.findIndex((edge) => edge.id === edgeId);
+  const current = idx >= 0 ? extras[idx] : packEdgeById(edgeId) || {};
+  const prevPatch = (draft.edgeEdits || {})[edgeId] || {};
+  const nextFrom = patch.from !== undefined ? patch.from : prevPatch.from ?? current.from;
+  const nextTo = patch.to !== undefined ? patch.to : prevPatch.to ?? current.to;
+  if (!nextFrom || !nextTo) return "from и to не могут быть пустыми.";
+  if (!ids.has(nextFrom) || !ids.has(nextTo)) return "Ребро только между существующими клетками.";
+  if (idx >= 0) {
+    extras[idx] = { ...extras[idx], ...patch, from: nextFrom, to: nextTo };
+    draft.extraEdges = extras;
+    return "";
+  }
+  draft.edgeEdits = { ...(draft.edgeEdits || {}) };
+  draft.edgeEdits[edgeId] = { ...prevPatch, ...patch };
+  return "";
+}
+
+function uniqueSchemaEdgeId(from, to) {
+  const used = new Set((state.pack?.graph?.edges || []).map((edge) => edge.id).filter(Boolean));
+  const base = `e-${from}-${to}`;
+  if (!used.has(base)) return base;
+  let i = 2;
+  while (used.has(`${base}-${i}`)) i += 1;
+  return `${base}-${i}`;
+}
+
+function setSchemaConnectFrom(nodeId) {
+  schemaConnectFrom = nodeId || null;
+  document.body.classList.toggle("schema-connecting", Boolean(schemaConnectFrom));
+  const hint = document.getElementById("schema-connect-hint");
+  if (hint) {
+    hint.classList.toggle("hidden", !schemaConnectFrom);
+    if (schemaConnectFrom) {
+      hint.textContent = `Стрелка от «${schemaConnectFrom}»: кликните целевую клетку (Esc — отмена)`;
+    }
+  }
+  highlightNode(selectedNodeId, null);
+}
+
+function cancelSchemaConnect() {
+  setSchemaConnectFrom(null);
+}
+
+function beginSchemaConnect(fromId) {
+  if (!fromId) return;
+  setSchemaConnectFrom(fromId);
+}
+
+function finishSchemaConnect(toId) {
+  const fromId = schemaConnectFrom;
+  cancelSchemaConnect();
+  if (!fromId || !toId) return;
+  addSchemaEdge(fromId, toId, { kind: "main" });
+}
+
+function addSchemaEdge(from, to, fields = {}) {
+  if (!isSchemaMode()) return;
+  if (!from || !to) {
+    setSchemaInspectorError("Нельзя сохранить ребро в пустоту.");
+    return;
+  }
+  if (from === to) {
+    setSchemaInspectorError("Петля на ту же клетку не нужна — выберите другую.");
+    return;
+  }
+  const ids = new Set((state.pack?.graph?.nodes || []).map((node) => node.id));
+  if (!ids.has(from) || !ids.has(to)) {
+    setSchemaInspectorError("Оба конца стрелки должны быть клетками на холсте.");
+    return;
+  }
+  pushSchemaUndo();
+  const id = uniqueSchemaEdgeId(from, to);
+  const draft = getPackDraft(state.packId);
+  draft.extraEdges = [
+    ...(draft.extraEdges || []),
+    {
+      id,
+      from,
+      to,
+      kind: SCHEMA_EDGE_KINDS.includes(fields.kind) ? fields.kind : "main",
+      label: fields.label || "",
+    },
+  ];
+  commitSchemaDraft(draft, { selectEdge: id, skipFit: true });
+  setSchemaInspectorError("");
+}
+
+function deleteSchemaEdge(edgeId) {
+  if (!edgeId || !isSchemaMode()) return;
+  pushSchemaUndo();
+  const draft = getPackDraft(state.packId);
+  const extraIds = new Set((draft.extraEdges || []).map((edge) => edge.id));
+  if (extraIds.has(edgeId)) {
+    draft.extraEdges = (draft.extraEdges || []).filter((edge) => edge.id !== edgeId);
+  } else {
+    draft.deletedEdgeIds = Array.from(new Set([...(draft.deletedEdgeIds || []), edgeId]));
+  }
+  if (draft.edgeEdits) delete draft.edgeEdits[edgeId];
+  if (selectedEdgeId === edgeId) {
+    selectedEdgeId = null;
+    selectedElementId = null;
+  }
+  commitSchemaDraft(draft, { skipFit: true });
+}
+
+function armInspectorUndo() {
+  if (schemaInspectorSyncing || schemaInspectorUndoArmed) return false;
+  pushSchemaUndo();
+  schemaInspectorUndoArmed = true;
+  return true;
+}
+
+function orchestratorCount(pack) {
+  return (pack?.graph?.nodes || []).filter((node) => node.kind === "orchestrator").length;
+}
+
+function applyNodeKindChange(nodeId, uiKind) {
+  const node = packNodeById(nodeId);
+  if (!node) return false;
+  if (!SCHEMA_NODE_KINDS.includes(uiKind)) {
+    setSchemaInspectorError("Неизвестный kind.");
+    return false;
+  }
+  if (uiKind !== "orchestrator" && node.kind === "orchestrator" && orchestratorCount(state.pack) <= 1) {
+    setSchemaInspectorError("Нужен ровно один оркестратор. Сначала назначьте оркестратором другую клетку.");
+    return false;
+  }
+  armInspectorUndo();
+  const draft = getPackDraft(state.packId);
+  const patched = applyUiKindToNode(node, uiKind);
+  patchDraftNode(draft, nodeId, {
+    uiKind,
+    kind: patched.kind,
+    ask: patched.ask === true,
+    cycle: patched.cycle || null,
+    label: patched.label,
+    subagent: patched.subagent,
+  });
+  if (uiKind === "orchestrator") {
+    const live = applyDraftToPack(state.packBase, draft);
+    for (const other of live.graph.nodes || []) {
+      if (other.id === nodeId || other.kind !== "orchestrator") continue;
+      const demoted = applyUiKindToNode(other, "step");
+      patchDraftNode(draft, other.id, {
+        uiKind: "step",
+        kind: "step",
+        ask: false,
+        cycle: null,
+        label: demoted.label,
+        subagent: demoted.subagent,
+      });
+    }
+    draft.orchestrator = nodeId;
+  } else if (draft.orchestrator === nodeId) {
+    draft.orchestrator = "";
+  }
+  commitSchemaDraft(draft, { selectNode: nodeId, skipFit: true });
+  setSchemaInspectorError("");
+  return true;
+}
+
+function renameSchemaNode(oldId, newIdRaw) {
+  const newId = String(newIdRaw || "").trim();
+  if (newId === oldId) return true;
+  if (!newId) {
+    setSchemaInspectorError("id не может быть пустым.");
+    return false;
+  }
+  if (packNodeById(newId)) {
+    setSchemaInspectorError(`id «${newId}» уже занят.`);
+    return false;
+  }
+  armInspectorUndo();
+  const draft = getPackDraft(state.packId);
+  const extras = draft.extraNodes || [];
+  const extraIdx = extras.findIndex((node) => node.id === oldId);
+  if (extraIdx >= 0) {
+    extras[extraIdx] = { ...extras[extraIdx], id: newId };
+    draft.extraNodes = extras;
+  } else {
+    const origId = originalPackNodeId(oldId, draft);
+    draft.nodeEdits = { ...(draft.nodeEdits || {}) };
+    draft.nodeEdits[origId] = { ...(draft.nodeEdits[origId] || {}), id: newId };
+  }
+  if (draft.positions?.[oldId]) {
+    draft.positions[newId] = draft.positions[oldId];
+    delete draft.positions[oldId];
+  }
+  draft.extraEdges = (draft.extraEdges || []).map((edge) => ({
+    ...edge,
+    from: edge.from === oldId ? newId : edge.from,
+    to: edge.to === oldId ? newId : edge.to,
+  }));
+  for (const [edgeId, patch] of Object.entries(draft.edgeEdits || {})) {
+    const next = { ...patch };
+    if (next.from === oldId) next.from = newId;
+    if (next.to === oldId) next.to = newId;
+    draft.edgeEdits[edgeId] = next;
+  }
+  if (draft.orchestrator === oldId) draft.orchestrator = newId;
+  selectedNodeId = newId;
+  selectedElementId = newId;
+  commitSchemaDraft(draft, { selectNode: newId, skipFit: true });
+  setSchemaInspectorError("");
+  return true;
+}
+
+function refreshSchemaElementVisuals() {
+  if (!cy || !isSchemaMode()) return;
+  for (const node of state.pack?.graph?.nodes || []) {
+    const el = cy.getElementById(node.id);
+    if (!el.length) continue;
+    el.data("label", formatPackNodeLabel(node));
+    el.data("color", packNodeColor(node));
+    el.data("kind", node.kind || "step");
+    el.data("askFlag", node.ask ? "true" : "false");
+    el.data("cycleFlag", node.cycle ? "true" : "false");
+    el.removeClass("draft-added cli-missing");
+    const classes = packNodeClasses(node);
+    if (classes) el.addClass(classes);
+  }
+  for (const edge of state.pack?.graph?.edges || []) {
+    if (!edge.id) continue;
+    const el = cy.getElementById(edge.id);
+    if (!el.length) continue;
+    el.data("label", packEdgeLabel(edge));
+    el.data("kind", edge.kind || "main");
+    el.data("color", PACK_EDGE_COLORS[edge.kind] || PACK_EDGE_COLORS.main);
+    el.data("source", edge.from);
+    el.data("target", edge.to);
+  }
+  renderPackSummary(state.pack);
+}
+
+function persistDraftWithoutFit(draft) {
+  const cleaned = sanitizePackDraft(draft);
+  setPackDraft(state.packId, cleaned);
+  state.pack = applyDraftToPack(
+    state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } },
+    cleaned
+  );
+}
+
+function applyNodeFieldPatch(nodeId, patch, opts = {}) {
+  armInspectorUndo();
+  const draft = getPackDraft(state.packId);
+  patchDraftNode(draft, nodeId, patch);
+  persistDraftWithoutFit(draft);
+  if (opts.rebuild) {
+    commitSchemaDraft(getPackDraft(state.packId), { selectNode: nodeId, skipFit: true });
+    return;
+  }
+  refreshSchemaElementVisuals();
+}
+
+function applyEdgeFieldPatch(edgeId, patch, opts = {}) {
+  const pushed = armInspectorUndo();
+  const draft = getPackDraft(state.packId);
+  const err = patchDraftEdge(draft, edgeId, patch);
+  if (err) {
+    if (pushed) {
+      schemaUndoStack(state.packId).past.pop();
+      schemaInspectorUndoArmed = false;
+      updateSchemaUndoChrome();
+    }
+    setSchemaInspectorError(err);
+    showSchemaInspector();
+    return false;
+  }
+  persistDraftWithoutFit(draft);
+  if (opts.rebuild) {
+    commitSchemaDraft(getPackDraft(state.packId), { selectEdge: edgeId, skipFit: true });
+    setSchemaInspectorError("");
+    return true;
+  }
+  refreshSchemaElementVisuals();
+  setSchemaInspectorError("");
+  return true;
+}
+
+function fillSchemaNodeForm(node) {
+  schemaInspectorSyncing = true;
+  const uiKind = nodeUiKind(node);
+  const idEl = document.getElementById("schema-node-id");
+  const labelEl = document.getElementById("schema-node-label");
+  const kindEl = document.getElementById("schema-node-kind");
+  const hintEl = document.getElementById("schema-kind-hint");
+  if (idEl) idEl.value = node.id;
+  if (labelEl) labelEl.value = node.label || node.id;
+  if (kindEl) kindEl.value = SCHEMA_NODE_KINDS.includes(uiKind) ? uiKind : "step";
+  if (hintEl) hintEl.textContent = schemaKindHint(uiKind);
+  fillSubagentSelect(document.getElementById("schema-node-subagent"), node.subagent || "");
+  schemaInspectorSyncing = false;
+}
+
+function markSchemaEdgeKindNotes(kind) {
+  const current = SCHEMA_EDGE_KINDS.includes(kind) ? kind : "main";
+  document.querySelectorAll("#schema-edge-kind-notes [data-kind]").forEach((item) => {
+    item.classList.toggle("is-current", item.dataset.kind === current);
+  });
+}
+
+function fillSchemaEdgeForm(edge) {
+  schemaInspectorSyncing = true;
+  fillNodeIdOptions(document.getElementById("schema-edge-from"), edge.from);
+  fillNodeIdOptions(document.getElementById("schema-edge-to"), edge.to);
+  const kindEl = document.getElementById("schema-edge-kind");
+  const labelEl = document.getElementById("schema-edge-label");
+  const kind = SCHEMA_EDGE_KINDS.includes(edge.kind) ? edge.kind : "main";
+  if (kindEl) kindEl.value = kind;
+  if (labelEl) labelEl.value = edge.label || "";
+  markSchemaEdgeKindNotes(kind);
+  schemaInspectorSyncing = false;
+}
+
+function showSchemaInspector() {
+  const heading = document.getElementById("step-heading");
+  const empty = document.getElementById("schema-inspector-empty");
+  const nodeForm = document.getElementById("schema-node-form");
+  const edgeForm = document.getElementById("schema-edge-form");
+  setSchemaNodeActionsVisible(false);
+  setSchemaEdgeActionsVisible(false);
+
+  if (selectedEdgeId) {
+    const edge = packEdgeById(selectedEdgeId);
+    if (!edge) {
+      selectedEdgeId = null;
+      resetSchemaInspectorForms();
+      if (heading) heading.textContent = "Инспектор";
+      return;
+    }
+    if (heading) heading.textContent = "Стрелка";
+    empty?.classList.add("hidden");
+    nodeForm?.classList.add("hidden");
+    edgeForm?.classList.remove("hidden");
+    fillSchemaEdgeForm(edge);
+    setSchemaEdgeActionsVisible(true);
+    return;
+  }
+
+  if (selectedNodeId) {
+    const node = packNodeById(selectedNodeId);
+    if (!node) {
+      selectedNodeId = null;
+      resetSchemaInspectorForms();
+      if (heading) heading.textContent = "Инспектор";
+      return;
+    }
+    if (heading) heading.textContent = "Клетка";
+    empty?.classList.add("hidden");
+    edgeForm?.classList.add("hidden");
+    nodeForm?.classList.remove("hidden");
+    fillSchemaNodeForm(node);
+    setSchemaNodeActionsVisible(true);
+    return;
+  }
+
+  if (heading) heading.textContent = "Инспектор";
+  resetSchemaInspectorForms();
+}
+
+function showPackNodeSummary(nodeId) {
+  selectedNodeId = nodeId;
+  selectedEdgeId = null;
+  showSchemaInspector();
 }
 
 function showPaletteNotice(text) {
@@ -2683,38 +3525,6 @@ function buildPackGraphElements(pack) {
   return elements;
 }
 
-function showPackNodeSummary(nodeId) {
-  const el = document.getElementById("step-detail");
-  const node = packNodeById(nodeId);
-  if (!el) return;
-    if (!node) {
-    el.textContent = `Нет клетки «${nodeId}».`;
-    setSchemaNodeActionsVisible(false);
-    return;
-  }
-  const lines = [
-    `id: ${node.id}`,
-    `label: ${node.label || node.id}`,
-    `kind: ${node.kind || "step"}`,
-  ];
-  if (node.subagent != null) lines.push(`subagent: ${node.subagent}`);
-  if (node.draft) lines.push("черновик: с палитры, не в YAML");
-  const missing = node.subagent ? missingClisFor(node.subagent) : [];
-  if (missing.length) lines.push(`нет в CLI: ${missing.join(", ")} — клетку всё равно можно держать`);
-  if (node.ask) lines.push("ask: true — пауза; apply без смены шага");
-  if (node.cycle && typeof node.cycle === "object") {
-    lines.push("cycle: составная клетка");
-    for (const key of ["persistent", "assemble", "param", "folder", "out", "item_file", "close"]) {
-      if (node.cycle[key] != null && node.cycle[key] !== "") {
-        lines.push(`  ${key}: ${node.cycle[key]}`);
-      }
-    }
-    if (!node.cycle.calls) lines.push("  calls: (нет — runtime подставит каталог)");
-  }
-  el.textContent = lines.join("\n");
-  setSchemaNodeActionsVisible(true);
-}
-
 function renderPackSummary(pack) {
   const el = document.getElementById("pack-summary");
   const badge = document.getElementById("pack-badge");
@@ -2723,22 +3533,30 @@ function renderPackSummary(pack) {
   const edges = graph.edges || [];
   const draft = getPackDraft(state.packId);
   const extra = (draft.extraNodes || []).length;
+  const extraEdges = (draft.extraEdges || []).length;
   const removed = (draft.deletedIds || []).length;
+  const removedEdges = (draft.deletedEdgeIds || []).length;
+  const edited =
+    Object.keys(draft.nodeEdits || {}).length + Object.keys(draft.edgeEdits || {}).length;
   const draftBits = [];
-  if (extra) draftBits.push(`+${extra} с палитры`);
-  if (removed) draftBits.push(`−${removed} удалено`);
+  if (extra) draftBits.push(`+${extra} клеток`);
+  if (extraEdges) draftBits.push(`+${extraEdges} стрелок`);
+  if (removed) draftBits.push(`−${removed} клеток`);
+  if (removedEdges) draftBits.push(`−${removedEdges} стрелок`);
+  if (edited) draftBits.push("правки инспектора");
   const text = [
     `id: ${pack?.id || "—"}`,
     `label: ${graph.label || "—"}`,
     `оркестратор: ${graph.orchestrator || "—"}`,
     `клеток: ${nodes.length} · стрелок: ${edges.length}`,
-    extra || removed ? `черновик: ${draftBits.join(", ")}` : "черновик: координаты в браузере",
+    draftBits.length ? `черновик: ${draftBits.join(", ")}` : "черновик: координаты в браузере",
   ].join("\n");
   if (el) el.textContent = text;
   if (badge) {
-    const mark = extra || removed ? " · черновик" : "";
+    const mark = draftBits.length ? " · черновик" : "";
     badge.textContent = `${pack?.id || "—"} · ${nodes.length} клеток${mark}`;
   }
+  renderSchemaCanvasIssues(pack);
 }
 
 function renderPackGraph(pack, opts = {}) {
@@ -2776,16 +3594,24 @@ function renderPackGraph(pack, opts = {}) {
     }
   }
   captureSchemaPositions();
+  updateSchemaUndoChrome();
 
-  if (selectedNodeId && packNodeById(selectedNodeId)) {
+  if (selectedEdgeId && packEdgeById(selectedEdgeId)) {
+    selectedNodeId = null;
+    selectedElementId = selectedEdgeId;
+    highlightNode(null, null);
+    showSchemaInspector();
+  } else if (selectedNodeId && packNodeById(selectedNodeId)) {
+    selectedEdgeId = null;
+    selectedElementId = selectedNodeId;
     highlightNode(selectedNodeId, null);
-    showPackNodeSummary(selectedNodeId);
+    showSchemaInspector();
   } else {
     selectedNodeId = null;
+    selectedEdgeId = null;
     selectedElementId = null;
-    setSchemaNodeActionsVisible(false);
-    const el = document.getElementById("step-detail");
-    if (el) el.textContent = "Кликните клетку или перетащите агента слева. YAML не пишется.";
+    highlightNode(null, null);
+    showSchemaInspector();
   }
 }
 
@@ -2817,6 +3643,7 @@ async function loadPackGraph() {
     if (emptyText) emptyText.textContent = err.message || String(err);
     renderPackSummary(null);
     setSchemaNodeActionsVisible(false);
+    setSchemaEdgeActionsVisible(false);
     showError(`Схема пака: ${err.message || err}`);
   }
 }
@@ -2830,56 +3657,18 @@ function addDraftAgentNode(agentName, position) {
   if (!agent) return;
   const missing = missingClisFor(agent);
   const id = uniqueSchemaNodeId(kebabAgentId(agent));
-  const node = {
+  const node = extraNodePayload({
     id,
     label: agent,
     kind: "step",
     subagent: agent,
-  };
+  });
+  pushSchemaUndo();
   const draft = getPackDraft(state.packId);
   draft.extraNodes = [...(draft.extraNodes || []).filter((item) => item.id !== id), node];
   draft.deletedIds = (draft.deletedIds || []).filter((item) => item !== id);
   draft.positions = { ...(draft.positions || {}), [id]: position };
-  setPackDraft(state.packId, draft);
-
-  if (!state.pack) {
-    state.pack = applyDraftToPack(state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } }, draft);
-  } else {
-    state.pack.graph = state.pack.graph || { nodes: [], edges: [] };
-    state.pack.graph.nodes = state.pack.graph.nodes || [];
-    if (!state.pack.graph.nodes.some((item) => item.id === id)) {
-      state.pack.graph.nodes.push({ ...node, draft: true });
-    }
-  }
-
-  const graph = initCytoscape();
-  const empty = document.getElementById("empty-state");
-  empty.classList.add("hidden");
-  document.getElementById("cy").style.visibility = "visible";
-  graph.autoungrabify(false);
-  const displayNode = { ...node, draft: true };
-  graph.add({
-    group: "nodes",
-    data: {
-      id,
-      label: formatPackNodeLabel(displayNode),
-      color: packNodeColor(displayNode),
-      kind: "step",
-      askFlag: "false",
-      cycleFlag: "false",
-    },
-    position,
-    grabbable: true,
-    classes: packNodeClasses(displayNode),
-  });
-  graph.getElementById(id).grabify();
-  selectedNodeId = id;
-  selectedElementId = id;
-  highlightNode(id, null);
-  showPackNodeSummary(id);
-  renderPackSummary(state.pack);
-  resizeGraphCanvas(graph, "target");
-  captureSchemaPositions();
+  commitSchemaDraft(draft, { selectNode: id, skipFit: true });
   if (missing.length) {
     showPaletteNotice(
       `Агента «${agent}» нет в ${missing.join(", ")}. Клетка создана (черновик, диск не пишется).`
@@ -2891,6 +3680,8 @@ function addDraftAgentNode(agentName, position) {
 
 function deleteSchemaNode(nodeId) {
   if (!nodeId || !isSchemaMode()) return;
+  pushSchemaUndo();
+  cancelSchemaConnect();
   const draft = getPackDraft(state.packId);
   const extraIds = new Set((draft.extraNodes || []).map((node) => node.id));
   if (extraIds.has(nodeId)) {
@@ -2899,29 +3690,29 @@ function deleteSchemaNode(nodeId) {
     draft.deletedIds = Array.from(new Set([...(draft.deletedIds || []), nodeId]));
   }
   if (draft.positions) delete draft.positions[nodeId];
-  setPackDraft(state.packId, draft);
-
-  if (state.pack?.graph) {
-    state.pack.graph.nodes = (state.pack.graph.nodes || []).filter((node) => node.id !== nodeId);
-    state.pack.graph.edges = (state.pack.graph.edges || []).filter(
-      (edge) => edge.from !== nodeId && edge.to !== nodeId
-    );
-  }
-  if (cy) {
-    const node = cy.getElementById(nodeId);
-    if (node.length) {
-      node.connectedEdges().remove();
-      node.remove();
+  if (draft.nodeEdits) {
+    delete draft.nodeEdits[nodeId];
+    for (const [orig, edit] of Object.entries(draft.nodeEdits)) {
+      if (edit?.id === nodeId) delete draft.nodeEdits[orig];
     }
   }
-  if (selectedNodeId === nodeId) {
-    selectedNodeId = null;
-    selectedElementId = null;
-    highlightNode(null, null);
-    clearNodePanel();
+  draft.extraEdges = (draft.extraEdges || []).filter(
+    (edge) => edge.from !== nodeId && edge.to !== nodeId
+  );
+  const packEdges = state.packBase?.graph?.edges || [];
+  for (const edge of packEdges) {
+    const from = edge.from;
+    const to = edge.to;
+    if (from === nodeId || to === nodeId) {
+      const id = edge.id;
+      if (id) draft.deletedEdgeIds = Array.from(new Set([...(draft.deletedEdgeIds || []), id]));
+    }
   }
-  renderPackSummary(state.pack);
-  captureSchemaPositions();
+  if (draft.orchestrator === nodeId) draft.orchestrator = "";
+  selectedNodeId = null;
+  selectedEdgeId = null;
+  selectedElementId = null;
+  commitSchemaDraft(draft, { skipFit: true });
 }
 
 function agentFromDragEvent(event) {
@@ -3033,16 +3824,91 @@ function bindSchemaPalette() {
 }
 
 function bindSchemaDraftActions() {
+  document.getElementById("schema-node-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+  document.getElementById("schema-edge-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
   document.getElementById("schema-delete-node")?.addEventListener("click", () => {
     if (selectedNodeId) deleteSchemaNode(selectedNodeId);
   });
+  document.getElementById("schema-delete-edge")?.addEventListener("click", () => {
+    if (selectedEdgeId) deleteSchemaEdge(selectedEdgeId);
+  });
+  document.getElementById("schema-connect-edge")?.addEventListener("click", () => {
+    if (selectedNodeId) beginSchemaConnect(selectedNodeId);
+  });
+  document.getElementById("schema-undo")?.addEventListener("click", () => undoSchemaDraft());
+
+  document.getElementById("schema-node-id")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedNodeId) return;
+    if (!renameSchemaNode(selectedNodeId, event.target.value)) {
+      event.target.value = selectedNodeId;
+    }
+  });
+  document.getElementById("schema-node-label")?.addEventListener("input", (event) => {
+    if (schemaInspectorSyncing || !selectedNodeId) return;
+    applyNodeFieldPatch(selectedNodeId, { label: event.target.value });
+  });
+  document.getElementById("schema-node-kind")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedNodeId) return;
+    if (!applyNodeKindChange(selectedNodeId, event.target.value)) {
+      const node = packNodeById(selectedNodeId);
+      event.target.value = nodeUiKind(node);
+    }
+  });
+  document.getElementById("schema-node-subagent")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedNodeId) return;
+    applyNodeFieldPatch(selectedNodeId, { subagent: event.target.value || null });
+  });
+
+  document.getElementById("schema-edge-from")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    applyEdgeFieldPatch(selectedEdgeId, { from: event.target.value }, { rebuild: true });
+  });
+  document.getElementById("schema-edge-to")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    applyEdgeFieldPatch(selectedEdgeId, { to: event.target.value }, { rebuild: true });
+  });
+  document.getElementById("schema-edge-kind")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    markSchemaEdgeKindNotes(event.target.value);
+    applyEdgeFieldPatch(selectedEdgeId, { kind: event.target.value });
+  });
+  document.getElementById("schema-edge-label")?.addEventListener("input", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    applyEdgeFieldPatch(selectedEdgeId, { label: event.target.value });
+  });
+
   document.addEventListener("keydown", (event) => {
     if (!isSchemaMode()) return;
+    const inField = event.target?.closest?.("input, textarea, select, [contenteditable]");
+    if ((event.key === "z" || event.key === "Z") && (event.metaKey || event.ctrlKey) && !event.shiftKey) {
+      if (inField) return;
+      event.preventDefault();
+      undoSchemaDraft();
+      return;
+    }
+    if (event.key === "Escape") {
+      if (schemaConnectFrom) {
+        event.preventDefault();
+        cancelSchemaConnect();
+      }
+      return;
+    }
     if (event.key !== "Delete" && event.key !== "Backspace") return;
-    if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return;
-    if (!selectedNodeId) return;
-    event.preventDefault();
-    deleteSchemaNode(selectedNodeId);
+    if (inField) return;
+    if (selectedEdgeId) {
+      event.preventDefault();
+      deleteSchemaEdge(selectedEdgeId);
+      return;
+    }
+    if (selectedNodeId) {
+      event.preventDefault();
+      deleteSchemaNode(selectedNodeId);
+    }
   });
 }
 
@@ -3067,6 +3933,7 @@ function fillPackTabs() {
     btn.addEventListener("click", () => {
       if (state.packId === item.id) return;
       captureSchemaPositions();
+      cancelSchemaConnect();
       state.packId = item.id;
       setActivePackTab();
       saveSelection();
@@ -3096,17 +3963,19 @@ function applyScreenModeChrome() {
   });
   const heading = document.getElementById("step-heading");
   const hint = document.getElementById("step-hint");
-  if (heading) heading.textContent = schema ? "Клетка" : "Выбранный шаг";
+  if (heading) heading.textContent = schema ? "Инспектор" : "Выбранный шаг";
   if (hint) {
     hint.textContent = schema
-      ? "Перетащите агента слева. Двигать и Delete — черновик, YAML не пишется."
+      ? "Клетка или стрелка справа. Shift+клик — ребро. Cmd/Ctrl+Z — отмена. YAML не пишется."
       : "Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.";
   }
   if (schema) {
     document.getElementById("legend")?.classList.remove("hidden");
     document.getElementById("graph-scroll")?.classList.remove("hidden-for-timing");
     document.getElementById("timing-panel")?.classList.add("hidden");
+    updateSchemaUndoChrome();
   } else {
+    cancelSchemaConnect();
     setGraphViewTabs();
   }
   if (cy) cy.autoungrabify(false);
@@ -3117,7 +3986,11 @@ function setScreenMode(mode) {
   const changed = state.screenMode !== next;
   state.screenMode = next;
   saveSelection();
-  if (changed && next === "run") captureSchemaPositions();
+  if (changed && next === "run") {
+    captureSchemaPositions();
+    selectedEdgeId = null;
+    cancelSchemaConnect();
+  }
   applyScreenModeChrome();
   if (next === "schema") {
     disconnectStream();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pipeline Viewer</title>
-  <link rel="stylesheet" href="/static/style.css?v=27" />
+  <link rel="stylesheet" href="/static/style.css?v=29" />
   <script src="/static/vendor/cytoscape.min.js"></script>
 </head>
 <body class="screen-run">
@@ -81,6 +81,11 @@
           Развернуть отменённые
         </button>
       </div>
+      <div id="schema-graph-toolbar" class="graph-view-toolbar schema-only" aria-label="Черновик схемы">
+        <button type="button" id="schema-undo" class="btn-secondary schema-undo" disabled>Отменить</button>
+        <span id="schema-connect-hint" class="graph-view-hint hidden">Кликните целевую клетку (Esc — отмена)</span>
+        <span class="graph-view-hint">Shift+клик: стрелка · клик по линии — инспектор</span>
+      </div>
       <div id="tooltip" class="node-tooltip hidden" role="tooltip"></div>
       <div id="graph-scroll" class="graph-scroll">
         <div id="empty-state" class="empty hidden">
@@ -107,7 +112,7 @@
       <footer id="legend" class="graph-legend" aria-label="Легенда графа">
         <span class="legend-schema schema-only">
           эллипс — оркестратор · квадрат — шаг · ромб — terminal
-          · — main · ╌ branch · ⋯ loop · cycle/ask — в tooltip · пунктир бирюза — клетка с палитры
+          · — main · ╌ branch · ⋯ loop · cycle/ask — флаг на клетке · пунктир бирюза — с палитры
         </span>
         <span class="legend-target run-only">
           <span class="dot ok"></span> ok
@@ -135,7 +140,8 @@
       <div id="schema-sidebar-intro" class="schema-only">
         <h2>Пак</h2>
         <pre id="pack-summary">—</pre>
-        <p class="sidebar-hint">Схема пака. Координаты и новые клетки — черновик в браузере, YAML не пишется.</p>
+        <p id="schema-canvas-issues" class="schema-canvas-issues hidden" role="status"></p>
+        <p class="sidebar-hint">Черновик в браузере: клетки, стрелки, типы. YAML не пишется.</p>
       </div>
 
       <details id="infra-panel" class="infra-panel run-only">
@@ -177,9 +183,71 @@
       <h2 id="step-heading">Выбранный шаг</h2>
       <p id="step-hint" class="sidebar-hint">Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.</p>
       <pre id="step-detail">Кликните узел на графе.</pre>
+      <div id="schema-inspector" class="schema-inspector schema-only">
+        <p id="schema-inspector-empty" class="sidebar-hint">Кликните клетку или стрелку. Shift+клик по второй клетке — ребро.</p>
+        <form id="schema-node-form" class="schema-inspector-form hidden" autocomplete="off">
+          <label>
+            <span>id</span>
+            <input id="schema-node-id" name="id" spellcheck="false" />
+          </label>
+          <label>
+            <span>label</span>
+            <input id="schema-node-label" name="label" />
+          </label>
+          <label>
+            <span>kind</span>
+            <select id="schema-node-kind" name="kind">
+              <option value="orchestrator">orchestrator</option>
+              <option value="step">step</option>
+              <option value="terminal">terminal</option>
+              <option value="ask">ask</option>
+              <option value="cycle">cycle</option>
+              <option value="meta">meta</option>
+            </select>
+          </label>
+          <p id="schema-kind-hint" class="sidebar-hint"></p>
+          <label>
+            <span>subagent</span>
+            <select id="schema-node-subagent" name="subagent"></select>
+          </label>
+        </form>
+        <form id="schema-edge-form" class="schema-inspector-form hidden" autocomplete="off">
+          <label>
+            <span>from</span>
+            <select id="schema-edge-from" name="from"></select>
+          </label>
+          <label>
+            <span>to</span>
+            <select id="schema-edge-to" name="to"></select>
+          </label>
+          <label>
+            <span>kind</span>
+            <select id="schema-edge-kind" name="kind">
+              <option value="main">main</option>
+              <option value="branch">branch</option>
+              <option value="loop">loop</option>
+            </select>
+          </label>
+          <ul id="schema-edge-kind-notes" class="schema-edge-kind-notes" aria-label="Зачем kind стрелки">
+            <li data-kind="main"><b>main</b> — основной ход вперёд, счастливый путь (сплошная линия).</li>
+            <li data-kind="branch"><b>branch</b> — ветка по условию, не главный шаг (пунктир).</li>
+            <li data-kind="loop"><b>loop</b> — возврат: перепроверить шаг или освежить routing (точки).</li>
+          </ul>
+          <label>
+            <span>label</span>
+            <input id="schema-edge-label" name="label" />
+          </label>
+          <p class="sidebar-hint">from/to только существующие клетки. condition — фаза 5.</p>
+        </form>
+        <p id="schema-inspector-error" class="schema-inspector-error hidden" role="alert"></p>
+      </div>
       <div id="schema-node-actions" class="schema-node-actions schema-only hidden">
+        <button type="button" id="schema-connect-edge" class="btn-secondary">Стрелка к…</button>
         <button type="button" id="schema-delete-node" class="btn-secondary">Удалить клетку</button>
-        <p class="sidebar-hint">Исчезнет из черновика на холсте. На диск не пишем.</p>
+        <p class="sidebar-hint">Черновик на холсте. На диск не пишем.</p>
+      </div>
+      <div id="schema-edge-actions" class="schema-node-actions schema-only hidden">
+        <button type="button" id="schema-delete-edge" class="btn-secondary">Удалить стрелку</button>
       </div>
       <div id="step-visits" class="step-section hidden run-only"></div>
       <div id="step-divergence" class="step-section hidden run-only"></div>
@@ -217,6 +285,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=27"></script>
+  <script src="/static/app.js?v=29"></script>
 </body>
 </html>

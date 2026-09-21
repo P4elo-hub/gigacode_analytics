@@ -467,10 +467,119 @@ body.screen-schema main {
 
 .schema-node-actions {
   margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .schema-node-actions.hidden {
   display: none;
+}
+
+.schema-canvas-issues {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #422006;
+  color: #fed7aa;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.schema-canvas-issues.hidden {
+  display: none;
+}
+
+body.screen-schema #step-detail {
+  display: none;
+}
+
+.schema-inspector-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.schema-inspector-form.hidden {
+  display: none;
+}
+
+.schema-inspector-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.schema-inspector-form input,
+.schema-inspector-form select {
+  width: 100%;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.schema-edge-kind-notes {
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #94a3b8;
+  text-transform: none;
+  letter-spacing: 0;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.schema-edge-kind-notes li {
+  margin: 0 0 6px;
+}
+
+.schema-edge-kind-notes li:last-child {
+  margin-bottom: 0;
+}
+
+.schema-edge-kind-notes b {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.schema-edge-kind-notes li.is-current {
+  color: #e2e8f0;
+}
+
+.schema-edge-kind-notes li.is-current b {
+  color: #fde68a;
+}
+
+.schema-inspector-error {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #fca5a5;
+}
+
+.schema-inspector-error.hidden {
+  display: none;
+}
+
+body.schema-connecting #cy {
+  cursor: crosshair;
+}
+
+#graph-panel.drop-ready.schema-connecting #cy {
+  outline-color: #22d3ee;
 }
 
 #graph-panel.drop-ready #cy {
@@ -572,8 +681,20 @@ body.screen-schema main {
 
 .graph-view-toolbar .tabs,
 .graph-view-toolbar .graph-view-hint,
-.graph-view-toolbar .stale-toggle {
+.graph-view-toolbar .stale-toggle,
+.graph-view-toolbar .schema-undo {
   pointer-events: auto;
+}
+
+.schema-undo {
+  width: auto;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.schema-undo:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .graph-view-hint {
