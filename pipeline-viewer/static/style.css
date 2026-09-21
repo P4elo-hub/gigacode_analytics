@@ -246,6 +246,16 @@ header h1 {
   font-weight: 600;
 }
 
+body.screen-schema .run-only,
+body.screen-run .schema-only {
+  display: none !important;
+}
+
+#screen-mode-tabs .tab[data-screen="schema"].active {
+  background: #0f766e;
+  color: #ecfdf5;
+}
+
 .slug-select {
   display: flex;
   align-items: center;
@@ -416,7 +426,8 @@ main {
 }
 
 #legend .legend-target.hidden,
-#legend .legend-actual.hidden {
+#legend .legend-actual.hidden,
+#legend .legend-schema.hidden {
   display: none !important;
 }
 

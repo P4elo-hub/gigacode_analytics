@@ -20,7 +20,7 @@ from artifact_paths import list_feature_slugs, workspace_root  # noqa: E402
 from build_pipeline_graph import build_graph  # noqa: E402
 from sync_pipeline_session import sync_session  # noqa: E402
 from pipeline_common import known_pipeline_ids, pipeline_restartable_steps  # noqa: E402
-from pipeline_pack import DEFAULT_PIPELINE_ID  # noqa: E402
+from pipeline_pack import DEFAULT_PIPELINE_ID, discover_pipeline_ids, export_pack_json  # noqa: E402
 from pipeline_restart import (  # noqa: E402
     apply_restart_plan,
     build_restart_plan,
@@ -29,7 +29,7 @@ from pipeline_restart import (  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_PORT = 8765
-API_VERSION = 5
+API_VERSION = 6
 POLL_INTERVAL = 1.0
 PIPELINES = ("spec", "calibration")
 
@@ -270,6 +270,23 @@ def make_handler(workspace: Path, defaults: Defaults):
                 self._send_json(build_catalog(workspace))
                 return
 
+            if path == "/api/pack":
+                pipeline = (qs.get("pipeline") or [""])[0].strip()
+                if not pipeline:
+                    self._send_json({"error": "pipeline required"}, status=400)
+                    return
+                known = set(discover_pipeline_ids(workspace))
+                if pipeline not in known:
+                    self._send_json({"error": f"unknown pack: {pipeline}"}, status=404)
+                    return
+                try:
+                    self._send_json(export_pack_json(pipeline, workspace))
+                except FileNotFoundError as exc:
+                    self._send_json({"error": str(exc)}, status=404)
+                except Exception as exc:
+                    self._send_json({"error": str(exc), "pipeline": pipeline}, status=500)
+                return
+
             if path == "/api/health":
                 self._send_json(
                     {"ok": True, "version": API_VERSION, "viewer": "pipeline-viewer"}
@@ -399,7 +416,7 @@ def main() -> None:
     print("")
     print("=" * 60)
     print(f"  ОТКРОЙТЕ В БРАУЗЕРЕ:  {url}")
-    print(f"  API v{API_VERSION} — dispatch, validate, перезапуск с шага")
+    print(f"  API v{API_VERSION} — dispatch, validate, pack schema, перезапуск с шага")
     print("=" * 60)
     if port != args.port:
         print("")

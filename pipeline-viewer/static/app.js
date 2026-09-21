@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = "pipeline-viewer-selection";
 const DISMISS_STORAGE_KEY = "pipeline-viewer-dismissed";
+const SCHEMA_API_VERSION = 6;
 
 const TIMING_STEP_COLORS = {
   "find-context": "#38bdf8",
@@ -29,6 +30,20 @@ const RESULT_COLORS = {
 const ROUTING_STEP = "analyze-routing";
 const ROUTING_SATELLITE_DY = 50;
 const ROUTING_SAT_COLOR = "#4338ca";
+
+const PACK_NODE_COLORS = {
+  orchestrator: "#2563eb",
+  step: "#475569",
+  terminal: "#15803d",
+  meta: "#64748b",
+  cycle: "#0f766e",
+};
+
+const PACK_EDGE_COLORS = {
+  main: "#94a3b8",
+  branch: "#64748b",
+  loop: "#6366f1",
+};
 
 function isRoutingStep(step) {
   return step === ROUTING_STEP;
@@ -125,8 +140,12 @@ const state = {
   pipeline: "spec",
   graphView: "target",
   staleCollapsed: true,
+  screenMode: "run",
+  packId: "spec",
   source: null,
   graph: null,
+  pack: null,
+  catalogPipelines: [],
   dismissedNotices: loadDismissedNotices(),
 };
 
@@ -300,6 +319,21 @@ function initCytoscape() {
           height: 44,
           "font-size": "11px",
           shape: "round-rectangle",
+        },
+      },
+      {
+        selector: 'node[askFlag = "true"]',
+        style: {
+          "border-style": "dashed",
+          "border-color": "#fdba74",
+          "border-width": 3,
+        },
+      },
+      {
+        selector: 'node[cycleFlag = "true"]',
+        style: {
+          "border-color": "#2dd4bf",
+          "border-width": 3,
         },
       },
       {
@@ -483,6 +517,19 @@ function initCytoscape() {
         },
       },
       {
+        selector: "edge.schema-edge",
+        style: {
+          opacity: 0.95,
+        },
+      },
+      {
+        selector: 'edge.schema-edge[kind = "loop"]',
+        style: {
+          opacity: 0.78,
+          width: 1.8,
+        },
+      },
+      {
         selector: "edge[traversed = 'true']",
         style: {
           width: 3,
@@ -655,7 +702,9 @@ function renderStepVisits(stepId) {
 }
 
 function clearNodePanel() {
-  document.getElementById("step-detail").textContent = "Кликните узел на графе.";
+  document.getElementById("step-detail").textContent = isSchemaMode()
+    ? "Кликните клетку. YAML не меняется."
+    : "Кликните узел на графе.";
   document.getElementById("step-visits").classList.add("hidden");
   document.getElementById("step-divergence").classList.add("hidden");
   document.getElementById("restart-actions").classList.add("hidden");
@@ -2177,6 +2226,15 @@ function bindGraphInteractions(graph) {
 
   graph.on("tap", "node", (evt) => {
     const node = evt.target;
+    if (isSchemaMode()) {
+      selectedElementId = node.id();
+      selectedNodeId = node.id();
+      selectedTimelineSeq = null;
+      highlightNode(selectedNodeId, null);
+      showPackNodeSummary(selectedNodeId);
+      hideTooltip();
+      return;
+    }
     if (node.data("kind") === "stale-bundle") {
       setStaleCollapsed(false);
       hideTooltip();
@@ -2193,6 +2251,10 @@ function bindGraphInteractions(graph) {
   });
 
   function tooltipForNode(nodeId, cyNode) {
+    if (state.screenMode === "schema") {
+      const node = packNodeById(nodeId);
+      return node ? packNodeTooltip(node) : nodeId;
+    }
     const stepId = cyNode?.data("stepId") || nodeId;
     const detail = nodeDetails[stepId];
     const node = (state.graph?.nodes || []).find((n) => n.id === stepId);
@@ -2266,8 +2328,371 @@ function saveSelection() {
       pipeline: state.pipeline,
       graphView: state.graphView,
       staleCollapsed: state.staleCollapsed,
+      screenMode: state.screenMode,
+      packId: state.packId,
     })
   );
+}
+
+function isSchemaMode() {
+  return state.screenMode === "schema";
+}
+
+function packNodeById(nodeId) {
+  return (state.pack?.graph?.nodes || []).find((node) => node.id === nodeId) || null;
+}
+
+function formatPackNodeLabel(node) {
+  const lines = [node.label || node.id];
+  if (node.cycle) lines.push("cycle");
+  else if (node.ask) lines.push("ask");
+  if (node.kind === "meta") lines.push("meta");
+  return lines.join("\n");
+}
+
+function packNodeTooltip(node) {
+  const lines = [node.label || node.id, `id: ${node.id}`, `kind: ${node.kind || "step"}`];
+  if (node.subagent) lines.push(`subagent: ${node.subagent}`);
+  else if (node.kind === "orchestrator") lines.push("оркестратор");
+  if (node.ask) lines.push("ask: пауза на этой клетке; apply без смены шага");
+  if (node.cycle && typeof node.cycle === "object") {
+    const cycle = node.cycle;
+    lines.push("cycle: составная клетка (внутренности — фаза 4)");
+    if (cycle.assemble) lines.push(`assemble: ${cycle.assemble}`);
+    if (cycle.close) lines.push(`close: ${cycle.close}`);
+    if (cycle.param) lines.push(`param: ${cycle.param}`);
+  }
+  return lines.join("\n");
+}
+
+function packEdgeLabel(edge) {
+  return edge.label || edge.condition_label || edge.condition || "";
+}
+
+function packNodeColor(node) {
+  if (node.cycle) return PACK_NODE_COLORS.cycle;
+  return PACK_NODE_COLORS[node.kind] || PACK_NODE_COLORS.step;
+}
+
+function layoutPackPositions(nodes, edges, orchestratorId) {
+  const ids = nodes.map((node) => node.id);
+  const idSet = new Set(ids);
+  const mainOut = Object.fromEntries(ids.map((id) => [id, []]));
+  const anyOut = Object.fromEntries(ids.map((id) => [id, []]));
+  for (const edge of edges) {
+    if (!idSet.has(edge.from) || !idSet.has(edge.to)) continue;
+    anyOut[edge.from].push(edge.to);
+    if ((edge.kind || "main") === "main") mainOut[edge.from].push(edge.to);
+  }
+
+  const rank = {};
+  if (idSet.has(orchestratorId)) rank[orchestratorId] = 0;
+  const mainQueue = idSet.has(orchestratorId) ? [orchestratorId] : [];
+  const mainSeen = new Set();
+  while (mainQueue.length) {
+    const id = mainQueue.shift();
+    if (mainSeen.has(id)) continue;
+    mainSeen.add(id);
+    for (const to of mainOut[id] || []) {
+      rank[to] = Math.max(rank[to] || 0, (rank[id] || 0) + 1);
+      mainQueue.push(to);
+    }
+  }
+
+  const restQueue = ids.filter((id) => rank[id] !== undefined);
+  while (restQueue.length) {
+    const id = restQueue.shift();
+    for (const to of anyOut[id] || []) {
+      if (rank[to] === undefined) {
+        rank[to] = (rank[id] || 0) + 1;
+        restQueue.push(to);
+      }
+    }
+  }
+  for (const id of ids) {
+    if (rank[id] === undefined) rank[id] = 0;
+  }
+
+  const mainChain = [];
+  const chainSeen = new Set();
+  let cursor = idSet.has(orchestratorId) ? orchestratorId : ids[0];
+  while (cursor && !chainSeen.has(cursor)) {
+    chainSeen.add(cursor);
+    mainChain.push(cursor);
+    cursor = (mainOut[cursor] || [])[0];
+  }
+  const mainSet = new Set(mainChain);
+
+  const byRank = {};
+  for (const id of ids) {
+    (byRank[rank[id]] ||= []).push(id);
+  }
+  for (const row of Object.values(byRank)) {
+    row.sort((a, b) => {
+      const aMain = mainSet.has(a) ? 0 : 1;
+      const bMain = mainSet.has(b) ? 0 : 1;
+      if (aMain !== bMain) return aMain - bMain;
+      return ids.indexOf(a) - ids.indexOf(b);
+    });
+  }
+
+  const colW = 230;
+  const rowH = 118;
+  const originX = 280;
+  const originY = 72;
+  const positions = {};
+  const maxRank = Math.max(0, ...Object.keys(byRank).map(Number));
+  for (let r = 0; r <= maxRank; r += 1) {
+    const row = byRank[r] || [];
+    row.forEach((id, index) => {
+      const onMain = mainSet.has(id);
+      const extraIndex = onMain ? 0 : mainSet.has(row[0]) ? index : index + 1;
+      positions[id] = {
+        x: originX + colW * extraIndex,
+        y: originY + r * rowH,
+      };
+    });
+  }
+  return positions;
+}
+
+function buildPackGraphElements(pack) {
+  const graph = pack?.graph || {};
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  const orchestratorId = graph.orchestrator || nodes[0]?.id || "";
+  const positions = layoutPackPositions(nodes, edges, orchestratorId);
+  const elements = [];
+
+  for (const node of nodes) {
+    const kind = node.kind || "step";
+    elements.push({
+      group: "nodes",
+      data: {
+        id: node.id,
+        label: formatPackNodeLabel(node),
+        color: packNodeColor(node),
+        kind,
+        askFlag: node.ask ? "true" : "false",
+        cycleFlag: node.cycle ? "true" : "false",
+      },
+      position: positions[node.id] || { x: 80, y: 80 },
+      grabbable: false,
+    });
+  }
+
+  const usedEdgeIds = new Set();
+  edges.forEach((edge, index) => {
+    const kind = edge.kind || "main";
+    let id = edge.id || `e-${edge.from}-${edge.to}-${index}`;
+    if (usedEdgeIds.has(id)) id = `${id}-${index}`;
+    usedEdgeIds.add(id);
+    elements.push({
+      group: "edges",
+      data: {
+        id,
+        source: edge.from,
+        target: edge.to,
+        label: packEdgeLabel(edge),
+        color: PACK_EDGE_COLORS[kind] || PACK_EDGE_COLORS.main,
+        kind,
+      },
+      classes: "schema-edge",
+    });
+  });
+  return elements;
+}
+
+function showPackNodeSummary(nodeId) {
+  const el = document.getElementById("step-detail");
+  const node = packNodeById(nodeId);
+  if (!el) return;
+  if (!node) {
+    el.textContent = `Нет клетки «${nodeId}».`;
+    return;
+  }
+  const lines = [
+    `id: ${node.id}`,
+    `label: ${node.label || node.id}`,
+    `kind: ${node.kind || "step"}`,
+  ];
+  if (node.subagent != null) lines.push(`subagent: ${node.subagent}`);
+  if (node.ask) lines.push("ask: true — пауза; apply без смены шага");
+  if (node.cycle && typeof node.cycle === "object") {
+    lines.push("cycle: составная клетка");
+    for (const key of ["persistent", "assemble", "param", "folder", "out", "item_file", "close"]) {
+      if (node.cycle[key] != null && node.cycle[key] !== "") {
+        lines.push(`  ${key}: ${node.cycle[key]}`);
+      }
+    }
+    if (!node.cycle.calls) lines.push("  calls: (нет — runtime подставит каталог)");
+  }
+  el.textContent = lines.join("\n");
+}
+
+function renderPackSummary(pack) {
+  const el = document.getElementById("pack-summary");
+  const badge = document.getElementById("pack-badge");
+  const graph = pack?.graph || {};
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  const text = [
+    `id: ${pack?.id || "—"}`,
+    `label: ${graph.label || "—"}`,
+    `оркестратор: ${graph.orchestrator || "—"}`,
+    `клеток: ${nodes.length} · стрелок: ${edges.length}`,
+  ].join("\n");
+  if (el) el.textContent = text;
+  if (badge) badge.textContent = `${pack?.id || "—"} · ${nodes.length} клеток`;
+}
+
+function renderPackGraph(pack) {
+  const empty = document.getElementById("empty-state");
+  const nodes = pack?.graph?.nodes || [];
+  const noGraph = !nodes.length;
+  empty.classList.toggle("hidden", !noGraph);
+  document.getElementById("cy").style.visibility = noGraph ? "hidden" : "visible";
+
+  state.pack = pack;
+  renderPackSummary(pack);
+
+  const graph = initCytoscape();
+  if (!graph) return;
+  graph.autoungrabify(true);
+
+  const elements = buildPackGraphElements(pack);
+  graph.elements().remove();
+  if (!elements.length) return;
+  graph.add(elements);
+  graph.nodes().ungrabify();
+  resizeGraphCanvas(graph, "target");
+  graph.fit(graph.nodes(), 48);
+  const zoom = graph.zoom();
+  if (zoom > 1) {
+    graph.zoom(1);
+    graph.center(graph.nodes());
+  } else if (zoom < 0.62) {
+    graph.zoom(0.62);
+    graph.center(graph.nodes());
+  }
+
+  if (selectedNodeId && packNodeById(selectedNodeId)) {
+    highlightNode(selectedNodeId, null);
+    showPackNodeSummary(selectedNodeId);
+  } else {
+    selectedNodeId = null;
+    selectedElementId = null;
+    const el = document.getElementById("step-detail");
+    if (el) el.textContent = "Кликните клетку. YAML не меняется.";
+  }
+}
+
+async function loadPackGraph() {
+  const empty = document.getElementById("empty-state");
+  const emptyText = document.getElementById("schema-empty-text");
+  if (emptyText) emptyText.textContent = "Загрузка схемы пака…";
+  try {
+    const res = await fetch(`/api/pack?pipeline=${encodeURIComponent(state.packId)}`);
+    const data = await parseJsonResponse(res);
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    clearError();
+    renderPackGraph(data);
+  } catch (err) {
+    state.pack = null;
+    if (cy) cy.elements().remove();
+    document.getElementById("cy").style.visibility = "hidden";
+    empty.classList.remove("hidden");
+    if (emptyText) emptyText.textContent = err.message || String(err);
+    renderPackSummary(null);
+    showError(`Схема пака: ${err.message || err}`);
+  }
+}
+
+function fillPackTabs() {
+  const nav = document.getElementById("pack-tabs");
+  if (!nav) return;
+  nav.innerHTML = "";
+  const pipelines = state.catalogPipelines.length
+    ? state.catalogPipelines
+    : [
+        { id: "spec", label: "Spec pipeline" },
+        { id: "calibration", label: "Calibration" },
+      ];
+  state.catalogPipelines = pipelines;
+  for (const item of pipelines) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tab";
+    btn.dataset.pack = item.id;
+    btn.textContent = item.id;
+    btn.title = item.label || item.id;
+    btn.addEventListener("click", () => {
+      if (state.packId === item.id) return;
+      state.packId = item.id;
+      setActivePackTab();
+      saveSelection();
+      loadPackGraph();
+    });
+    nav.appendChild(btn);
+  }
+  const known = new Set(pipelines.map((item) => item.id));
+  if (!known.has(state.packId)) {
+    state.packId = pipelines[0]?.id || "spec";
+  }
+  setActivePackTab();
+}
+
+function setActivePackTab() {
+  document.querySelectorAll("#pack-tabs .tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.pack === state.packId);
+  });
+}
+
+function applyScreenModeChrome() {
+  const schema = isSchemaMode();
+  document.body.classList.toggle("screen-schema", schema);
+  document.body.classList.toggle("screen-run", !schema);
+  document.querySelectorAll("#screen-mode-tabs .tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.screen === state.screenMode);
+  });
+  const heading = document.getElementById("step-heading");
+  const hint = document.getElementById("step-hint");
+  if (heading) heading.textContent = schema ? "Клетка" : "Выбранный шаг";
+  if (hint) {
+    hint.textContent = schema
+      ? "Клик не пишет YAML. Инспектор полей — с фазы 3."
+      : "Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.";
+  }
+  if (schema) {
+    document.getElementById("legend")?.classList.remove("hidden");
+    document.getElementById("graph-scroll")?.classList.remove("hidden-for-timing");
+    document.getElementById("timing-panel")?.classList.add("hidden");
+  } else {
+    setGraphViewTabs();
+  }
+  if (cy) cy.autoungrabify(schema);
+}
+
+function setScreenMode(mode) {
+  const next = mode === "schema" ? "schema" : "run";
+  const changed = state.screenMode !== next;
+  state.screenMode = next;
+  saveSelection();
+  applyScreenModeChrome();
+  if (next === "schema") {
+    disconnectStream();
+    selectedTimelineSeq = null;
+    if (changed) {
+      selectedNodeId = null;
+      selectedElementId = null;
+    }
+    loadPackGraph();
+    return;
+  }
+  if (cy) cy.autoungrabify(false);
+  connectStream();
 }
 
 function streamUrl() {
@@ -2292,6 +2717,7 @@ function setActiveTab(pipeline) {
 }
 
 function renderGraph(data) {
+  if (isSchemaMode()) return;
   const empty = document.getElementById("empty-state");
   const noSlug = !data.slug;
   const nodes = data.nodes || [];
@@ -2351,6 +2777,7 @@ function renderGraph(data) {
 
   const graph = initCytoscape();
   if (!graph) return;
+  graph.autoungrabify(false);
 
   if (data.error && nodes.length === 0) {
     document.getElementById("dispatch").textContent = data.error;
@@ -2432,6 +2859,7 @@ function disconnectStream() {
 
 function connectStream() {
   disconnectStream();
+  if (isSchemaMode()) return;
   if (!state.slug) {
     renderGraph({ slug: "", nodes: [], edges: [], history: [] });
     setConnection("idle", "нет задачи");
@@ -2443,9 +2871,13 @@ function connectStream() {
   const source = new EventSource(streamUrl());
   state.source = source;
 
-  source.onopen = () => setConnection("live", "live");
+  source.onopen = () => {
+    if (state.source !== source || isSchemaMode()) return;
+    setConnection("live", "live");
+  };
 
   source.onmessage = (event) => {
+    if (state.source !== source || isSchemaMode()) return;
     try {
       const data = JSON.parse(event.data);
       renderGraph(data);
@@ -2458,9 +2890,13 @@ function connectStream() {
   };
 
   source.onerror = () => {
+    if (state.source !== source || isSchemaMode()) return;
     setConnection("reconnecting", "переподключение…");
     disconnectStream();
-    setTimeout(connectStream, 2000);
+    setTimeout(() => {
+      if (isSchemaMode()) return;
+      connectStream();
+    }, 2000);
   };
 }
 
@@ -2544,9 +2980,10 @@ async function init() {
     }
 
     const saved = loadSelection();
-    const [configRes, slugsRes] = await Promise.all([
+    const [configRes, slugsRes, catalogRes] = await Promise.all([
       fetch("/api/config"),
       fetch("/api/slugs"),
+      fetch("/api/catalog"),
     ]);
 
     if (!configRes.ok || !slugsRes.ok) {
@@ -2556,13 +2993,23 @@ async function init() {
 
     const config = await configRes.json();
     const payload = await slugsRes.json();
+    const catalog = catalogRes.ok ? await catalogRes.json() : { pipelines: [] };
 
     state.pipeline = saved.pipeline || config.default_pipeline || "spec";
     state.graphView = ["actual", "timing"].includes(saved.graphView) ? saved.graphView : "target";
     state.staleCollapsed = saved.staleCollapsed !== false;
+    state.screenMode = saved.screenMode === "schema" ? "schema" : "run";
+    state.packId = typeof saved.packId === "string" && saved.packId ? saved.packId : "spec";
+    state.catalogPipelines = Array.isArray(catalog.pipelines) ? catalog.pipelines : [];
+    fillPackTabs();
     setActiveTab(state.pipeline);
     setGraphViewTabs();
+    applyScreenModeChrome();
     state.slug = fillSlugSelect(payload, config, saved);
+
+    if (apiVersion < SCHEMA_API_VERSION && isSchemaMode()) {
+      showError(staleViewerMessage("вкладка «Схема» (GET /api/pack)"));
+    }
 
     document.getElementById("stale-toggle")?.addEventListener("click", () => {
       setStaleCollapsed(!state.staleCollapsed);
@@ -2570,6 +3017,7 @@ async function init() {
 
     document.querySelectorAll("#graph-view-tabs .tab").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (isSchemaMode()) return;
         const view = btn.dataset.view || "target";
         state.graphView = ["actual", "timing"].includes(view) ? view : "target";
         setGraphViewTabs();
@@ -2595,6 +3043,12 @@ async function init() {
 
     initNoticeDismissHandlers();
 
+    document.querySelectorAll("#screen-mode-tabs .tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setScreenMode(btn.dataset.screen === "schema" ? "schema" : "run");
+      });
+    });
+
     document.getElementById("restart-btn").addEventListener("click", openRestartModal);
     document.getElementById("restart-confirm-btn").addEventListener("click", confirmRestart);
     document.querySelectorAll("#restart-modal [data-close]").forEach((el) => {
@@ -2603,7 +3057,7 @@ async function init() {
 
     document.getElementById("slug-select").addEventListener("change", (e) => {
       state.slug = e.target.value;
-      connectStream();
+      if (!isSchemaMode()) connectStream();
     });
 
     document.querySelectorAll("#pipeline-tabs .tab").forEach((btn) => {
@@ -2611,11 +3065,15 @@ async function init() {
         state.pipeline = btn.dataset.pipeline;
         setActiveTab(state.pipeline);
         updateRestartActions(selectedNodeId);
-        connectStream();
+        if (!isSchemaMode()) connectStream();
       });
     });
 
-    connectStream();
+    if (isSchemaMode()) {
+      loadPackGraph();
+    } else {
+      connectStream();
+    }
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
