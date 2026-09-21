@@ -2,7 +2,10 @@
 
 const STORAGE_KEY = "pipeline-viewer-selection";
 const DISMISS_STORAGE_KEY = "pipeline-viewer-dismissed";
+const DRAFT_STORAGE_KEY = "pipeline-viewer-schema-draft";
 const SCHEMA_API_VERSION = 6;
+const SCHEMA_CLIS = ["qwen", "gigacode", "opencode"];
+const PALETTE_DRAG_TYPE = "application/x-pipeline-agent";
 
 const TIMING_STEP_COLORS = {
   "find-context": "#38bdf8",
@@ -145,7 +148,11 @@ const state = {
   source: null,
   graph: null,
   pack: null,
+  packBase: null,
   catalogPipelines: [],
+  catalogAgents: [],
+  catalogSkills: [],
+  agentsByCli: {},
   dismissedNotices: loadDismissedNotices(),
 };
 
@@ -216,7 +223,9 @@ function setNoticeBanner(id, baseClass, statusClass, message, show) {
     return;
   }
 
-  el.className = ["notice-banner", baseClass, statusClass].filter(Boolean).join(" ");
+  const classes = ["notice-banner", baseClass, statusClass].filter(Boolean);
+  if (el.id !== "app-error") classes.push("run-only");
+  el.className = classes.join(" ");
   body.textContent = message;
   el.classList.remove("hidden");
 }
@@ -385,6 +394,21 @@ function initCytoscape() {
           "border-color": "#a855f7",
           "border-width": 4,
           "border-style": "dashed",
+        },
+      },
+      {
+        selector: "node.draft-added",
+        style: {
+          "border-style": "dashed",
+          "border-color": "#67e8f9",
+          "border-width": 3,
+        },
+      },
+      {
+        selector: "node.cli-missing",
+        style: {
+          "border-color": "#fbbf24",
+          "border-width": 3,
         },
       },
       {
@@ -703,11 +727,12 @@ function renderStepVisits(stepId) {
 
 function clearNodePanel() {
   document.getElementById("step-detail").textContent = isSchemaMode()
-    ? "Кликните клетку. YAML не меняется."
+    ? "Кликните клетку или перетащите агента слева. YAML не пишется."
     : "Кликните узел на графе.";
   document.getElementById("step-visits").classList.add("hidden");
   document.getElementById("step-divergence").classList.add("hidden");
   document.getElementById("restart-actions").classList.add("hidden");
+  setSchemaNodeActionsVisible(false);
 }
 
 function updateRestartActions(stepId) {
@@ -2300,6 +2325,11 @@ function bindGraphInteractions(graph) {
 
   graph.on("mouseout", "node", () => hideTooltip());
 
+  graph.on("dragfree", "node", () => {
+    if (!isSchemaMode()) return;
+    captureSchemaPositions();
+  });
+
   graph.on("tap", (evt) => {
     if (evt.target === graph) {
       selectedNodeId = null;
@@ -2338,6 +2368,153 @@ function isSchemaMode() {
   return state.screenMode === "schema";
 }
 
+function emptyPackDraft() {
+  return { positions: {}, extraNodes: [], deletedIds: [] };
+}
+
+function loadDraftStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { packs: {} };
+    if (!parsed.packs || typeof parsed.packs !== "object") return { packs: {} };
+    return parsed;
+  } catch {
+    return { packs: {} };
+  }
+}
+
+function saveDraftStore(store) {
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(store));
+}
+
+function getPackDraft(packId) {
+  const store = loadDraftStore();
+  const raw = store.packs?.[packId];
+  if (!raw || typeof raw !== "object") return emptyPackDraft();
+  return {
+    positions: raw.positions && typeof raw.positions === "object" ? raw.positions : {},
+    extraNodes: Array.isArray(raw.extraNodes) ? raw.extraNodes : [],
+    deletedIds: Array.isArray(raw.deletedIds) ? raw.deletedIds : [],
+  };
+}
+
+function setPackDraft(packId, draft) {
+  const store = loadDraftStore();
+  store.packs = store.packs || {};
+  store.packs[packId] = {
+    positions: draft.positions || {},
+    extraNodes: draft.extraNodes || [],
+    deletedIds: draft.deletedIds || [],
+  };
+  saveDraftStore(store);
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function kebabAgentId(name) {
+  const slug = String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "agent";
+}
+
+function missingClisFor(agent) {
+  const by = state.agentsByCli || {};
+  const clis = Object.keys(by).length ? Object.keys(by) : SCHEMA_CLIS;
+  if (!clis.some((cli) => Array.isArray(by[cli]))) return [];
+  return clis.filter((cli) => !(by[cli] || []).includes(agent));
+}
+
+function applyDraftToPack(basePack, draft) {
+  const pack = cloneJson(basePack || { graph: { nodes: [], edges: [] } });
+  pack.graph = pack.graph || {};
+  const deleted = new Set(draft.deletedIds || []);
+  const nodes = (pack.graph.nodes || []).filter((node) => node && !deleted.has(node.id));
+  const existing = new Set(nodes.map((node) => node.id));
+  for (const extra of draft.extraNodes || []) {
+    if (!extra?.id || existing.has(extra.id)) continue;
+    nodes.push({
+      id: extra.id,
+      label: extra.label || extra.id,
+      kind: extra.kind || "step",
+      subagent: extra.subagent || extra.id,
+      draft: true,
+    });
+    existing.add(extra.id);
+    deleted.delete(extra.id);
+  }
+  pack.graph.nodes = nodes;
+  pack.graph.edges = (pack.graph.edges || []).filter(
+    (edge) => edge && existing.has(edge.from) && existing.has(edge.to)
+  );
+  return pack;
+}
+
+function uniqueSchemaNodeId(base) {
+  const used = new Set((state.pack?.graph?.nodes || []).map((node) => node.id));
+  if (!used.has(base)) return base;
+  let i = 2;
+  while (used.has(`${base}-${i}`)) i += 1;
+  return `${base}-${i}`;
+}
+
+function schemaCanvasPosition(clientX, clientY) {
+  const graph = initCytoscape();
+  const container = graph?.container() || document.getElementById("cy");
+  const rect = container.getBoundingClientRect();
+  const pan = graph ? graph.pan() : { x: 0, y: 0 };
+  const zoom = graph ? graph.zoom() : 1;
+  return {
+    x: (clientX - rect.left - pan.x) / zoom,
+    y: (clientY - rect.top - pan.y) / zoom,
+  };
+}
+
+function captureSchemaPositions() {
+  if (!cy || !isSchemaMode()) return;
+  const draft = getPackDraft(state.packId);
+  draft.positions = draft.positions || {};
+  cy.nodes().forEach((node) => {
+    const pos = node.position();
+    draft.positions[node.id()] = { x: pos.x, y: pos.y };
+  });
+  setPackDraft(state.packId, draft);
+}
+
+function setSchemaNodeActionsVisible(show) {
+  const el = document.getElementById("schema-node-actions");
+  if (el) el.classList.toggle("hidden", !show);
+}
+
+function showPaletteNotice(text) {
+  const el = document.getElementById("palette-notice");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
+}
+
+function packPositions(pack) {
+  const graph = pack?.graph || {};
+  const nodes = graph.nodes || [];
+  const layout = layoutPackPositions(nodes, graph.edges || [], graph.orchestrator || nodes[0]?.id || "");
+  const saved = getPackDraft(state.packId).positions || {};
+  const positions = {};
+  for (const node of nodes) {
+    positions[node.id] = saved[node.id] || layout[node.id] || { x: 80, y: 80 };
+  }
+  return positions;
+}
+
+function packNodeClasses(node) {
+  const classes = [];
+  if (node.draft) classes.push("draft-added");
+  if (node.subagent && missingClisFor(node.subagent).length) classes.push("cli-missing");
+  return classes.join(" ");
+}
+
 function packNodeById(nodeId) {
   return (state.pack?.graph?.nodes || []).find((node) => node.id === nodeId) || null;
 }
@@ -2354,6 +2531,9 @@ function packNodeTooltip(node) {
   const lines = [node.label || node.id, `id: ${node.id}`, `kind: ${node.kind || "step"}`];
   if (node.subagent) lines.push(`subagent: ${node.subagent}`);
   else if (node.kind === "orchestrator") lines.push("оркестратор");
+  if (node.draft) lines.push("черновик: клетка с палитры, не в YAML");
+  const missing = node.subagent ? missingClisFor(node.subagent) : [];
+  if (missing.length) lines.push(`нет в CLI: ${missing.join(", ")}`);
   if (node.ask) lines.push("ask: пауза на этой клетке; apply без смены шага");
   if (node.cycle && typeof node.cycle === "object") {
     const cycle = node.cycle;
@@ -2460,8 +2640,7 @@ function buildPackGraphElements(pack) {
   const graph = pack?.graph || {};
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
-  const orchestratorId = graph.orchestrator || nodes[0]?.id || "";
-  const positions = layoutPackPositions(nodes, edges, orchestratorId);
+  const positions = packPositions(pack);
   const elements = [];
 
   for (const node of nodes) {
@@ -2477,7 +2656,8 @@ function buildPackGraphElements(pack) {
         cycleFlag: node.cycle ? "true" : "false",
       },
       position: positions[node.id] || { x: 80, y: 80 },
-      grabbable: false,
+      grabbable: true,
+      classes: packNodeClasses(node),
     });
   }
 
@@ -2507,8 +2687,9 @@ function showPackNodeSummary(nodeId) {
   const el = document.getElementById("step-detail");
   const node = packNodeById(nodeId);
   if (!el) return;
-  if (!node) {
+    if (!node) {
     el.textContent = `Нет клетки «${nodeId}».`;
+    setSchemaNodeActionsVisible(false);
     return;
   }
   const lines = [
@@ -2517,6 +2698,9 @@ function showPackNodeSummary(nodeId) {
     `kind: ${node.kind || "step"}`,
   ];
   if (node.subagent != null) lines.push(`subagent: ${node.subagent}`);
+  if (node.draft) lines.push("черновик: с палитры, не в YAML");
+  const missing = node.subagent ? missingClisFor(node.subagent) : [];
+  if (missing.length) lines.push(`нет в CLI: ${missing.join(", ")} — клетку всё равно можно держать`);
   if (node.ask) lines.push("ask: true — пауза; apply без смены шага");
   if (node.cycle && typeof node.cycle === "object") {
     lines.push("cycle: составная клетка");
@@ -2528,6 +2712,7 @@ function showPackNodeSummary(nodeId) {
     if (!node.cycle.calls) lines.push("  calls: (нет — runtime подставит каталог)");
   }
   el.textContent = lines.join("\n");
+  setSchemaNodeActionsVisible(true);
 }
 
 function renderPackSummary(pack) {
@@ -2536,17 +2721,27 @@ function renderPackSummary(pack) {
   const graph = pack?.graph || {};
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
+  const draft = getPackDraft(state.packId);
+  const extra = (draft.extraNodes || []).length;
+  const removed = (draft.deletedIds || []).length;
+  const draftBits = [];
+  if (extra) draftBits.push(`+${extra} с палитры`);
+  if (removed) draftBits.push(`−${removed} удалено`);
   const text = [
     `id: ${pack?.id || "—"}`,
     `label: ${graph.label || "—"}`,
     `оркестратор: ${graph.orchestrator || "—"}`,
     `клеток: ${nodes.length} · стрелок: ${edges.length}`,
+    extra || removed ? `черновик: ${draftBits.join(", ")}` : "черновик: координаты в браузере",
   ].join("\n");
   if (el) el.textContent = text;
-  if (badge) badge.textContent = `${pack?.id || "—"} · ${nodes.length} клеток`;
+  if (badge) {
+    const mark = extra || removed ? " · черновик" : "";
+    badge.textContent = `${pack?.id || "—"} · ${nodes.length} клеток${mark}`;
+  }
 }
 
-function renderPackGraph(pack) {
+function renderPackGraph(pack, opts = {}) {
   const empty = document.getElementById("empty-state");
   const nodes = pack?.graph?.nodes || [];
   const noGraph = !nodes.length;
@@ -2558,23 +2753,29 @@ function renderPackGraph(pack) {
 
   const graph = initCytoscape();
   if (!graph) return;
-  graph.autoungrabify(true);
+  graph.autoungrabify(false);
 
   const elements = buildPackGraphElements(pack);
   graph.elements().remove();
-  if (!elements.length) return;
-  graph.add(elements);
-  graph.nodes().ungrabify();
-  resizeGraphCanvas(graph, "target");
-  graph.fit(graph.nodes(), 48);
-  const zoom = graph.zoom();
-  if (zoom > 1) {
-    graph.zoom(1);
-    graph.center(graph.nodes());
-  } else if (zoom < 0.62) {
-    graph.zoom(0.62);
-    graph.center(graph.nodes());
+  if (!elements.length) {
+    setSchemaNodeActionsVisible(false);
+    return;
   }
+  graph.add(elements);
+  graph.nodes().grabify();
+  resizeGraphCanvas(graph, "target");
+  if (!opts.skipFit) {
+    graph.fit(graph.nodes(), 48);
+    const zoom = graph.zoom();
+    if (zoom > 1) {
+      graph.zoom(1);
+      graph.center(graph.nodes());
+    } else if (zoom < 0.62) {
+      graph.zoom(0.62);
+      graph.center(graph.nodes());
+    }
+  }
+  captureSchemaPositions();
 
   if (selectedNodeId && packNodeById(selectedNodeId)) {
     highlightNode(selectedNodeId, null);
@@ -2582,32 +2783,267 @@ function renderPackGraph(pack) {
   } else {
     selectedNodeId = null;
     selectedElementId = null;
+    setSchemaNodeActionsVisible(false);
     const el = document.getElementById("step-detail");
-    if (el) el.textContent = "Кликните клетку. YAML не меняется.";
+    if (el) el.textContent = "Кликните клетку или перетащите агента слева. YAML не пишется.";
   }
 }
 
+let packLoadSeq = 0;
+
 async function loadPackGraph() {
+  const seq = ++packLoadSeq;
+  const packId = state.packId;
   const empty = document.getElementById("empty-state");
   const emptyText = document.getElementById("schema-empty-text");
   if (emptyText) emptyText.textContent = "Загрузка схемы пака…";
   try {
-    const res = await fetch(`/api/pack?pipeline=${encodeURIComponent(state.packId)}`);
+    const res = await fetch(`/api/pack?pipeline=${encodeURIComponent(packId)}`);
     const data = await parseJsonResponse(res);
+    if (seq !== packLoadSeq || state.packId !== packId) return;
     if (!res.ok) {
       throw new Error(data.error || `HTTP ${res.status}`);
     }
     clearError();
-    renderPackGraph(data);
+    state.packBase = data;
+    renderPackGraph(applyDraftToPack(data, getPackDraft(packId)));
   } catch (err) {
+    if (seq !== packLoadSeq || state.packId !== packId) return;
     state.pack = null;
+    state.packBase = null;
     if (cy) cy.elements().remove();
     document.getElementById("cy").style.visibility = "hidden";
     empty.classList.remove("hidden");
     if (emptyText) emptyText.textContent = err.message || String(err);
     renderPackSummary(null);
+    setSchemaNodeActionsVisible(false);
     showError(`Схема пака: ${err.message || err}`);
   }
+}
+
+function addDraftAgentNode(agentName, position) {
+  if (!state.packBase && !state.pack) {
+    showPaletteNotice("Сначала дождитесь загрузки пака.");
+    return;
+  }
+  const agent = String(agentName || "").trim();
+  if (!agent) return;
+  const missing = missingClisFor(agent);
+  const id = uniqueSchemaNodeId(kebabAgentId(agent));
+  const node = {
+    id,
+    label: agent,
+    kind: "step",
+    subagent: agent,
+  };
+  const draft = getPackDraft(state.packId);
+  draft.extraNodes = [...(draft.extraNodes || []).filter((item) => item.id !== id), node];
+  draft.deletedIds = (draft.deletedIds || []).filter((item) => item !== id);
+  draft.positions = { ...(draft.positions || {}), [id]: position };
+  setPackDraft(state.packId, draft);
+
+  if (!state.pack) {
+    state.pack = applyDraftToPack(state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } }, draft);
+  } else {
+    state.pack.graph = state.pack.graph || { nodes: [], edges: [] };
+    state.pack.graph.nodes = state.pack.graph.nodes || [];
+    if (!state.pack.graph.nodes.some((item) => item.id === id)) {
+      state.pack.graph.nodes.push({ ...node, draft: true });
+    }
+  }
+
+  const graph = initCytoscape();
+  const empty = document.getElementById("empty-state");
+  empty.classList.add("hidden");
+  document.getElementById("cy").style.visibility = "visible";
+  graph.autoungrabify(false);
+  const displayNode = { ...node, draft: true };
+  graph.add({
+    group: "nodes",
+    data: {
+      id,
+      label: formatPackNodeLabel(displayNode),
+      color: packNodeColor(displayNode),
+      kind: "step",
+      askFlag: "false",
+      cycleFlag: "false",
+    },
+    position,
+    grabbable: true,
+    classes: packNodeClasses(displayNode),
+  });
+  graph.getElementById(id).grabify();
+  selectedNodeId = id;
+  selectedElementId = id;
+  highlightNode(id, null);
+  showPackNodeSummary(id);
+  renderPackSummary(state.pack);
+  resizeGraphCanvas(graph, "target");
+  captureSchemaPositions();
+  if (missing.length) {
+    showPaletteNotice(
+      `Агента «${agent}» нет в ${missing.join(", ")}. Клетка создана (черновик, диск не пишется).`
+    );
+  } else {
+    showPaletteNotice("");
+  }
+}
+
+function deleteSchemaNode(nodeId) {
+  if (!nodeId || !isSchemaMode()) return;
+  const draft = getPackDraft(state.packId);
+  const extraIds = new Set((draft.extraNodes || []).map((node) => node.id));
+  if (extraIds.has(nodeId)) {
+    draft.extraNodes = (draft.extraNodes || []).filter((node) => node.id !== nodeId);
+  } else {
+    draft.deletedIds = Array.from(new Set([...(draft.deletedIds || []), nodeId]));
+  }
+  if (draft.positions) delete draft.positions[nodeId];
+  setPackDraft(state.packId, draft);
+
+  if (state.pack?.graph) {
+    state.pack.graph.nodes = (state.pack.graph.nodes || []).filter((node) => node.id !== nodeId);
+    state.pack.graph.edges = (state.pack.graph.edges || []).filter(
+      (edge) => edge.from !== nodeId && edge.to !== nodeId
+    );
+  }
+  if (cy) {
+    const node = cy.getElementById(nodeId);
+    if (node.length) {
+      node.connectedEdges().remove();
+      node.remove();
+    }
+  }
+  if (selectedNodeId === nodeId) {
+    selectedNodeId = null;
+    selectedElementId = null;
+    highlightNode(null, null);
+    clearNodePanel();
+  }
+  renderPackSummary(state.pack);
+  captureSchemaPositions();
+}
+
+function agentFromDragEvent(event) {
+  const dt = event.dataTransfer;
+  if (!dt) return "";
+  return (dt.getData(PALETTE_DRAG_TYPE) || dt.getData("text/plain") || "").trim();
+}
+
+function setPaletteDropReady(on) {
+  document.getElementById("graph-panel")?.classList.toggle("drop-ready", Boolean(on));
+}
+
+function bindSchemaPalette() {
+  const list = document.getElementById("palette-agents");
+  const filter = document.getElementById("palette-filter");
+  const skillsEl = document.getElementById("palette-skills");
+  const skillsCount = document.getElementById("palette-skills-count");
+  const dropRoot = document.getElementById("graph-panel");
+  if (!list || !dropRoot) return;
+
+  function renderAgents() {
+    const query = (filter?.value || "").trim().toLowerCase();
+    list.innerHTML = "";
+    const agents = state.catalogAgents.filter((name) => !query || name.toLowerCase().includes(query));
+    if (!agents.length) {
+      const empty = document.createElement("p");
+      empty.className = "sidebar-hint";
+      empty.textContent = state.catalogAgents.length ? "Нет совпадений." : "Каталог агентов пуст.";
+      list.appendChild(empty);
+      return;
+    }
+    for (const name of agents) {
+      const missing = missingClisFor(name);
+      const card = document.createElement("div");
+      card.className = `palette-card${missing.length ? " is-partial" : ""}`;
+      card.draggable = true;
+      card.dataset.agent = name;
+      card.setAttribute("role", "listitem");
+      const title = document.createElement("span");
+      title.className = "palette-card-name";
+      title.textContent = name;
+      card.appendChild(title);
+      const clis = document.createElement("span");
+      clis.className = "palette-clis";
+      const present = Object.keys(state.agentsByCli).length
+        ? Object.keys(state.agentsByCli)
+        : SCHEMA_CLIS;
+      for (const cli of present) {
+        const badge = document.createElement("span");
+        const isMissing = missing.includes(cli);
+        badge.className = `palette-cli${isMissing ? " is-missing" : ""}`;
+        badge.textContent = isMissing ? `нет ${cli}` : cli;
+        clis.appendChild(badge);
+      }
+      card.appendChild(clis);
+      if (missing.length) {
+        card.title = `Нет в ${missing.join(", ")}. Клетку всё равно можно поставить.`;
+      } else {
+        card.title = "Перетащите на холст — клетка kind=step";
+      }
+      card.addEventListener("dragstart", (event) => {
+        try {
+          event.dataTransfer.setData(PALETTE_DRAG_TYPE, name);
+        } catch {
+          /* some browsers only allow text/plain */
+        }
+        event.dataTransfer.setData("text/plain", name);
+        event.dataTransfer.effectAllowed = "copy";
+      });
+      list.appendChild(card);
+    }
+  }
+
+  if (skillsEl) {
+    skillsEl.innerHTML = "";
+    for (const skill of state.catalogSkills) {
+      const li = document.createElement("li");
+      li.textContent = skill;
+      skillsEl.appendChild(li);
+    }
+  }
+  if (skillsCount) skillsCount.textContent = state.catalogSkills.length ? `(${state.catalogSkills.length})` : "";
+
+  filter?.addEventListener("input", renderAgents);
+  renderAgents();
+
+  dropRoot.addEventListener("dragenter", (event) => {
+    if (!isSchemaMode()) return;
+    event.preventDefault();
+    setPaletteDropReady(true);
+  });
+  dropRoot.addEventListener("dragover", (event) => {
+    if (!isSchemaMode()) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    setPaletteDropReady(true);
+  });
+  dropRoot.addEventListener("dragleave", (event) => {
+    if (!dropRoot.contains(event.relatedTarget)) setPaletteDropReady(false);
+  });
+  dropRoot.addEventListener("drop", (event) => {
+    if (!isSchemaMode()) return;
+    event.preventDefault();
+    setPaletteDropReady(false);
+    const agent = agentFromDragEvent(event);
+    if (!agent) return;
+    addDraftAgentNode(agent, schemaCanvasPosition(event.clientX, event.clientY));
+  });
+}
+
+function bindSchemaDraftActions() {
+  document.getElementById("schema-delete-node")?.addEventListener("click", () => {
+    if (selectedNodeId) deleteSchemaNode(selectedNodeId);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!isSchemaMode()) return;
+    if (event.key !== "Delete" && event.key !== "Backspace") return;
+    if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (!selectedNodeId) return;
+    event.preventDefault();
+    deleteSchemaNode(selectedNodeId);
+  });
 }
 
 function fillPackTabs() {
@@ -2630,6 +3066,7 @@ function fillPackTabs() {
     btn.title = item.label || item.id;
     btn.addEventListener("click", () => {
       if (state.packId === item.id) return;
+      captureSchemaPositions();
       state.packId = item.id;
       setActivePackTab();
       saveSelection();
@@ -2662,7 +3099,7 @@ function applyScreenModeChrome() {
   if (heading) heading.textContent = schema ? "Клетка" : "Выбранный шаг";
   if (hint) {
     hint.textContent = schema
-      ? "Клик не пишет YAML. Инспектор полей — с фазы 3."
+      ? "Перетащите агента слева. Двигать и Delete — черновик, YAML не пишется."
       : "Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.";
   }
   if (schema) {
@@ -2672,7 +3109,7 @@ function applyScreenModeChrome() {
   } else {
     setGraphViewTabs();
   }
-  if (cy) cy.autoungrabify(schema);
+  if (cy) cy.autoungrabify(false);
 }
 
 function setScreenMode(mode) {
@@ -2680,6 +3117,7 @@ function setScreenMode(mode) {
   const changed = state.screenMode !== next;
   state.screenMode = next;
   saveSelection();
+  if (changed && next === "run") captureSchemaPositions();
   applyScreenModeChrome();
   if (next === "schema") {
     disconnectStream();
@@ -2706,7 +3144,7 @@ function streamUrl() {
 function setConnection(status, text) {
   const el = document.getElementById("connection");
   el.textContent = text;
-  el.className = `badge conn ${status}`;
+  el.className = `badge conn ${status} run-only`;
 }
 
 function setActiveTab(pipeline) {
@@ -3001,7 +3439,13 @@ async function init() {
     state.screenMode = saved.screenMode === "schema" ? "schema" : "run";
     state.packId = typeof saved.packId === "string" && saved.packId ? saved.packId : "spec";
     state.catalogPipelines = Array.isArray(catalog.pipelines) ? catalog.pipelines : [];
+    state.catalogAgents = Array.isArray(catalog.agents) ? catalog.agents : [];
+    state.catalogSkills = Array.isArray(catalog.skills) ? catalog.skills : [];
+    state.agentsByCli =
+      catalog.agents_by_cli && typeof catalog.agents_by_cli === "object" ? catalog.agents_by_cli : {};
     fillPackTabs();
+    bindSchemaPalette();
+    bindSchemaDraftActions();
     setActiveTab(state.pipeline);
     setGraphViewTabs();
     applyScreenModeChrome();

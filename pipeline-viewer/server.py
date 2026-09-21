@@ -32,6 +32,24 @@ DEFAULT_PORT = 8765
 API_VERSION = 6
 POLL_INTERVAL = 1.0
 PIPELINES = ("spec", "calibration")
+CLI_AGENT_DIRS = (".qwen", ".gigacode", ".opencode")
+
+
+def catalog_for_viewer(workspace: Path) -> dict:
+    """GET /api/catalog: compile catalog plus per-CLI agent presence for the palette."""
+    from pipeline_pack import build_catalog
+
+    catalog = build_catalog(workspace)
+    by_cli: dict[str, list[str]] = {}
+    for cli_dir in CLI_AGENT_DIRS:
+        name = cli_dir.lstrip(".")
+        folder = workspace / cli_dir / "agents"
+        if folder.is_dir():
+            by_cli[name] = sorted(path.stem for path in folder.glob("*.md") if path.is_file())
+        else:
+            by_cli[name] = []
+    catalog["agents_by_cli"] = by_cli
+    return catalog
 
 
 def _normalize_pipeline(raw: str | None) -> str:
@@ -265,9 +283,7 @@ def make_handler(workspace: Path, defaults: Defaults):
                 return
 
             if path == "/api/catalog":
-                from pipeline_pack import build_catalog
-
-                self._send_json(build_catalog(workspace))
+                self._send_json(catalog_for_viewer(workspace))
                 return
 
             if path == "/api/pack":

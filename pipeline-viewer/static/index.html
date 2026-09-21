@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pipeline Viewer</title>
-  <link rel="stylesheet" href="/static/style.css?v=24" />
+  <link rel="stylesheet" href="/static/style.css?v=27" />
   <script src="/static/vendor/cytoscape.min.js"></script>
 </head>
 <body class="screen-run">
@@ -52,6 +52,23 @@
   </header>
 
   <main>
+    <aside id="agent-palette" class="schema-only" aria-label="Палитра агентов">
+      <h2>Агенты</h2>
+      <p class="sidebar-hint">
+        Перетащите карточку на холст «Схема». Один агент — одна карточка
+        (qwen / gigacode / opencode объединены). Координаты только в браузере, YAML не пишется.
+      </p>
+      <label class="palette-filter-label">
+        <span class="visually-hidden">Фильтр агентов</span>
+        <input id="palette-filter" type="search" placeholder="Фильтр агентов…" autocomplete="off" />
+      </label>
+      <div id="palette-agents" class="palette-list" role="list"></div>
+      <details id="palette-skills-wrap" class="palette-skills-wrap">
+        <summary>Скиллы <span id="palette-skills-count"></span></summary>
+        <ul id="palette-skills" class="palette-skills"></ul>
+      </details>
+      <p id="palette-notice" class="palette-notice hidden" role="status"></p>
+    </aside>
     <section id="graph-panel">
       <div id="graph-view-toolbar" class="graph-view-toolbar run-only">
         <nav id="graph-view-tabs" class="tabs" aria-label="Режим графа">
@@ -90,7 +107,7 @@
       <footer id="legend" class="graph-legend" aria-label="Легенда графа">
         <span class="legend-schema schema-only">
           эллипс — оркестратор · квадрат — шаг · ромб — terminal
-          · — main · ╌ branch · ⋯ loop · cycle/ask — в tooltip
+          · — main · ╌ branch · ⋯ loop · cycle/ask — в tooltip · пунктир бирюза — клетка с палитры
         </span>
         <span class="legend-target run-only">
           <span class="dot ok"></span> ok
@@ -118,7 +135,7 @@
       <div id="schema-sidebar-intro" class="schema-only">
         <h2>Пак</h2>
         <pre id="pack-summary">—</pre>
-        <p class="sidebar-hint">Read-only схема из pack JSON. Клики не пишут YAML.</p>
+        <p class="sidebar-hint">Схема пака. Координаты и новые клетки — черновик в браузере, YAML не пишется.</p>
       </div>
 
       <details id="infra-panel" class="infra-panel run-only">
@@ -160,6 +177,10 @@
       <h2 id="step-heading">Выбранный шаг</h2>
       <p id="step-hint" class="sidebar-hint">Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.</p>
       <pre id="step-detail">Кликните узел на графе.</pre>
+      <div id="schema-node-actions" class="schema-node-actions schema-only hidden">
+        <button type="button" id="schema-delete-node" class="btn-secondary">Удалить клетку</button>
+        <p class="sidebar-hint">Исчезнет из черновика на холсте. На диск не пишем.</p>
+      </div>
       <div id="step-visits" class="step-section hidden run-only"></div>
       <div id="step-divergence" class="step-section hidden run-only"></div>
       <div id="restart-actions" class="restart-actions hidden run-only">
@@ -196,6 +217,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=24"></script>
+  <script src="/static/app.js?v=27"></script>
 </body>
 </html>
