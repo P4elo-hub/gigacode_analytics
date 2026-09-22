@@ -243,6 +243,7 @@ status_fields:
     source: collectors.needs_check_feature
     artifacts: [spec, gaps_map, challenges_map, challenges]
     collectors: [needs_check_feature]
+    predicates: [needs_check_feature]
     invariant: needs-check-feature
     instruction: >
       False if no SPEC. False if last successful check-feature in run-log
@@ -454,6 +455,14 @@ edge_conditions:
       priority: 70
       next: resolve-challenges
     label: pending-apply challenges Relates
+  needs_check_feature:
+    expr:
+      field: needs_check_feature
+      op: truthy
+    dispatch:
+      priority: 75
+      next: check-feature
+    label: spec needs review
   critical_major_mismatch_resolvable:
     expr:
       all:

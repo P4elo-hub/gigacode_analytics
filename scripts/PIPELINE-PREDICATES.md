@@ -62,6 +62,7 @@ come from pack `reason_for_predicate` (spec keeps the mapping) or `edge_conditio
 | `pending_apply_with_gaps` | edge | `decisions_pending_apply_gaps` |
 | `pending_apply_alignment_only` | edge | `decisions_pending_apply_alignment`, mismatch, iteration |
 | `pending_apply_challenges_only` | edge | `decisions_pending_apply_challenges` |
+| `needs_check_feature` | edge | overlay `needs_check_feature` (after P70 apply) |
 | `critical_major_mismatch_resolvable` | edge | `critical_major_mismatch`, iteration, stale |
 | `open_gaps` | edge | `open_gaps` |
 | `open_challenges` | edge | `has_challenges`, `challenges.open` |

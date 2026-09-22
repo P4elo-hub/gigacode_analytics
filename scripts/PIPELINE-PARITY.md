@@ -25,9 +25,9 @@ informational). Replay fixtures: `scripts/fixtures/routing_state_replay/`.
 | `has_context` | artifacts.context | `has_context` | `not_has_context` | P20 find-context |
 | `has_spec` | artifacts.spec | `has_spec` | `not_has_spec` | P30 write-feature |
 | `has_decisions` | artifacts.decisions | `has_decisions` | (display) | none |
-| `has_gaps_map` | artifacts.gaps_map | `has_gaps_map` | `needs-check-feature` | invariant → check-feature |
+| `has_gaps_map` | artifacts.gaps_map | `has_gaps_map` | `needs_check_feature` | P75 check-feature |
 | `has_challenges` | artifacts.challenges | `has_challenges` | `open_challenges`, `no_challenges_file` | P100 / P110 |
-| `has_challenges_map` | artifacts.challenges_map | `has_challenges_map` | `needs-check-feature` | invariant |
+| `has_challenges_map` | artifacts.challenges_map | `has_challenges_map` | `needs_check_feature` | P75 |
 | `has_alignment` | artifacts.alignment | `has_alignment` | limit, `alignment_missing_or_stale` | P10 / P120 |
 | `decisions_needs_answer` | decisions table | `decisions_needs_answer` | totals (display / validate) | — |
 | `decisions_pending_apply` | decisions table | `decisions_pending_apply` | totals (display / validate) | — |
@@ -45,8 +45,8 @@ informational). Replay fixtures: `scripts/fixtures/routing_state_replay/`.
 | `critical_major_mismatch` | alignment frontmatter | `critical_major_mismatch` | mismatch resolvable, pending alignment | P65 / P80 |
 | `alignment_stale` | alignment_stale | `alignment_stale` | mismatch, pending alignment | P65 / P80 (engine) |
 | `stale` | stale[] | `stale` | `alignment_missing_or_stale`; P5 refresh | P5 / P120 |
-| `needs_check_feature` | needs_check_feature | `needs_check_feature` | invariant `needs-check-feature` | after P70 → check-feature |
-| `needs_check_feature_reason` | needs_check_feature | `needs_check_feature_reason` | invariant | (reason only) |
+| `needs_check_feature` | needs_check_feature | `needs_check_feature` | `needs_check_feature` | P75 → check-feature |
+| `needs_check_feature_reason` | needs_check_feature | `needs_check_feature_reason` | `needs_check_feature` | (reason only) |
 
 ## Documented diffs
 

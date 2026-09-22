@@ -1,0 +1,190 @@
+schema_version: 1
+status_fields:
+  has_feature_context_slug_md_eshche_net:
+    type: bool
+    instruction: "Feature-context/{slug}.md ещё нет"
+  agent_zakonchil_svoe_vypolnenie:
+    type: bool
+    instruction: Агент закончил своё выполнение
+  eshche_odno_svoe_uslovie:
+    type: bool
+    instruction: ещё одно своё условие
+  has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh:
+    type: bool
+    instruction: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
+  has_agent_zakonchil_svoe_vypolnenie:
+    type: bool
+    instruction: Агент закончил своё выполнение
+  has_v_decisions_est_needs_answer_s_relates_na_gap_open_g:
+    type: bool
+    instruction: "в DECISIONS есть needs-answer с Relates на GAP, open_gaps не пустые"
+  has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec:
+    type: bool
+    instruction: решения по GAP уже есть — нужно применить в SPEC
+  has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply:
+    type: bool
+    instruction: open_gaps не пустые (после ревью / без pending-apply)
+  has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp:
+    type: bool
+    instruction: "SPEC есть, и после последней правки ещё не было успешного check-feature"
+  has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp:
+    type: bool
+    instruction: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
+  has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili:
+    type: bool
+    instruction: "Нет отчёта или он устарел Коротко: ALIGNMENT нет или старше SPEC Чуть точнее: сверки с кодом ещё не было, или SPEC новее ALIGNMENT"
+  has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa:
+    type: bool
+    instruction: "Отчёт есть, но без PASS Коротко: ALIGNMENT без PASS / PASS WITH GAPS Чуть точнее: отчёт есть и не stale, но verdict не PASS — нужен повторный аудит"
+  has_v_alignment_est_critical_major_raskhozhdeniya_otchet:
+    type: bool
+    instruction: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
+edge_conditions:
+  routing_state_needs_refresh:
+    expr:
+      any:
+        - field: has_routing_state
+          op: falsy
+        - field: stale
+          op: contains
+          value: routing_state
+    dispatch:
+      priority: 5
+      next: analyze-routing
+    label: routing-state missing/stale
+    reason: нет routing-state.json — нужен analyze-routing
+  not_has_main:
+    core: true
+    expr:
+      field: has_main
+      op: falsy
+    label: no main
+    reason: Нет артефакта main
+  has_feature_context_slug_md_eshche_net:
+    expr:
+      field: has_feature_context_slug_md_eshche_net
+      op: truthy
+    dispatch:
+      priority: 140
+      next: context-researcher
+    label: "Feature-context/{slug}.md ещё нет"
+    reason: "Feature-context/{slug}.md ещё нет"
+  agent_zakonchil_svoe_vypolnenie:
+    expr:
+      field: agent_zakonchil_svoe_vypolnenie
+      op: truthy
+    dispatch:
+      priority: 150
+      next: analyze-routing
+    label: Агент закончил своё выполнение
+    reason: Агент закончил своё выполнение
+  eshche_odno_svoe_uslovie:
+    expr:
+      field: eshche_odno_svoe_uslovie
+      op: truthy
+    dispatch:
+      priority: 160
+      next: analyze-routing
+    label: ещё одно своё условие
+    reason: ещё одно своё условие
+  has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh:
+    expr:
+      field: has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh
+      op: truthy
+    dispatch:
+      priority: 170
+      next: spec-writer
+    label: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
+    reason: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
+  has_agent_zakonchil_svoe_vypolnenie:
+    expr:
+      field: has_agent_zakonchil_svoe_vypolnenie
+      op: truthy
+    dispatch:
+      priority: 180
+      next: analyze-routing
+    label: Агент закончил своё выполнение
+    reason: Агент закончил своё выполнение
+  has_v_decisions_est_needs_answer_s_relates_na_gap_open_g:
+    expr:
+      field: has_v_decisions_est_needs_answer_s_relates_na_gap_open_g
+      op: truthy
+    dispatch:
+      priority: 190
+      next: gap-resolver
+    label: "в DECISIONS есть needs-answer с Relates на GAP, open_gaps не пустые"
+    reason: "в DECISIONS есть needs-answer с Relates на GAP, open_gaps не пустые"
+  has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec:
+    expr:
+      field: has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec
+      op: truthy
+    dispatch:
+      priority: 200
+      next: gap-resolver
+    label: решения по GAP уже есть — нужно применить в SPEC
+    reason: решения по GAP уже есть — нужно применить в SPEC
+  has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply:
+    expr:
+      field: has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply
+      op: truthy
+    dispatch:
+      priority: 210
+      next: gap-resolver
+    label: open_gaps не пустые (после ревью / без pending-apply)
+    reason: open_gaps не пустые (после ревью / без pending-apply)
+  has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp:
+    expr:
+      field: has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp
+      op: truthy
+    dispatch:
+      priority: 220
+      next: spec-reviewer
+    label: "SPEC есть, и после последней правки ещё не было успешного check-feature"
+    reason: "SPEC есть, и после последней правки ещё не было успешного check-feature"
+  has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp:
+    expr:
+      field: has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp
+      op: truthy
+    dispatch:
+      priority: 230
+      next: null
+      outcome: ready
+    label: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
+    reason: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
+  has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili:
+    expr:
+      field: has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili
+      op: truthy
+    dispatch:
+      priority: 240
+      next: code-auditor
+    label: "Нет отчёта или он устарел Коротко: ALIGNMENT нет или старше SPEC Чуть точнее: сверки с кодом ещё не было, или SPEC новее ALIGNMENT"
+    reason: "Нет отчёта или он устарел Коротко: ALIGNMENT нет или старше SPEC Чуть точнее: сверки с кодом ещё не было, или SPEC новее ALIGNMENT"
+  has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa:
+    expr:
+      field: has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa
+      op: truthy
+    dispatch:
+      priority: 250
+      next: code-auditor
+    label: "Отчёт есть, но без PASS Коротко: ALIGNMENT без PASS / PASS WITH GAPS Чуть точнее: отчёт есть и не stale, но verdict не PASS — нужен повторный аудит"
+    reason: "Отчёт есть, но без PASS Коротко: ALIGNMENT без PASS / PASS WITH GAPS Чуть точнее: отчёт есть и не stale, но verdict не PASS — нужен повторный аудит"
+  has_v_alignment_est_critical_major_raskhozhdeniya_otchet:
+    expr:
+      field: has_v_alignment_est_critical_major_raskhozhdeniya_otchet
+      op: truthy
+    dispatch:
+      priority: 260
+      next: alignment-resolver
+    label: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
+    reason: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
+engine_fields:
+  - has_routing_state
+  - routing_state_invalid
+  - routing_state_error
+  - stale
+stale_vs:
+  - spec
+validate_ids:
+  - routing-state-missing
+  - routing-state-stale

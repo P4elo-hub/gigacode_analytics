@@ -3,7 +3,10 @@
 const STORAGE_KEY = "pipeline-viewer-selection";
 const DISMISS_STORAGE_KEY = "pipeline-viewer-dismissed";
 const DRAFT_STORAGE_KEY = "pipeline-viewer-schema-draft";
-const SCHEMA_API_VERSION = 6;
+const SCHEMA_API_VERSION = 7;
+const SAVE_STORAGE_KEY = "pipeline-viewer-schema-applied";
+const INIT_TEMPLATES = ["routing-state", "full-dispatch", "orchestrator-only"];
+const PROTECTED_PACKS = new Set(["spec", "calibration"]);
 const SCHEMA_CLIS = ["qwen", "gigacode", "opencode"];
 const PALETTE_DRAG_TYPE = "application/x-pipeline-agent";
 
@@ -157,6 +160,7 @@ const state = {
   agentsByCli: {},
   writeFeatureCycle: { profile: "", calls: [] },
   dismissedNotices: loadDismissedNotices(),
+  packSave: { ok: false, errors: [], warnings: [], preview: null },
 };
 
 let cy = null;
@@ -619,6 +623,23 @@ function initCytoscape() {
           "font-size": "10px",
           "text-background-opacity": 0.92,
           opacity: 1,
+        },
+      },
+      {
+        selector: "edge.schema-edge.save-error",
+        style: {
+          "line-color": "#ef4444",
+          "target-arrow-color": "#ef4444",
+          color: "#fecaca",
+          opacity: 1,
+          width: 3,
+        },
+      },
+      {
+        selector: "node.save-error",
+        style: {
+          "border-color": "#ef4444",
+          "border-width": 4,
         },
       },
       {
@@ -2620,6 +2641,7 @@ function undoSchemaDraft() {
     prev
   );
   schemaInspectorUndoArmed = false;
+  invalidatePackSave();
   renderPackGraph(state.pack, { skipFit: true });
   updateSchemaUndoChrome();
 }
@@ -2893,16 +2915,52 @@ function applyDraftToPack(basePack, draft) {
   pack.graph.nodes = nodes;
   pack.graph.edges = edges.map((edge) => {
     const next = { ...edge };
-    if (!next.condition) {
+    const labels = { ...(next.condition_labels || {}) };
+    const ids = [];
+    const seen = new Set();
+    const collect = (raw, label) => {
+      const text = String(raw || "").trim();
+      const human = String(label || "").trim();
+      if (!text && !human) return;
+      const token = normalizeWhenToken(text || human, human);
+      if (!token.id || seen.has(token.id)) return;
+      seen.add(token.id);
+      ids.push(token.id);
+      if (token.label) labels[token.id] = token.label;
+    };
+    collect(next.condition, next.condition_label || labels[next.condition]);
+    if (Array.isArray(next.conditions)) {
+      for (const item of next.conditions) {
+        if (typeof item === "string") collect(item, labels[item]);
+        else if (item && typeof item === "object") collect(item.id || item.label, item.label || item.instruction);
+      }
+    }
+    if (ids.length) {
+      next.condition = ids[0];
+      if (ids.length > 1) next.conditions = ids;
+      else delete next.conditions;
+      if (labels[ids[0]]) next.condition_label = labels[ids[0]];
+      else delete next.condition_label;
+      next.condition_labels = labels;
+    } else {
       delete next.condition;
+      delete next.conditions;
       delete next.condition_label;
+      delete next.condition_labels;
     }
     return next;
   });
 
+  const keepDispatchNext = (rule) => {
+    const nxt = rule?.next;
+    return !nxt || existing.has(nxt) || DISPATCH_OUTCOMES.includes(nxt);
+  };
   if (Array.isArray(draft.dispatchRules)) {
     pack.dispatch = { ...(pack.dispatch || {}) };
-    pack.dispatch.rules = draft.dispatchRules.map(normalizeDispatchRule);
+    pack.dispatch.rules = draft.dispatchRules.map(normalizeDispatchRule).filter(keepDispatchNext);
+  } else if (Array.isArray(pack.dispatch?.rules)) {
+    pack.dispatch = { ...(pack.dispatch || {}) };
+    pack.dispatch.rules = pack.dispatch.rules.map(normalizeDispatchRule).filter(keepDispatchNext);
   }
 
   if (draft.orchestrator && existing.has(draft.orchestrator)) {
@@ -3046,18 +3104,177 @@ function whenCatalogEntries(packId) {
 function conditionHumanLabel(conditionId, edge) {
   const id = String(conditionId || "").trim();
   if (!id) return String(edge?.condition_label || "").trim();
+  const fromMap = edge?.condition_labels && edge.condition_labels[id];
+  if (fromMap && fromMap !== id) return fromMap;
   const found = whenCatalogEntries().find((item) => item.id === id);
   if (found && found.label && found.label !== id) return found.label;
   if (edge?.condition_label && edge.condition_label !== id) return edge.condition_label;
   return found?.label || id;
 }
 
+function inventConditionId(text, taken) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const compact = raw.replace(/-/g, "_");
+  if (/^[A-Za-z][A-Za-z0-9_]*$/.test(compact)) return compact.toLowerCase();
+  const slug = slugConditionId(raw);
+  let base = slug.startsWith("has_") || slug.startsWith("not_has_") ? slug : `has_${slug}`;
+  if (base.length > 56) base = base.slice(0, 56).replace(/_+$/, "") || "has_custom";
+  if (!/^[a-z]/.test(base)) base = `has_${base}`;
+  let candidate = base;
+  let n = 2;
+  const used = taken instanceof Set ? taken : new Set(taken || []);
+  while (used.has(candidate)) {
+    const suffix = `_${n}`;
+    candidate = `${base.slice(0, Math.max(1, 56 - suffix.length))}${suffix}`;
+    n += 1;
+  }
+  return candidate;
+}
+
+function normalizeWhenToken(raw, label) {
+  const text = String(raw || "").trim();
+  const human = String(label || "").trim();
+  if (!text && !human) return { id: "", label: "" };
+  const looksLikeId = (value) => /^[A-Za-z][A-Za-z0-9_]*$/.test(String(value || "").replace(/-/g, "_"));
+  if (text && looksLikeId(text)) {
+    return { id: inventConditionId(text, []), label: human || text };
+  }
+  if (human && !looksLikeId(human)) {
+    return { id: inventConditionId(human, []), label: human };
+  }
+  if (text && !looksLikeId(text)) {
+    return { id: inventConditionId(text, []), label: text };
+  }
+  return {
+    id: inventConditionId(text || human, []),
+    label: human || text,
+  };
+}
+
+function edgeConditionIds(edge) {
+  if (!edge) return [];
+  const ids = [];
+  const seen = new Set();
+  const push = (raw, label) => {
+    const token = normalizeWhenToken(raw, label);
+    if (!token.id || seen.has(token.id)) return;
+    seen.add(token.id);
+    ids.push(token.id);
+  };
+  const labels = edge.condition_labels || {};
+  push(edge.condition, edge.condition_label || labels[edge.condition]);
+  if (Array.isArray(edge.conditions)) {
+    for (const item of edge.conditions) {
+      if (typeof item === "string") push(item, labels[item]);
+      else if (item && typeof item === "object") push(item.id || item.label, item.label || item.instruction);
+    }
+  }
+  return ids;
+}
+
+function mergedDraftEdge(edgeId) {
+  const live = packEdgeById(edgeId) || {};
+  const draft = getPackDraft(state.packId);
+  const extra = (draft.extraEdges || []).find((item) => item.id === edgeId) || {};
+  const edit = (draft.edgeEdits || {})[edgeId] || {};
+  return { ...live, ...extra, ...edit, id: edgeId || live.id || extra.id };
+}
+
+function resolveEdgeConditionPatch(current, prevPatch, patch) {
+  if (!patch || (!Object.prototype.hasOwnProperty.call(patch, "condition") && !Object.prototype.hasOwnProperty.call(patch, "conditions"))) {
+    return patch;
+  }
+  const before = { ...current, ...prevPatch };
+  const ids = Array.isArray(patch.conditions)
+    ? edgeConditionIds({ condition: patch.condition, conditions: patch.conditions })
+    : edgeConditionIds({ ...before, condition: patch.condition, conditions: [...edgeConditionIds(before), patch.condition] });
+  return { ...patch, ...conditionPatchFromIds(ids, { ...before, ...patch }) };
+}
+
+function formatConditionId(conditionId, edge) {
+  const id = String(conditionId || "").trim();
+  if (!id) return "";
+  const human = conditionHumanLabel(id, edge);
+  return human && human !== id ? `${id} · ${human}` : id;
+}
+
+function conditionPatchFromIds(ids, edge) {
+  const unique = [];
+  const seen = new Set();
+  for (const raw of ids || []) {
+    const id = String(raw || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+  }
+  if (!unique.length) {
+    return { condition: "", condition_label: "", conditions: [] };
+  }
+  const first = unique[0];
+  const labels = { ...(edge?.condition_labels || {}) };
+  const label = conditionHumanLabel(first, edge);
+  if (label && label !== first) labels[first] = label;
+  const kept = {};
+  for (const id of unique) {
+    if (labels[id]) kept[id] = labels[id];
+  }
+  return {
+    condition: first,
+    condition_label: label && label !== first ? label : "",
+    conditions: unique,
+    condition_labels: kept,
+  };
+}
+
+const RU_TRANSLIT = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "i",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "kh",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "shch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+};
+
 function slugConditionId(text) {
-  return String(text || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const compact = raw.replace(/-/g, "_");
+  if (/^[A-Za-z][A-Za-z0-9_]*$/.test(compact)) return compact.toLowerCase();
+  const out = [];
+  for (const char of raw.toLowerCase()) {
+    if (Object.prototype.hasOwnProperty.call(RU_TRANSLIT, char)) out.push(RU_TRANSLIT[char]);
+    else if (/[a-z0-9]/.test(char)) out.push(char);
+    else out.push("_");
+  }
+  return out.join("").replace(/_+/g, "_").replace(/^_|_$/g, "") || "when_custom";
 }
 
 function matchWhenCatalog(text) {
@@ -3074,25 +3291,21 @@ function matchWhenCatalog(text) {
 
 function conditionPatchFromText(text) {
   const raw = String(text || "").trim();
-  if (!raw) return { condition: "", condition_label: "" };
-  const match = matchWhenCatalog(raw);
-  if (match) {
-    return {
-      condition: match.id,
-      condition_label: match.label && match.label !== match.id ? match.label : "",
-    };
-  }
+  if (!raw) return { condition: "", condition_label: "", conditions: [], condition_labels: {} };
+  const token = normalizeWhenToken(raw, raw);
   return {
-    condition: slugConditionId(raw) || raw,
-    condition_label: raw,
+    condition: token.id,
+    condition_label: token.label || raw,
+    conditions: [token.id],
+    condition_labels: token.label ? { [token.id]: token.label } : {},
   };
 }
 
 function conditionTextForEdge(edge) {
   if (!edge) return "";
-  if (edge.condition_label) return edge.condition_label;
-  if (edge.condition) return conditionHumanLabel(edge.condition, edge);
-  return "";
+  const ids = edgeConditionIds(edge);
+  if (!ids.length) return String(edge.condition_label || "").trim();
+  return ids.map((id) => formatConditionId(id, edge)).join(" · ");
 }
 
 function fillWhenDatalist(datalist) {
@@ -3176,7 +3389,7 @@ function fillDispatchNextSelect(select, selectedNext, outcome) {
 
 function normalizeDispatchRule(rule) {
   const rawPriority = Number(rule?.priority);
-  const when = String(rule?.when || "").trim();
+  const when = slugConditionId(String(rule?.when || "").trim()) || String(rule?.when || "").trim();
   let next = rule?.next;
   if (next === "" || next === undefined) next = null;
   let outcome = String(rule?.outcome || "").trim();
@@ -3345,6 +3558,7 @@ function renderSchemaDispatchTable() {
     li.append(head, row);
     list.appendChild(li);
   }
+  highlightSaveErrors();
 }
 
 function uniqueCycleCallParam(calls) {
@@ -3850,16 +4064,16 @@ function packEdgeById(edgeId) {
 
 function packEdgeTooltip(edge) {
   const lines = [`${edge.from} → ${edge.to}`, `kind: ${edge.kind || "main"}`];
-  const when = conditionTextForEdge(edge);
-  if (when) {
-    lines.push(
-      edge.condition && when !== edge.condition
-        ? `условие: ${edge.condition} · ${when}`
-        : `условие: ${when}`
-    );
-  } else {
+  const ids = edgeConditionIds(edge);
+  if (!ids.length) {
     lines.push("условие: нет");
+  } else if (ids.length === 1) {
+    lines.push(`условие: ${formatConditionId(ids[0], edge)}`);
+  } else {
+    lines.push(`условия: ${ids.join(", ")}`);
+    ids.forEach((id) => lines.push(`  ${formatConditionId(id, edge)}`));
   }
+  const when = conditionTextForEdge(edge);
   if (edge.label && edge.label !== when) lines.push(`подпись: ${edge.label}`);
   const fromNode = packNodeById(edge.from);
   if (fromNode?.ask) {
@@ -3875,8 +4089,10 @@ function outgoingEdgesFrom(nodeId) {
 }
 
 function packEdgeCanvasLabel(edge) {
-  const when = conditionTextForEdge(edge);
-  if (when) return when;
+  const ids = edgeConditionIds(edge);
+  if (ids.length) {
+    return ids.map((id) => conditionHumanLabel(id, edge) || id).join(" · ");
+  }
   return edge.label || "";
 }
 
@@ -3897,6 +4113,7 @@ function highlightSchemaSelection() {
     const show = isOut || isSel;
     el.data("label", show && edge ? packEdgeCanvasLabel(edge) : "");
   });
+  highlightSaveErrors();
 }
 
 function renderOutgoingEdges(node) {
@@ -3928,13 +4145,10 @@ function renderOutgoingEdges(node) {
     const target = packNodeById(edge.to);
     to.textContent = `→ ${target?.label || edge.to}`;
     const when = document.createElement("span");
-    const text = conditionTextForEdge(edge);
+    const ids = edgeConditionIds(edge);
+    const text = ids.length ? ids.map((id) => formatConditionId(id, edge)).join(" · ") : "";
     when.className = text ? "schema-outgoing-when" : "schema-outgoing-when is-empty";
-    when.textContent = text
-      ? edge.condition && text !== edge.condition
-        ? `${edge.condition} · ${text}`
-        : text
-      : "без условия";
+    when.textContent = text || "без условия";
     item.append(to, when);
     list.appendChild(item);
   }
@@ -3956,6 +4170,7 @@ function commitSchemaDraft(draft, opts = {}) {
     state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } },
     cleaned
   );
+  if (!opts.keepSave) invalidatePackSave();
   if (opts.selectNode) {
     selectedNodeId = opts.selectNode;
     selectedEdgeId = null;
@@ -3995,17 +4210,18 @@ function patchDraftEdge(draft, edgeId, patch) {
   const idx = extras.findIndex((edge) => edge.id === edgeId);
   const current = idx >= 0 ? extras[idx] : packEdgeById(edgeId) || {};
   const prevPatch = (draft.edgeEdits || {})[edgeId] || {};
-  const nextFrom = patch.from !== undefined ? patch.from : prevPatch.from ?? current.from;
-  const nextTo = patch.to !== undefined ? patch.to : prevPatch.to ?? current.to;
+  const nextPatch = resolveEdgeConditionPatch(current, prevPatch, patch) || {};
+  const nextFrom = nextPatch.from !== undefined ? nextPatch.from : prevPatch.from ?? current.from;
+  const nextTo = nextPatch.to !== undefined ? nextPatch.to : prevPatch.to ?? current.to;
   if (!nextFrom || !nextTo) return "from и to не могут быть пустыми.";
   if (!ids.has(nextFrom) || !ids.has(nextTo)) return "Ребро только между существующими клетками.";
   if (idx >= 0) {
-    extras[idx] = { ...extras[idx], ...patch, from: nextFrom, to: nextTo };
+    extras[idx] = { ...extras[idx], ...nextPatch, from: nextFrom, to: nextTo };
     draft.extraEdges = extras;
     return "";
   }
   draft.edgeEdits = { ...(draft.edgeEdits || {}) };
-  draft.edgeEdits[edgeId] = { ...prevPatch, ...patch };
+  draft.edgeEdits[edgeId] = { ...prevPatch, ...nextPatch };
   return "";
 }
 
@@ -4248,6 +4464,7 @@ function persistDraftWithoutFit(draft) {
     state.packBase || { id: state.packId, graph: { nodes: [], edges: [] } },
     cleaned
   );
+  invalidatePackSave();
 }
 
 function applyNodeFieldPatch(nodeId, patch, opts = {}) {
@@ -4312,30 +4529,128 @@ function markSchemaEdgeKindNotes(kind) {
   });
 }
 
+function renderSchemaEdgeConditions(edge) {
+  const list = document.getElementById("schema-edge-conditions");
+  const yamlEl = document.getElementById("schema-edge-condition-yaml");
+  if (!list) return;
+  const ids = edgeConditionIds(edge);
+  const errors = state.packSave?.errors || [];
+  list.innerHTML = "";
+  if (!ids.length) {
+    const empty = document.createElement("li");
+    empty.className = "schema-edge-conditions-empty";
+    empty.textContent = "Нет условий. Напишите текст по-русски и нажмите «Добавить».";
+    list.appendChild(empty);
+  } else {
+    for (const id of ids) {
+      const li = document.createElement("li");
+      li.className = "schema-edge-condition";
+      li.dataset.when = id;
+      const hit = errors.some(
+        (item) => item.when === id && (!item.edge || item.edge === edge.id)
+      );
+      if (hit) li.classList.add("is-save-error");
+      const text = document.createElement("span");
+      text.className = "schema-edge-condition-text";
+      const human = conditionHumanLabel(id, edge);
+      text.textContent = human && human !== id ? human : id;
+      text.title = `when: ${id}`;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn-secondary";
+      remove.dataset.removeWhen = id;
+      remove.setAttribute("aria-label", `Убрать ${human || id}`);
+      remove.textContent = "Убрать";
+      li.append(text, remove);
+      list.appendChild(li);
+    }
+  }
+  if (!yamlEl) return;
+  if (!ids.length) {
+    yamlEl.textContent = "";
+    yamlEl.classList.add("hidden");
+    return;
+  }
+  yamlEl.textContent =
+    ids.length === 1
+      ? `система запишет: status_fields.${ids[0]} + dispatch when:${ids[0]}`
+      : `система запишет: ${ids.map((id) => `when:${id}`).join(", ")}`;
+  yamlEl.classList.remove("hidden");
+}
+
 function fillSchemaEdgeForm(edge) {
   schemaInspectorSyncing = true;
   fillNodeIdOptions(document.getElementById("schema-edge-from"), edge.from);
   fillNodeIdOptions(document.getElementById("schema-edge-to"), edge.to);
-  fillWhenDatalist(document.getElementById("schema-when-catalog"));
   const kindEl = document.getElementById("schema-edge-kind");
   const labelEl = document.getElementById("schema-edge-label");
-  const textEl = document.getElementById("schema-edge-condition-text");
-  const yamlEl = document.getElementById("schema-edge-condition-yaml");
+  const addEl = document.getElementById("schema-edge-condition-add");
   const kind = SCHEMA_EDGE_KINDS.includes(edge.kind) ? edge.kind : "main";
   if (kindEl) kindEl.value = kind;
   if (labelEl) labelEl.value = edge.label || "";
-  if (textEl) textEl.value = conditionTextForEdge(edge);
-  if (yamlEl) {
-    if (edge.condition) {
-      yamlEl.textContent = `в YAML: condition: ${edge.condition}`;
-      yamlEl.classList.remove("hidden");
-    } else {
-      yamlEl.textContent = "";
-      yamlEl.classList.add("hidden");
-    }
-  }
+  if (addEl) addEl.value = "";
+  renderSchemaEdgeConditions(edge);
   markSchemaEdgeKindNotes(kind);
   schemaInspectorSyncing = false;
+}
+
+function ensureDispatchRuleForWhen(when, nextId) {
+  const id = String(when || "").trim();
+  if (!id) return;
+  const rules = liveDispatchRules();
+  if (rules.some((rule) => rule.when === id)) return;
+  rules.push(ruleFromDispatchFields(nextDispatchPriority(rules), id, nextId || ""));
+  commitDispatchRules(rules, { skipUndo: true });
+}
+
+function addSelectedEdgeCondition(rawText) {
+  if (!selectedEdgeId) return;
+  const edge = mergedDraftEdge(selectedEdgeId);
+  if (!edge.from && !packEdgeById(selectedEdgeId)) return;
+  const raw = String(rawText || "").trim();
+  if (!raw) {
+    setSchemaInspectorError("Напишите условие по-русски.");
+    return;
+  }
+  const parsed = conditionPatchFromText(raw);
+  const id = parsed.condition;
+  if (!id) {
+    setSchemaInspectorError("Не удалось сделать id из этого текста.");
+    return;
+  }
+  const ids = edgeConditionIds(edge);
+  if (ids.includes(id)) {
+    const addEl = document.getElementById("schema-edge-condition-add");
+    if (addEl) addEl.value = "";
+    setSchemaInspectorError("");
+    return;
+  }
+  ids.push(id);
+  const withLabel = {
+    ...edge,
+    condition_labels: {
+      ...(edge.condition_labels || {}),
+      ...(parsed.condition_labels || {}),
+      ...(parsed.condition_label ? { [id]: parsed.condition_label } : {}),
+    },
+  };
+  applyEdgeFieldPatch(selectedEdgeId, conditionPatchFromIds(ids, withLabel));
+  ensureDispatchRuleForWhen(id, edge.to);
+  const addEl = document.getElementById("schema-edge-condition-add");
+  if (addEl) addEl.value = "";
+  setSchemaInspectorError("");
+  const next = mergedDraftEdge(selectedEdgeId);
+  fillSchemaEdgeForm(next);
+  highlightSchemaSelection();
+}
+
+function removeSelectedEdgeCondition(whenId) {
+  if (!selectedEdgeId || !whenId) return;
+  const edge = mergedDraftEdge(selectedEdgeId);
+  const ids = edgeConditionIds(edge).filter((id) => id !== whenId);
+  applyEdgeFieldPatch(selectedEdgeId, conditionPatchFromIds(ids, edge));
+  fillSchemaEdgeForm(mergedDraftEdge(selectedEdgeId));
+  highlightSchemaSelection();
 }
 
 function showSchemaInspector() {
@@ -4514,10 +4829,8 @@ function packNodeTooltip(node) {
 }
 
 function packEdgeLabel(edge) {
-  if (edge.condition) {
-    const human = conditionHumanLabel(edge.condition, edge);
-    return human && human !== edge.condition ? `${edge.condition} · ${human}` : edge.condition;
-  }
+  const ids = edgeConditionIds(edge);
+  if (ids.length) return ids.map((id) => formatConditionId(id, edge)).join(" · ");
   return edge.label || edge.condition_label || "";
 }
 
@@ -4735,6 +5048,8 @@ function renderPackGraph(pack, opts = {}) {
   }
   captureSchemaPositions();
   updateSchemaUndoChrome();
+  updateSchemaSaveChrome();
+  highlightSaveErrors();
 
   if (selectedEdgeId && packEdgeById(selectedEdgeId)) {
     selectedNodeId = null;
@@ -4965,6 +5280,437 @@ function bindSchemaPalette() {
   });
 }
 
+function overlayPackBody() {
+  const pack = state.pack || state.packBase || {};
+  return {
+    id: pack.id || state.packId,
+    graph: pack.graph || { label: state.packId, orchestrator: "", nodes: [], edges: [] },
+    dispatch: { rules: liveDispatchRules() },
+    codegen: true,
+  };
+}
+
+function loadAppliedStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { packs: {} };
+    if (!parsed.packs || typeof parsed.packs !== "object") return { packs: {} };
+    return parsed;
+  } catch {
+    return { packs: {} };
+  }
+}
+
+function appliedRecord(packId) {
+  return loadAppliedStore().packs?.[packId] || null;
+}
+
+function rememberAppliedOverlay(packId, rec) {
+  const store = loadAppliedStore();
+  store.packs = store.packs || {};
+  store.packs[packId] = {
+    previous: rec?.previous || null,
+    last: rec?.last || null,
+  };
+  localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(store));
+  updateSchemaSaveChrome();
+}
+
+function invalidatePackSave() {
+  if (!state.packSave?.ok && !(state.packSave?.errors || []).length) {
+    updateSchemaSaveChrome();
+    return;
+  }
+  state.packSave = { ok: false, errors: [], warnings: [], preview: null };
+  updateSchemaSaveChrome();
+  highlightSaveErrors();
+}
+
+function clipSaveText(text, max = 42) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, max - 1)}…`;
+}
+
+function looksLikeProseWhen(when) {
+  const raw = String(when || "").trim();
+  return /[а-яё]/i.test(raw) || /\s/.test(raw);
+}
+
+function saveErrorWhere(item) {
+  if (item?.edge) {
+    const edge = packEdgeById(item.edge);
+    if (edge) return `${edge.from} → ${edge.to}`;
+    return String(item.edge).replace(/^e-/, "");
+  }
+  if (item?.priority != null && item.priority !== "") return `P${item.priority}`;
+  if (item?.node) return item.node;
+  return "";
+}
+
+function humanSaveError(item) {
+  const msg = String(item?.message || "");
+  const when = String(item?.when || "").trim();
+  const where = saveErrorWhere(item);
+  if (/unknown when/i.test(msg) || /нет в каталоге when/i.test(msg)) {
+    return `${where ? `${where}: ` : ""}when: ${when || "—"} — нет формулы, Проверить сделает stub.`;
+  }
+  if (/invalid next/i.test(msg) || /нет на холсте/i.test(msg)) {
+    const node = item.node || when;
+    const pri = item.priority != null && item.priority !== "" ? `P${item.priority}` : where;
+    return `${pri}${when ? ` ${when}` : ""}: клетки «${node}» нет на холсте. Удалите правило или верните клетку.`;
+  }
+  if (/добавь правило|нет строки в таблице/i.test(msg)) {
+    return `${where ? `${where}: ` : ""}для ${when || "условия"} нет строки в таблице dispatch.`;
+  }
+  if (/пустой when/i.test(msg)) {
+    return `${where || "таблица"}: пустой when:.`;
+  }
+  return msg.replace(/\s*—\s*диск не пишется\.?$/i, "");
+}
+
+function formatSaveError(item) {
+  return humanSaveError(item);
+}
+
+function setSaveStatus(kind, line, errors) {
+  const box = document.getElementById("schema-save-status");
+  const lineEl = document.getElementById("schema-save-status-line");
+  const list = document.getElementById("schema-save-errors");
+  if (box) {
+    box.classList.remove("is-ok", "is-error", "is-warn");
+    if (kind) box.classList.add(kind);
+  }
+  if (lineEl) lineEl.textContent = line || "";
+  else if (box && !list) box.textContent = line || "";
+  if (!list) return;
+  list.innerHTML = "";
+  const items = Array.isArray(errors) ? errors.filter(Boolean) : [];
+  list.classList.toggle("hidden", !items.length);
+  for (const item of items) {
+    const row = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "schema-save-error";
+    if (item.edge) btn.dataset.edgeId = item.edge;
+    if (item.node) btn.dataset.nodeId = item.node;
+    btn.textContent = humanSaveError(item);
+    row.appendChild(btn);
+    list.appendChild(row);
+  }
+}
+
+function updateSchemaSaveChrome() {
+  const applyBtn = document.getElementById("schema-apply");
+  const rollbackBtn = document.getElementById("schema-rollback");
+  const save = state.packSave || {};
+  const errors = Array.isArray(save.errors) ? save.errors : [];
+  const warnings = Array.isArray(save.warnings) ? save.warnings : [];
+  if (applyBtn) {
+    applyBtn.classList.toggle("hidden", !save.ok);
+    applyBtn.disabled = !save.ok;
+  }
+  if (rollbackBtn) rollbackBtn.disabled = !appliedRecord(state.packId)?.previous;
+  if (errors.length) {
+    const n = errors.length;
+    setSaveStatus("is-error", `${n} ${n === 1 ? "ошибка" : n < 5 ? "ошибки" : "ошибок"} — Применить скрыт, диск не пишется.`, errors);
+    return;
+  }
+  if (save.ok) {
+    const extra = warnings.length ? ` ${warnings.join("; ")}` : "";
+    setSaveStatus("is-ok", `Проверка ок.${extra} Применить доступен, диск не писали.`);
+    return;
+  }
+  if (warnings.length) {
+    setSaveStatus("is-warn", warnings.join(" · "));
+    return;
+  }
+  setSaveStatus("", "");
+}
+
+function highlightSaveErrors() {
+  if (!cy || !isSchemaMode()) return;
+  const errors = state.packSave?.errors || [];
+  const edgeIds = new Set(errors.map((item) => item.edge).filter(Boolean));
+  const nodeIds = new Set(errors.map((item) => item.node).filter(Boolean));
+  cy.nodes().forEach((el) => el.toggleClass("save-error", nodeIds.has(el.id())));
+  cy.edges(".schema-edge").forEach((el) => el.toggleClass("save-error", edgeIds.has(el.id())));
+  document.querySelectorAll("#schema-dispatch-rules .schema-dispatch-rule").forEach((row) => {
+    const priority = row.dataset.priority;
+    const when = row.dataset.when;
+    const hit = errors.some(
+      (item) =>
+        (item.priority != null && String(item.priority) === priority) ||
+        (item.when && item.when === when)
+    );
+    row.classList.toggle("is-save-error", hit);
+  });
+  document.querySelectorAll("#schema-outgoing-list .schema-outgoing-item").forEach((row) => {
+    row.classList.toggle("is-save-error", edgeIds.has(row.dataset.edgeId));
+  });
+  document.querySelectorAll("#schema-edge-conditions .schema-edge-condition").forEach((row) => {
+    const when = row.dataset.when;
+    const hit = errors.some(
+      (item) => item.when === when && (!item.edge || item.edge === selectedEdgeId)
+    );
+    row.classList.toggle("is-save-error", hit);
+  });
+}
+
+function clearPackDraftKeepPositions(packId) {
+  const draft = getPackDraft(packId);
+  const next = emptyPackDraft();
+  next.positions = draft.positions || {};
+  setPackDraft(packId, next);
+}
+
+async function validatePackDraft() {
+  if (!isSchemaMode() || !state.pack) {
+    showError("Сначала откройте пак на вкладке «Схема».");
+    return;
+  }
+  setSaveStatus("", "Проверка…");
+  try {
+    const res = await fetch("/api/pack/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(overlayPackBody()),
+    });
+    const data = await parseJsonResponse(res);
+    state.packSave = {
+      ok: Boolean(data.ok),
+      errors: Array.isArray(data.errors) ? data.errors : data.error ? [{ message: data.error }] : [],
+      warnings: Array.isArray(data.warnings) ? data.warnings : [],
+      preview: data.preview || null,
+    };
+    updateSchemaSaveChrome();
+    highlightSaveErrors();
+    const firstEdge = state.packSave.errors.find((item) => item.edge);
+    if (firstEdge?.edge && packEdgeById(firstEdge.edge)) selectSchemaEdge(firstEdge.edge);
+    else if (!data.ok) {
+      const firstNode = state.packSave.errors.find((item) => item.node);
+      if (firstNode?.node && packNodeById(firstNode.node)) {
+        selectedNodeId = firstNode.node;
+        selectedEdgeId = null;
+        selectedElementId = firstNode.node;
+        highlightNode(firstNode.node, null);
+        showSchemaInspector();
+      }
+    }
+    if (data.ok) clearError();
+  } catch (err) {
+    state.packSave = { ok: false, errors: [{ message: err.message || String(err) }], warnings: [], preview: null };
+    updateSchemaSaveChrome();
+    showError(`Проверка пака: ${err.message || err}`);
+  }
+}
+
+function closeSchemaModal(which) {
+  const id = which === "init" ? "schema-init-modal" : "schema-apply-modal";
+  document.getElementById(id)?.classList.add("hidden");
+}
+
+function openApplyModal() {
+  if (!state.packSave?.ok) return;
+  const modal = document.getElementById("schema-apply-modal");
+  const summary = document.getElementById("schema-apply-summary");
+  const warn = document.getElementById("schema-apply-warn");
+  const preview = state.packSave.preview || {};
+  if (summary) {
+    summary.textContent = [
+      `Пак ${state.packId}: ${preview.nodes ?? "?"} клеток, ${preview.edges ?? "?"} стрелок, ${preview.rules ?? "?"} правил.`,
+      "Запишем YAML (граф + dispatch + registry из клеток). status и expr не из черновика.",
+    ].join(" ");
+  }
+  if (warn) {
+    const protectedPack = PROTECTED_PACKS.has(state.packId);
+    warn.textContent = protectedPack
+      ? `Пак ${state.packId} живой. Меняйте только безобидное (label). Комментарии в изменённых YAML могут пропасть.`
+      : "";
+    warn.classList.toggle("hidden", !protectedPack);
+  }
+  modal?.classList.remove("hidden");
+}
+
+async function confirmApplyPack() {
+  if (!state.packSave?.ok) return;
+  const confirmBtn = document.getElementById("schema-apply-confirm");
+  if (confirmBtn) confirmBtn.disabled = true;
+  const overlay = overlayPackBody();
+  const previous = overlayPackBodyFromPack(state.packBase);
+  try {
+    const res = await fetch("/api/pack/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...overlay, confirm: true }),
+    });
+    const data = await parseJsonResponse(res);
+    if (!data.ok) {
+      state.packSave = {
+        ok: false,
+        errors: Array.isArray(data.errors) ? data.errors : [{ message: data.error || "apply failed" }],
+        warnings: Array.isArray(data.warnings) ? data.warnings : [],
+        preview: data.preview || null,
+      };
+      updateSchemaSaveChrome();
+      highlightSaveErrors();
+      showError(data.error || formatSaveError(state.packSave.errors[0]) || "Применить не удалось, диск не должен быть сломан.");
+      return;
+    }
+    rememberAppliedOverlay(state.packId, {
+      previous,
+      last: overlayPackBodyFromPack(data.pack) || overlay,
+    });
+    closeSchemaModal("apply");
+    clearPackDraftKeepPositions(state.packId);
+    schemaUndoByPack[state.packId] = { past: [] };
+    state.packSave = { ok: false, errors: [], warnings: data.warnings || [], preview: data.preview || null };
+    setSaveStatus("is-ok", `Записано: ${(data.written || []).join(", ") || "YAML"}. Схема перечитывается.`);
+    clearError();
+    await refreshCatalogAndPack(data.pack);
+  } catch (err) {
+    showError(`Применить: ${err.message || err}`);
+  } finally {
+    if (confirmBtn) confirmBtn.disabled = false;
+    updateSchemaSaveChrome();
+  }
+}
+
+function overlayPackBodyFromPack(pack) {
+  if (!pack) return null;
+  return {
+    id: pack.id,
+    graph: pack.graph,
+    dispatch: { rules: Array.isArray(pack.dispatch?.rules) ? pack.dispatch.rules : [] },
+  };
+}
+
+async function rollbackLastApply() {
+  const rec = appliedRecord(state.packId);
+  if (!rec?.previous) return;
+  if (!window.confirm(`Откатить ${state.packId} к последнему успешно применённому JSON?`)) return;
+  try {
+    const res = await fetch("/api/pack/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...rec.previous, confirm: true }),
+    });
+    const data = await parseJsonResponse(res);
+    if (!data.ok) {
+      showError(data.error || "Откат не прошёл, диск не меняли если проверка не зелёная.");
+      return;
+    }
+    rememberAppliedOverlay(state.packId, {
+      previous: overlayPackBodyFromPack(data.pack),
+      last: rec.previous,
+    });
+    clearPackDraftKeepPositions(state.packId);
+    schemaUndoByPack[state.packId] = { past: [] };
+    setSaveStatus("is-ok", "Откат записан. Схема перечитывается.");
+    await refreshCatalogAndPack(data.pack);
+  } catch (err) {
+    showError(`Откат: ${err.message || err}`);
+  }
+}
+
+function openInitModal() {
+  document.getElementById("schema-init-error")?.classList.add("hidden");
+  const idEl = document.getElementById("schema-init-id");
+  if (idEl && !idEl.value) idEl.value = "";
+  document.getElementById("schema-init-modal")?.classList.remove("hidden");
+  idEl?.focus();
+}
+
+async function confirmInitPack() {
+  const id = String(document.getElementById("schema-init-id")?.value || "").trim();
+  const template = String(document.getElementById("schema-init-template")?.value || "routing-state");
+  const errEl = document.getElementById("schema-init-error");
+  if (!/^[a-z][a-z0-9-]*$/.test(id)) {
+    if (errEl) {
+      errEl.textContent = "id: kebab-case, например authoring-ui-demo";
+      errEl.classList.remove("hidden");
+    }
+    return;
+  }
+  if (!INIT_TEMPLATES.includes(template)) {
+    if (errEl) {
+      errEl.textContent = "шаблон: routing-state | full-dispatch | orchestrator-only";
+      errEl.classList.remove("hidden");
+    }
+    return;
+  }
+  try {
+    const res = await fetch("/api/pack/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, template }),
+    });
+    const data = await parseJsonResponse(res);
+    if (!data.ok) {
+      if (errEl) {
+        errEl.textContent = data.error || "не удалось создать пак";
+        errEl.classList.remove("hidden");
+      }
+      return;
+    }
+    closeSchemaModal("init");
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    state.packSave = { ok: false, errors: [], warnings, preview: null };
+    if (warnings.length) showError(warnings.join(" · "));
+    else clearError();
+    state.packId = id;
+    saveSelection();
+    await refreshCatalogAndPack(data.pack);
+    const hasStatus = Boolean(data.pack?.status && Object.keys(data.pack.status).length);
+    setSaveStatus(
+      warnings.length ? "is-warn" : "is-ok",
+      hasStatus
+        ? `Пак ${id} из шаблона ${template}. status на месте, это не пустой холст.`
+        : `Пак ${id} создан, но status пуст.`
+    );
+  } catch (err) {
+    if (errEl) {
+      errEl.textContent = err.message || String(err);
+      errEl.classList.remove("hidden");
+    }
+  }
+}
+
+async function refreshCatalogAndPack(pack) {
+  try {
+    const catalogRes = await fetch("/api/catalog");
+    if (catalogRes.ok) {
+      const catalog = await catalogRes.json();
+      state.catalogPipelines = Array.isArray(catalog.pipelines) ? catalog.pipelines : state.catalogPipelines;
+      state.catalogAgents = Array.isArray(catalog.agents) ? catalog.agents : state.catalogAgents;
+      state.catalogPredicates =
+        catalog.predicates && typeof catalog.predicates === "object"
+          ? {
+              core: Array.isArray(catalog.predicates.core) ? catalog.predicates.core : [],
+              by_pipeline:
+                catalog.predicates.by_pipeline && typeof catalog.predicates.by_pipeline === "object"
+                  ? catalog.predicates.by_pipeline
+                  : {},
+            }
+          : state.catalogPredicates;
+      state.catalogRouting =
+        catalog.routing_conditions && typeof catalog.routing_conditions === "object"
+          ? catalog.routing_conditions
+          : state.catalogRouting;
+      fillPackTabs();
+    }
+  } catch {
+    /* catalog refresh is best-effort */
+  }
+  setActivePackTab();
+  if (pack && pack.id === state.packId) {
+    state.packBase = pack;
+    renderPackGraph(applyDraftToPack(pack, getPackDraft(state.packId)));
+    return;
+  }
+  await loadPackGraph();
+}
+
 function bindSchemaDraftActions() {
   document.getElementById("schema-node-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -4983,6 +5729,34 @@ function bindSchemaDraftActions() {
     if (selectedNodeId) beginSchemaConnect(selectedNodeId);
   });
   document.getElementById("schema-undo")?.addEventListener("click", () => undoSchemaDraft());
+  document.getElementById("schema-validate")?.addEventListener("click", () => validatePackDraft());
+  document.getElementById("schema-save-errors")?.addEventListener("click", (event) => {
+    const btn = event.target.closest(".schema-save-error");
+    if (!btn) return;
+    if (btn.dataset.edgeId && packEdgeById(btn.dataset.edgeId)) {
+      selectSchemaEdge(btn.dataset.edgeId);
+      return;
+    }
+    if (btn.dataset.nodeId && packNodeById(btn.dataset.nodeId)) {
+      selectedNodeId = btn.dataset.nodeId;
+      selectedEdgeId = null;
+      selectedElementId = btn.dataset.nodeId;
+      highlightNode(btn.dataset.nodeId, null);
+      showSchemaInspector();
+    }
+  });
+  document.getElementById("schema-apply")?.addEventListener("click", () => openApplyModal());
+  document.getElementById("schema-rollback")?.addEventListener("click", () => rollbackLastApply());
+  document.getElementById("schema-init")?.addEventListener("click", () => openInitModal());
+  document.getElementById("schema-apply-confirm")?.addEventListener("click", () => confirmApplyPack());
+  document.getElementById("schema-init-confirm")?.addEventListener("click", () => confirmInitPack());
+  document.getElementById("schema-init-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    confirmInitPack();
+  });
+  document.querySelectorAll("[data-schema-close]").forEach((el) => {
+    el.addEventListener("click", () => closeSchemaModal(el.getAttribute("data-schema-close")));
+  });
 
   document.getElementById("schema-node-id")?.addEventListener("change", (event) => {
     if (schemaInspectorSyncing || !selectedNodeId) return;
@@ -5085,28 +5859,26 @@ function bindSchemaDraftActions() {
     if (schemaInspectorSyncing || !selectedEdgeId) return;
     applyEdgeFieldPatch(selectedEdgeId, { label: event.target.value });
   });
-  const previewConditionPatch = (text) => {
-    const raw = String(text || "").trim();
-    const yamlEl = document.getElementById("schema-edge-condition-yaml");
-    if (!yamlEl) return conditionPatchFromText(raw);
-    if (!raw) {
-      yamlEl.textContent = "";
-      yamlEl.classList.add("hidden");
-      return { condition: "", condition_label: "" };
-    }
-    const patch = conditionPatchFromText(raw);
-    yamlEl.textContent = patch.condition ? `в YAML: condition: ${patch.condition}` : "";
-    yamlEl.classList.toggle("hidden", !patch.condition);
-    return patch;
+  const commitAddedEdgeCondition = () => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    const addEl = document.getElementById("schema-edge-condition-add");
+    addSelectedEdgeCondition(addEl?.value || "");
   };
-  document.getElementById("schema-edge-condition-text")?.addEventListener("input", (event) => {
-    if (schemaInspectorSyncing || !selectedEdgeId) return;
-    previewConditionPatch(event.target.value);
+  document.getElementById("schema-edge-condition-add-btn")?.addEventListener("click", () => {
+    commitAddedEdgeCondition();
   });
-  document.getElementById("schema-edge-condition-text")?.addEventListener("change", (event) => {
-    if (schemaInspectorSyncing || !selectedEdgeId) return;
-    applyEdgeFieldPatch(selectedEdgeId, previewConditionPatch(event.target.value));
-    highlightSchemaSelection();
+  document.getElementById("schema-edge-condition-add")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    commitAddedEdgeCondition();
+  });
+  document.getElementById("schema-edge-condition-add")?.addEventListener("change", () => {
+    commitAddedEdgeCondition();
+  });
+  document.getElementById("schema-edge-conditions")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-when]");
+    if (!button || schemaInspectorSyncing || !selectedEdgeId) return;
+    removeSelectedEdgeCondition(button.dataset.removeWhen);
   });
   document.getElementById("schema-outgoing-list")?.addEventListener("click", (event) => {
     const item = event.target.closest(".schema-outgoing-item");
@@ -5207,6 +5979,7 @@ function fillPackTabs() {
       captureSchemaPositions();
       cancelSchemaConnect();
       state.packId = item.id;
+      state.packSave = { ok: false, errors: [], warnings: [], preview: null };
       setActivePackTab();
       saveSelection();
       loadPackGraph();
@@ -5615,7 +6388,7 @@ async function init() {
     state.slug = fillSlugSelect(payload, config, saved);
 
     if (apiVersion < SCHEMA_API_VERSION && isSchemaMode()) {
-      showError(staleViewerMessage("вкладка «Схема» (GET /api/pack)"));
+      showError(staleViewerMessage("вкладка «Схема» (GET /api/pack, validate/apply)"));
     }
 
     document.getElementById("stale-toggle")?.addEventListener("click", () => {

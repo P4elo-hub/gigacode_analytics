@@ -94,6 +94,8 @@ edges:
     from: write-feature
     to: check-feature
     kind: main
+    label: spec needs review
+    condition: needs_check_feature
   - id: e-wf-ar
     from: write-feature
     to: analyze-routing
@@ -131,6 +133,7 @@ edges:
     to: check-feature
     kind: loop
     label: re-check
+    condition: needs_check_feature
   - id: e-rg-rc
     from: resolve-gaps
     to: resolve-challenges
@@ -164,6 +167,7 @@ edges:
     from: resolve-challenges
     to: check-feature
     kind: loop
+    condition: needs_check_feature
   - id: e-rc-ar
     from: resolve-challenges
     to: analyze-routing
@@ -174,6 +178,7 @@ edges:
     to: check-feature
     kind: loop
     label: spec edited after audit
+    condition: needs_check_feature
   - id: e-cc-rg
     from: check-feature-code
     to: resolve-gaps
@@ -199,6 +204,7 @@ edges:
     to: check-feature
     kind: loop
     label: SPEC edited per alignment
+    condition: needs_check_feature
   - id: e-ra-ar
     from: resolve-code-alignment
     to: analyze-routing
@@ -218,7 +224,8 @@ edges:
     from: analyze-routing
     to: check-feature
     kind: main
-    label: next by dispatch
+    label: spec needs review
+    condition: needs_check_feature
   - id: e-ar-rg
     from: analyze-routing
     to: resolve-gaps

@@ -30,7 +30,8 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 | `edges[].from/to` | стрелка | оба конца — существующие id |
 | `edges[].kind` | стиль стрелки | `main` / `branch` / `loop` |
 | `edges[].label` | подпись стрелки | человеческий текст |
-| `edges[].condition` | id условия (`when:`) | палитра catalog |
+| `edges[].condition` | id условия (`when:`), первое из списка | палитра catalog |
+| `edges[].conditions` | все `when:` на одной стрелке (если больше одного) | разные правила на один next |
 | `edges[].condition_label` | запасная подпись | codegen может slug → `condition` |
 | `registry.step_to_subagent` | не фигура | синхрон с `nodes[].subagent` при save |
 | `registry.orchestrator_owned` | не фигура | шаг без внешнего task (spec: `write-feature`) |
@@ -102,13 +103,16 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 - `GET /api/pack?pipeline=<id>` — обёртка `export_pack_json`; 404 если пака нет.
 - Список паков уже в catalog; не использовать `/api/graph`.
 
-**Фаза 6 (проверить / применить)**
+**Фаза 6 (проверить / применить) — сделано**
 
-- `POST /api/pack/validate` — слой 1 + слой 2 **без** записи диска. Сейчас `--from-json` всегда пишет YAML и `--apply`.
-- `POST /api/pack/apply` — `apply_pack_json` + compile apply; только после зелёной проверки; confirmation на клиенте.
-- Ошибки вернуть с привязкой к `node id` / `edge id` / `dispatch.priority`, не одним текстом.
+Сборка: `base = export_pack_json(id) | --init-pack` → overlay `graph` + `dispatch.rules` → `registry` из клеток → `status` и `expr` с диска.
 
-Не нужны до фазы 6: `--apply` с холста, `--init-pack`, запись `.qwen/agents`.
+- `POST /api/pack/validate` — слой 1 + слой 2 без записи. Ошибки с `node` / `edge` / `priority`.
+- `POST /api/pack/apply` — тот же payload, `confirm: true` → `apply_pack_json` + compile apply. Неизменённые YAML (семантика) не перезаписываем, чтобы не снести комментарии.
+- `POST /api/pack/init` — `--init-pack` (routing-state | full-dispatch | orchestrator-only). Пустой холст в `--from-json` нельзя.
+- Стрелка с `condition` / `conditions` без `dispatch.rules.when` — ошибка на стрелке, Apply скрыт. `unknown when:` — ошибка, диск не пишется. Каждому when: нужен ряд в таблице.
+
+Не нужны: запись `.qwen/agents`, редактор `expr`, правка `collectors.py`.
 
 ---
 
@@ -120,9 +124,10 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 | Формулы `expr` | `routing_conditions.edge_conditions.*.expr` | палитра id + label; не редактор формул |
 | Запуск Qwen/GigaCode с холста | runtime loop | это вкладка Прогон |
 | Оверлей live-таймлайна на схему пака | `/api/graph` history | два режима экрана, не смесь |
-| `status_fields.instruction` / collectors.py | status YAML | вне фаз 1–6 |
+| `status_fields.instruction` / collectors.py | status YAML | вне холста; при save копируются из открытого пака / шаблона |
 | Создание оркестратора-агента из UI | `--init-pack` не пишет `.qwen/` | только предупреждение «файла нет» |
 | Координаты в YAML | — | localStorage / черновик |
+| Новый пак «с нуля» без шаблона | `--init-pack` | фаза 6: сначала template, потом overlay холста |
 
 ---
 

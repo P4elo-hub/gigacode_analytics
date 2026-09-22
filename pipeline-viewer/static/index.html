@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pipeline Viewer</title>
-  <link rel="stylesheet" href="/static/style.css?v=42" />
+  <link rel="stylesheet" href="/static/style.css?v=50" />
   <script src="/static/vendor/cytoscape.min.js"></script>
 </head>
 <body class="screen-run">
@@ -82,7 +82,17 @@
         </button>
       </div>
       <div id="schema-graph-toolbar" class="graph-view-toolbar schema-only" aria-label="Черновик схемы">
-        <button type="button" id="schema-undo" class="btn-secondary schema-undo" disabled>Отменить</button>
+        <div class="schema-save-actions">
+          <button type="button" id="schema-undo" class="btn-secondary schema-undo" disabled>Отменить</button>
+          <button type="button" id="schema-validate" class="btn-secondary">Проверить</button>
+          <button type="button" id="schema-apply" class="btn-secondary schema-apply hidden" disabled>Применить</button>
+          <button type="button" id="schema-rollback" class="btn-secondary" disabled>Откат</button>
+          <button type="button" id="schema-init" class="btn-secondary">Новый пак</button>
+        </div>
+        <div id="schema-save-status" class="schema-save-status" role="status">
+          <p id="schema-save-status-line"></p>
+          <ul id="schema-save-errors" class="schema-save-errors hidden"></ul>
+        </div>
         <span id="schema-connect-hint" class="graph-view-hint hidden">Кликните целевую клетку (Esc — отмена)</span>
         <span class="graph-view-hint">Shift+клик: стрелка · клик по клетке — исходящие · клик по линии — условие</span>
       </div>
@@ -141,7 +151,7 @@
         <h2>Пак</h2>
         <pre id="pack-summary">—</pre>
         <p id="schema-canvas-issues" class="schema-canvas-issues hidden" role="status"></p>
-        <p class="sidebar-hint">Черновик в браузере: клетки, стрелки, условия. YAML не пишется.</p>
+        <p class="sidebar-hint">Черновик: клетки, стрелки, таблица. Проверить — без диска. Применить пишет исполняемый пак (граф + dispatch + registry), не один graph.yaml.</p>
       </div>
 
       <details id="infra-panel" class="infra-panel run-only">
@@ -301,24 +311,29 @@
             <li data-kind="branch"><b>branch</b> — ветка по условию, не главный шаг (пунктир).</li>
             <li data-kind="loop"><b>loop</b> — возврат: перепроверить шаг или освежить routing (точки).</li>
           </ul>
+          <div class="schema-edge-conditions-block">
+            <span class="schema-edge-conditions-title">условие перехода</span>
+            <ul id="schema-edge-conditions" class="schema-edge-conditions"></ul>
+            <label>
+              <span class="visually-hidden">Текст условия</span>
+              <input
+                id="schema-edge-condition-add"
+                name="condition_add"
+                placeholder="по-русски, например: проверилась спека"
+                autocomplete="off"
+              />
+            </label>
+            <button type="button" id="schema-edge-condition-add-btn" class="btn-secondary">Добавить условие</button>
+            <p id="schema-edge-condition-yaml" class="schema-condition-label hidden"></p>
+          </div>
           <label>
-            <span>условие перехода</span>
-            <input
-              id="schema-edge-condition-text"
-              name="condition_text"
-              list="schema-when-catalog"
-              placeholder="текст условия, например: нет контекста"
-            />
-          </label>
-          <datalist id="schema-when-catalog"></datalist>
-          <p id="schema-edge-condition-yaml" class="schema-condition-label hidden"></p>
-          <label>
-            <span>подпись (не when:)</span>
-            <input id="schema-edge-label" name="label" placeholder="если нет условия — текст на холсте" />
+            <span>подпись на холсте (если нет условия)</span>
+            <input id="schema-edge-label" name="label" placeholder="необязательно" />
           </label>
           <p class="sidebar-hint">
-            Условие пишется на стрелке и уйдёт в YAML как condition / condition_label.
-            Совпадение с каталогом подставит id. Свободный текст сохранится как подпись и slug. expr не редактируется.
+            Пишите условие обычным текстом. При «Проверить» / «Применить» система сама
+            придумает id (has_…), запишет его в status_fields.instruction = ваш текст,
+            создаст edge_conditions и строку dispatch (priority + when).
           </p>
         </form>
         <div id="schema-outgoing" class="schema-outgoing hidden">
@@ -331,7 +346,7 @@
       <div id="schema-node-actions" class="schema-node-actions schema-only hidden">
         <button type="button" id="schema-connect-edge" class="btn-secondary">Стрелка к…</button>
         <button type="button" id="schema-delete-node" class="btn-secondary">Удалить клетку</button>
-        <p class="sidebar-hint">Черновик на холсте. На диск не пишем.</p>
+        <p class="sidebar-hint">Черновик на холсте, пока не нажали Применить.</p>
       </div>
       <div id="schema-edge-actions" class="schema-node-actions schema-only hidden">
         <button type="button" id="schema-delete-edge" class="btn-secondary">Удалить стрелку</button>
@@ -382,6 +397,46 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=42"></script>
+  <div id="schema-apply-modal" class="modal hidden" role="dialog" aria-labelledby="schema-apply-title">
+    <div class="modal-backdrop" data-schema-close="apply"></div>
+    <div class="modal-card">
+      <h2 id="schema-apply-title">Применить пак</h2>
+      <p id="schema-apply-summary" class="modal-summary"></p>
+      <p id="schema-apply-warn" class="schema-apply-warn hidden"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-schema-close="apply">Отмена</button>
+        <button type="button" id="schema-apply-confirm" class="btn-danger">Записать YAML и compile</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="schema-init-modal" class="modal hidden" role="dialog" aria-labelledby="schema-init-title">
+    <div class="modal-backdrop" data-schema-close="init"></div>
+    <div class="modal-card">
+      <h2 id="schema-init-title">Новый пак</h2>
+      <p class="sidebar-hint">Не пустой холст в --from-json. Сначала шаблон (--init-pack), потом overlay с холста. Markdown агентов не создаём.</p>
+      <form id="schema-init-form" class="schema-inspector-form" autocomplete="off">
+        <label>
+          <span>id</span>
+          <input id="schema-init-id" name="id" spellcheck="false" placeholder="my-pipeline" />
+        </label>
+        <label>
+          <span>шаблон</span>
+          <select id="schema-init-template" name="template">
+            <option value="routing-state">routing-state</option>
+            <option value="full-dispatch">full-dispatch</option>
+            <option value="orchestrator-only">orchestrator-only</option>
+          </select>
+        </label>
+      </form>
+      <p id="schema-init-error" class="schema-inspector-error hidden" role="alert"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-schema-close="init">Отмена</button>
+        <button type="button" id="schema-init-confirm" class="btn-secondary">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=50"></script>
 </body>
 </html>

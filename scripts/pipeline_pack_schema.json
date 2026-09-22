@@ -93,6 +93,11 @@
               "condition_label": {
                 "type": "string",
                 "description": "Human text from PlantUML / UI; codegen may slug this into condition."
+              },
+              "conditions": {
+                "type": "array",
+                "description": "All when: ids on this arrow. First is also written as condition.",
+                "items": { "type": "string" }
               }
             }
           }

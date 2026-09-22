@@ -18,6 +18,12 @@
       "when": "alignment_pass",
       "status": {"verdict": "PASS WITH GAPS"},
       "expect": true
+    },
+    {
+      "id": "domain-needs-check-feature",
+      "when": "needs_check_feature",
+      "status": {"needs_check_feature": true},
+      "expect": true
     }
   ]
 }

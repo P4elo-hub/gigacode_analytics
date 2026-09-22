@@ -73,6 +73,9 @@ def reason_for_predicate(when: str, status) -> str:
             f"применить pending-apply из DECISIONS "
             f"({status.decisions_pending_apply_challenges} строк, CH)"
         )
+    if when == "needs_check_feature":
+        text = str(getattr(status, "needs_check_feature_reason", "") or "").strip()
+        return text or "нет check-feature после последней правки SPEC"
     if when == "critical_major_mismatch_resolvable":
         return "spec противоречит коду"
     if when == "open_gaps":

@@ -14,7 +14,9 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
+VIEWER = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(VIEWER))
 
 from artifact_paths import list_feature_slugs, workspace_root  # noqa: E402
 from build_pipeline_graph import build_graph  # noqa: E402
@@ -29,7 +31,7 @@ from pipeline_restart import (  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_PORT = 8765
-API_VERSION = 6
+API_VERSION = 7
 POLL_INTERVAL = 1.0
 PIPELINES = ("spec", "calibration")
 CLI_AGENT_DIRS = (".qwen", ".gigacode", ".opencode")
@@ -373,17 +375,35 @@ def make_handler(workspace: Path, defaults: Defaults):
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
 
+        def _read_json_body(self) -> tuple[dict | None, str | None]:
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                return None, "invalid JSON"
+            if not isinstance(payload, dict):
+                return None, "JSON object required"
+            return payload, None
+
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
-            if parsed.path != "/api/restart":
+            path = parsed.path
+            if path == "/api/pack/validate":
+                self._pack_validate()
+                return
+            if path == "/api/pack/apply":
+                self._pack_apply()
+                return
+            if path == "/api/pack/init":
+                self._pack_init()
+                return
+            if path != "/api/restart":
                 self.send_error(404)
                 return
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(body.decode("utf-8"))
-            except json.JSONDecodeError:
-                self._send_json({"error": "invalid JSON"}, status=400)
+            payload, err = self._read_json_body()
+            if err:
+                self._send_json({"error": err}, status=400)
                 return
             slug = payload.get("slug", "")
             from_step = payload.get("from_step", "")
@@ -410,6 +430,96 @@ def make_handler(workspace: Path, defaults: Defaults):
                 self._send_json({"error": str(exc)}, status=400)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=500)
+
+        def _pack_validate(self) -> None:
+            from pack_authoring_api import assemble_pack_payload, preview_payload, validate_assembled
+
+            payload, err = self._read_json_body()
+            if err:
+                self._send_json({"ok": False, "error": err, "errors": [{"message": err}]}, status=400)
+                return
+            try:
+                assembled, overlay_errors, notes = assemble_pack_payload(
+                    payload,
+                    workspace,
+                    codegen=payload.get("codegen") is True,
+                )
+                result = validate_assembled(assembled, workspace, overlay_errors)
+                result["warnings"] = notes
+                result["preview"] = preview_payload(assembled)
+                self._send_json(result, status=200 if result["ok"] else 400)
+            except FileNotFoundError as exc:
+                self._send_json({"ok": False, "error": str(exc), "errors": [{"message": str(exc)}]}, status=404)
+            except ValueError as exc:
+                self._send_json({"ok": False, "error": str(exc), "errors": [{"message": str(exc)}]}, status=400)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc), "errors": [{"message": str(exc)}]}, status=500)
+
+        def _pack_apply(self) -> None:
+            from pack_authoring_api import assemble_pack_payload, apply_assembled, preview_payload, validate_assembled
+
+            payload, err = self._read_json_body()
+            if err:
+                self._send_json({"ok": False, "error": err, "errors": [{"message": err}]}, status=400)
+                return
+            if payload.get("confirm") is not True:
+                self._send_json(
+                    {"ok": False, "error": "confirm: true required", "errors": [{"message": "confirm: true required"}]},
+                    status=400,
+                )
+                return
+            try:
+                assembled, overlay_errors, notes = assemble_pack_payload(
+                    payload,
+                    workspace,
+                    codegen=payload.get("codegen") is True,
+                )
+                checked = validate_assembled(assembled, workspace, overlay_errors)
+                if not checked["ok"]:
+                    checked["warnings"] = notes
+                    checked["preview"] = preview_payload(assembled)
+                    self._send_json(checked, status=400)
+                    return
+                applied = apply_assembled(assembled, workspace)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "warnings": notes,
+                        "preview": preview_payload(assembled),
+                        "written": applied["written"],
+                        "compiled": applied["compiled"],
+                        "pack": applied["pack"],
+                    }
+                )
+            except FileNotFoundError as exc:
+                self._send_json({"ok": False, "error": str(exc), "errors": [{"message": str(exc)}]}, status=404)
+            except ValueError as exc:
+                self._send_json({"ok": False, "error": str(exc), "errors": [{"message": str(exc)}]}, status=400)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc), "errors": [{"message": str(exc)}]}, status=500)
+
+        def _pack_init(self) -> None:
+            from pack_authoring_api import init_new_pack
+
+            payload, err = self._read_json_body()
+            if err:
+                self._send_json({"ok": False, "error": err}, status=400)
+                return
+            pack_id = str(payload.get("id") or "").strip()
+            template = str(payload.get("template") or "routing-state").strip()
+            if not pack_id:
+                self._send_json({"ok": False, "error": "id required"}, status=400)
+                return
+            try:
+                result = init_new_pack(pack_id, template, workspace)
+                result["ok"] = True
+                self._send_json(result)
+            except FileExistsError as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=409)
+            except ValueError as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
 
         def _send_sse(self, graph: dict) -> None:
             data = json.dumps(graph, ensure_ascii=False)

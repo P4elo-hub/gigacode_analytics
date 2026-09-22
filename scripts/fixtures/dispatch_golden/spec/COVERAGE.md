@@ -33,14 +33,16 @@ Gate vs mutate (hook `sync_after_step` in the golden runner):
 | `28-write-feature-does-not-stamp` | write-feature ok, SPEC newer | analyze-routing |
 | `29-check-feature-after-spec-edit` | check-feature ok, but SPEC newer | analyze-routing |
 
-## Invariant (after P10–P70, before P80+)
+## P75 `needs_check_feature` (after P10–P70, before P80+)
 
-| Invariant | Fixtures | Effect |
-|-----------|----------|--------|
-| `needs-check-feature` | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` | `check-feature` |
-| pending-apply beats invariant | `30-pending-apply-beats-needs-check` | `resolve-challenges` even if `needs_check_feature` |
+Former dispatch invariant; now a catalog `when:` like the other arrows.
+
+| when | Fixtures | Effect |
+|------|----------|--------|
+| `needs_check_feature` | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` | `check-feature` |
+| pending-apply beats P75 | `30-pending-apply-beats-needs-check` | `resolve-challenges` even if `needs_check_feature` |
 | graph from `challenge-feature` | `31-graph-from-challenge-skips-check` | same, with run-log origin — no edge to check-feature |
-| (JSON stamp / hook sync) | `25-check-feature-stamped-json`, `27-check-feature-stamp-no-file-change`, `16-graph-gate-run-log`, `10-no-challenges-file` | invariant false → later rules |
+| (JSON stamp / hook sync) | `25-check-feature-stamped-json`, `27-check-feature-stamp-no-file-change`, `16-graph-gate-run-log`, `10-no-challenges-file` | P75 false → later rules |
 
 Runs after needs-answer / pending-apply (P40–70). A SPEC edit must not skip apply.
 
@@ -59,6 +61,7 @@ Runs after needs-answer / pending-apply (P40–70). A SPEC edit must not skip ap
 | 65 | `pending_apply_alignment_only` | resolve-code-alignment | | `23-pending-apply-alignment-only`, `24-mixed-pending-apply-align-ch` |
 | 70 | `pending_apply_challenges_only` | resolve-challenges | | `17-pending-apply-challenges` |
 | 70 | leftover GAP must not steal CH Relates | resolve-challenges | | `32-ch-pending-leftover-gaps`, `33-ch-needs-answer-leftover-gaps` |
+| 75 | `needs_check_feature` | check-feature | | `03-spec-needs-check`, `04-spec-newer-gaps-map`, `18-spec-newer-challenges-map` |
 | 80 | `critical_major_mismatch_resolvable` | resolve-code-alignment | | `14-alignment-fail-mismatch` |
 | 90 | `open_gaps` | resolve-gaps | | `05-open-gaps`, `16-graph-gate-run-log` |
 | 100 | `open_challenges` | resolve-challenges | | `09-open-challenges` |

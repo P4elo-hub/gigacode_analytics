@@ -43,7 +43,7 @@
 - [x] Фаза 3 — стрелки, инспектор, типы клеток (без внутренностей cycle)
 - [x] Фаза 4 — составная клетка (write-feature / cycle)
 - [x] Фаза 5 — условия, приоритеты, ask, выход из клетки
-- [ ] Фаза 6 — проверка и сохранение пака
+- [x] Фаза 6 — проверка и сохранение пака
 
 ---
 
@@ -244,32 +244,79 @@ ask на шаге: на клетке «пауза · apply здесь»; в ин
 Инспектор cycle: выход `on_done` простым языком (отметка шага → снять задачу → внешний dispatch).
 expr / status_fields не редактируются. YAML нет. Прогон не трогали.
 
-Не трогать в фазе 6 кроме save-path: новый пак с нуля, редактор expr, тексты скиллов.
-Не ломать Прогон. Дальше: Проверить (schema + compile) и Применить (`--from-json`) только после зелёной проверки.
+Не трогать в фазе 6: редактор expr, тексты скиллов, запуск Qwen.
+Не ломать Прогон. Save — не «холст → graph.yaml». Полный алгоритм в промпте фазы 6.
 
 ---
 
 ## Фаза 6 — проверка и сохранение
 
-**Зачем.** Черновик → validate → запись `pipelines/<id>/`.
+**Зачем.** Черновик холста должен стать **исполняемым паком**, не только красивым `graph.yaml`.
 
-**Готово когда.** Кнопка «Проверить» гоняет schema + compile-ошибки (агент не в каталоге, unknown when:, дубли priority) и вешает их на клетку/стрелку. «Применить» вызывает --from-json (или POST-обёртку) только после зелёной проверки. Откат к последнему применённому JSON. Прогон по-прежнему читает compiled schema после apply.
+Роутер не идёт по стрелкам как flowchart. Цепочка: `status` + коллекторы → `expr` в `routing_conditions` → первое правило `dispatch.rules` → `registry` → delegate. Если save запишет только граф, ветка на холсте **не выберется**.
 
-**Не делать.** Генерацию markdown-агентов оркестратора. Редактор collectors.py. Запуск live Qwen.
+**Готово когда.**
+
+1. **Сборка payload** (обязательно, не «граф целиком»):
+   - взяли открытый пак (`GET /api/pack` / `--export-json`);
+   - поверх него overlay: `graph` и таблица `dispatch.rules` с холста;
+   - `status` и существующие `routing_conditions` (в т.ч. `expr`) **не выкидываем**;
+   - `registry` выводим из клеток: `step_to_subagent`, `orchestrator_owned` (нет внешнего task / cycle пишущий оркестратор), `gated_subagents`, `restartable_steps`. Черновик браузера эти поля сам не хранит — save их считает.
+2. **Стрелка с condition без строки dispatch** — не молчаливый YAML. Либо ошибка на стрелке («добавь правило в таблицу»), либо тот же путь, что CLI: `pipeline_routing_codegen.py --from-json` / `--from-graph-conditions` (stub `expr`, не затирая ручные формулы; новая строка dispatch). Существующий `expr` не переписывать.
+3. **Проверить** — слой 1 schema + слой 2 compile **без записи диска**. Ошибки на клетку / стрелку / строку priority. Apply скрыт, пока не зелёное.
+4. **Применить** — confirmation → `--from-json` (пишет YAML и compile `--apply`). Схема перечитывается. Прогон не падает.
+5. **Новый пак** — не пустой холст в `--from-json`. Кнопка «создать»: `--init-pack <id> --template routing-state|full-dispatch|orchestrator-only`, затем тот же overlay. Предупреждение, если нет файла оркестратора в `.qwen/agents`. Markdown агентов не генерить.
+6. Откат к последнему успешно применённому JSON.
+
+**Не делать.** Редактор `expr`. `collectors.py` / `validate.py` руками. Тексты `.qwen/agents`. Запуск Qwen. Ломать spec без явного «да» (для опытов — новый id или dry-run validate).
 
 ### Промпт фазы 6
 
 ```
-Фаза 6. Save-path редактора схемы.
+Фаза 6. Save-path, чтобы пак после Apply был исполняемым. Читай authoring-contract.md §4 и «разрыв save» в AUTHORING-UI-PHASES.md.
 
-Проверить: слой schema (pipeline_pack_schema.json) и слой compile (when:/agents), ошибки к элементам холста.
-Применить: только если проверка ok; confirmation; затем from-json.
-После apply: вкладка Схема перечитывает пак; Прогон spec не падает.
-Нет apply при битом id, отсутствии оркестратора, неизвестном агенте.
+Нельзя: POST только graph.nodes/edges. Роутер читает status + routing_conditions.expr + dispatch.rules + registry.
 
-Проверка в браузере: безобидная правка label существующего шага spec → проверить → применить → refresh схемы. Затем сломать when: на несуществующий — Apply недоступен, ошибка на стрелке.
-Не применяй заведомо ломающий spec без моего «да». Для опасных опытов — копия пака или dry-run, если он уже есть.
+Алгоритм Применить / Проверить:
+1. base = GET /api/pack (существующий) ИЛИ результат --init-pack (новый id + template).
+2. overlay base.graph и base.dispatch.rules из черновика холста (клетки, cycle, ask, стрелки+condition, таблица приоритетов).
+3. registry заново из клеток (step_to_subagent, orchestrator_owned, gated, restartable). status и старые expr не трогать.
+4. Если у стрелки есть condition, а в dispatch.rules нет when: с этим id — не писать дырявый YAML: либо ошибка на стрелке, либо codegen stub (pipeline_routing_codegen, merge, expr существующих условий не затирать).
+5. validate без диска (слой schema + compile). Ошибки к node id / edge id / priority.
+6. Apply только после ok: from-json + compile apply. Confirmation. Потом GET пака снова.
+
+HTTP (если нет — тонкие обёртки, не новый engine):
+- POST /api/pack/validate  (без записи)
+- POST /api/pack/apply
+- POST /api/pack/init  → --init-pack (новый пак)
+
+Проверка в браузере:
+A) spec: сменить label шага → Проверить → Применить → refresh Схемы; Прогон живого slug жив. Для этого шага можно, это безобидно.
+B) На копии/новом id (не ломая spec): стрелка с известным when: + строка dispatch → после Apply delegate/dispatch видит next. Стрелка с новым condition без правила — Apply недоступен ИЛИ после codegen появился stub, не пустой graph-only.
+C) unknown when: — ошибка на стрелке, диск не пишется.
+D) «Новый пак» с шаблона routing-state: на холсте не пустой status; предупреждение если нет orchestrator md.
+
+Не применяй ломающий spec. Не редактируй expr. Не пиши тексты агентов.
 ```
+
+### Разрыв, который фаза 6 должна закрыть
+
+Фронта фаз 1–5 хватает, чтобы **править уже открытый пак** (клетки, cycle, ask, стрелки, таблица priority/when/next). Не хватает, чтобы:
+
+- с пустого холста собрать новый исполняемый пайплайн (нужен `--init-pack`, не десять полей в инспекторе);
+- записать только `graph.yaml` и ожидать, что роутер пойдёт по стрелке «нет контекста → find-context».
+
+Пока save не соберёт `открытый пак + overlay графа/правил` и не синхронизирует dispatch/stub expr, скрипты ветку не выберут. Это шаг записи, не новое поле инспектора.
+
+### Фаза 6 закрыта
+
+Сделано: save-path не пишет «граф целиком». `POST /api/pack/validate` (слой schema + compile, без диска), `POST /api/pack/apply` (confirm → from-json + compile apply), `POST /api/pack/init` (`--init-pack` + template).
+Сборка: `GET /api/pack` как base, overlay `graph` + `dispatch.rules` с холста, `registry` заново из клеток, `status` и `expr` с диска.
+Стрелка с condition без строки dispatch — ошибка на стрелке, Apply скрыт. `unknown when:` — ошибка, диск не пишется.
+Откат к предыдущему успешно применённому JSON. Новый пак — шаблон (routing-state / full-dispatch / orchestrator-only), не пустой холст; предупреждение если нет `.qwen/agents/<id>-orchestrator.md`.
+Прогон: slug, SSE, Целевой/Факт/Время, restart — не ломали. spec YAML в этой сессии не применяли (validate label — зелёный).
+
+Не трогать дальше: редактор `expr`, тексты `.qwen/agents`, `collectors.py` / `validate.py`, запуск Qwen с холста. v1 фаз больше нет.
 
 ---
 

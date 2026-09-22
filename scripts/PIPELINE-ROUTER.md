@@ -26,10 +26,10 @@ YAML is still only `priority` + `when` + `next` (+ optional `outcome`). No formu
 
 ### Invariants
 
-Run after rules with `priority <= invariant_after_priority` (spec: 70 — after
-needs-answer and pending-apply, before open_gaps / open_challenges).
-
-- spec: `needs-check-feature` → `check-feature`
+Run after rules with `priority <= invariant_after_priority`. Spec keeps the
+slot at 70 (after needs-answer / pending-apply) but the list is empty:
+`needs_check_feature` is a regular P75 `when:` → `check-feature`, same catalog
+as the other arrows.
 
 When run-log / JSON `position` says where we stand, a rule whose `next` is
 not an outgoing graph edge is skipped. Incomplete step (`retry`/`fail`) may

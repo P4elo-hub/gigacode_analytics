@@ -1,0 +1,25 @@
+task_kind: slug
+artifacts:
+  main:
+    path: "{task_id}/main.md"
+    exists_as: has_main
+    missing_reason: Нет артефакта main — создай файл или поправь status.yaml artifacts.main.path
+  routing_state:
+    path: "Feature-writing/{task_id}/{task_id}-routing-state.json"
+    exists_as: has_routing_state
+    missing_reason: нет routing-state.json — нужен analyze-routing
+collectors:
+  - id: routing_state
+    source: routing_state
+stale:
+orchestrator:
+messages:
+  ready: spec-v2 ready
+  ready_title: spec-v2 без dispatch
+  ready_detail: spec-v2 pack has no dispatch rules.
+  ready_fix: Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.
+  stopped: spec-v2 пайплайн остановлен.
+collector_mode: routing_state
+invariants:
+display:
+constants:

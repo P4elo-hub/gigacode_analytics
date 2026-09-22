@@ -53,7 +53,7 @@ alignment_stale:                # optional extra bool (same when/left/right)
   right: spec
   require_left: true
 invariants:
-  - id: needs-check-feature     # dispatch.yaml invariant id
+  - id: needs-check-feature     # collector id; dispatch when: needs_check_feature (P75)
     collector: needs_check_feature
 orchestrator:
   write_cycle_step: write-feature

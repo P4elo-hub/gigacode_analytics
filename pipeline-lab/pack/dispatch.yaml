@@ -1,11 +1,9 @@
 # Named when: values must be in the spec predicate catalog (core + pack).
-# Invariant after needs-answer + pending-apply (P40–70). A SPEC edit during
-# challenge/gaps must not skip apply: graph has challenge-feature →
+# P75 needs_check_feature after needs-answer + pending-apply (P40–70). A SPEC
+# edit during challenge/gaps must not skip apply: graph has challenge-feature →
 # resolve-challenges, not challenge-feature → check-feature.
 invariant_after_priority: 70
-invariants:
-  - id: needs-check-feature
-    step: check-feature
+invariants: []
 fallback:
   next: analyze-routing
   reason: routing-state не готов
@@ -41,6 +39,9 @@ rules:
   - priority: 70
     when: pending_apply_challenges_only
     next: resolve-challenges
+  - priority: 75
+    when: needs_check_feature
+    next: check-feature
   - priority: 80
     when: critical_major_mismatch_resolvable
     next: resolve-code-alignment

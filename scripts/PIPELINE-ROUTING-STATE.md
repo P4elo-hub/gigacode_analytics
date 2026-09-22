@@ -52,8 +52,8 @@ Analyzer populates the same names so overlay is 1:1.
 | `has_spec` | artifacts.spec (engine after overlay) | `not_has_spec` |
 | `has_alignment` | artifacts.alignment (engine after overlay) | `alignment_limit_exhausted`, `alignment_missing_or_stale` |
 | `has_challenges` | artifacts.challenges + JSON | `open_challenges`, `no_challenges_file` |
-| `has_gaps_map` | artifacts.gaps_map + JSON | invariant `needs-check-feature` |
-| `has_challenges_map` | artifacts.challenges_map + JSON | invariant |
+| `has_gaps_map` | artifacts.gaps_map + JSON | `needs_check_feature` |
+| `has_challenges_map` | artifacts.challenges_map + JSON | `needs_check_feature` |
 | `has_decisions` | artifacts.decisions + JSON | display |
 | `decisions_needs_answer` | JSON | `needs_answer_*`, `ask_user` |
 | `decisions_pending_apply` | JSON | `pending_apply_*` |
@@ -66,7 +66,7 @@ Analyzer populates the same names so overlay is 1:1.
 | `critical_major_mismatch` | JSON | `critical_major_mismatch_resolvable` |
 | `alignment_stale` | engine after overlay | mismatch / pending-apply alignment |
 | `stale` | engine stale[] | `alignment_missing_or_stale`; `routing_state` id → P5 |
-| `needs_check_feature` + `_reason` | JSON fields (hook sync + analyzer) | invariant `needs-check-feature` |
+| `needs_check_feature` + `_reason` | JSON fields (hook sync + analyzer) | `needs_check_feature` (P75) |
 | `step_completion` | JSON metadata (hook only) | not router overlay |
 
 Not used by spec dispatch: `open_questions`, `spec_lines`, `context_lines`,
@@ -121,9 +121,10 @@ steps (that would clear `stale` and skip the LLM analyzer).
 5. If JSON is already stale vs `stale_vs`, hook **skips** so analyzer runs.
 6. Router reads `fields` only — no run-log on dispatch.
 
-Spec invariant `needs_check_feature`: pack config
+Spec `needs_check_feature`: pack config
 `routing_state_sync.invariants.needs_check_feature.satisfied_by_step` names
-which completed gate step clears the flag (default `check-feature`).
+which completed gate step clears the flag (default `check-feature`). Dispatch
+reads the overlay bool as `when: needs_check_feature` (P75).
 
 Golden `25-check-feature-stamped-json`. See
 [fixtures/dispatch_golden/spec/COVERAGE.md](fixtures/dispatch_golden/spec/COVERAGE.md).

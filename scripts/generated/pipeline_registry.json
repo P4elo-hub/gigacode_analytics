@@ -167,6 +167,62 @@
         "kind": "terminal",
         "subagent": null
       }
+    ],
+    "spec-v2": [
+      {
+        "id": "spec-v2-orchestrator",
+        "label": "spec-v2-orchestrator",
+        "kind": "orchestrator",
+        "subagent": null
+      },
+      {
+        "id": "analyze-routing",
+        "label": "analyze-routing",
+        "kind": "step",
+        "subagent": "routing-analyzer"
+      },
+      {
+        "id": "done",
+        "label": "done",
+        "kind": "terminal",
+        "subagent": null
+      },
+      {
+        "id": "context-researcher",
+        "label": "context-researcher",
+        "kind": "step",
+        "subagent": "context-researcher"
+      },
+      {
+        "id": "spec-writer",
+        "label": "spec-writer",
+        "kind": "step",
+        "subagent": "spec-writer"
+      },
+      {
+        "id": "gap-resolver",
+        "label": "gap-resolver",
+        "kind": "step",
+        "subagent": "gap-resolver"
+      },
+      {
+        "id": "spec-reviewer",
+        "label": "spec-reviewer",
+        "kind": "step",
+        "subagent": "spec-reviewer"
+      },
+      {
+        "id": "code-auditor",
+        "label": "code-auditor",
+        "kind": "step",
+        "subagent": "code-auditor"
+      },
+      {
+        "id": "alignment-resolver",
+        "label": "alignment-resolver",
+        "kind": "step",
+        "subagent": "alignment-resolver"
+      }
     ]
   },
   "dispatch": {
@@ -198,12 +254,7 @@
     },
     "spec": {
       "invariant_after_priority": 70,
-      "invariants": [
-        {
-          "id": "needs-check-feature",
-          "step": "check-feature"
-        }
-      ],
+      "invariants": [],
       "fallback": {
         "next": "analyze-routing",
         "reason": "routing-state не готов"
@@ -261,6 +312,11 @@
           "next": "resolve-challenges"
         },
         {
+          "priority": 75,
+          "when": "needs_check_feature",
+          "next": "check-feature"
+        },
+        {
           "priority": 80,
           "when": "critical_major_mismatch_resolvable",
           "next": "resolve-code-alignment"
@@ -295,6 +351,87 @@
           "priority": 140,
           "when": "alignment_fail_reaudit",
           "next": "check-feature-code"
+        }
+      ]
+    },
+    "spec-v2": {
+      "invariant_after_priority": 0,
+      "invariants": [],
+      "fallback": {
+        "next": "analyze-routing",
+        "reason": "routing-state не готов"
+      },
+      "rules": [
+        {
+          "when": "routing_state_needs_refresh",
+          "priority": 5,
+          "next": "analyze-routing"
+        },
+        {
+          "when": "has_feature_context_slug_md_eshche_net",
+          "priority": 140,
+          "next": "context-researcher"
+        },
+        {
+          "when": "agent_zakonchil_svoe_vypolnenie",
+          "priority": 150,
+          "next": "analyze-routing"
+        },
+        {
+          "when": "eshche_odno_svoe_uslovie",
+          "priority": 160,
+          "next": "analyze-routing"
+        },
+        {
+          "when": "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh",
+          "priority": 170,
+          "next": "spec-writer"
+        },
+        {
+          "when": "has_agent_zakonchil_svoe_vypolnenie",
+          "priority": 180,
+          "next": "analyze-routing"
+        },
+        {
+          "when": "has_v_decisions_est_needs_answer_s_relates_na_gap_open_g",
+          "priority": 190,
+          "next": "gap-resolver"
+        },
+        {
+          "when": "has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec",
+          "priority": 200,
+          "next": "gap-resolver"
+        },
+        {
+          "when": "has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply",
+          "priority": 210,
+          "next": "gap-resolver"
+        },
+        {
+          "when": "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
+          "priority": 220,
+          "next": "spec-reviewer"
+        },
+        {
+          "when": "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
+          "priority": 230,
+          "next": null,
+          "outcome": "ready"
+        },
+        {
+          "when": "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili",
+          "priority": 240,
+          "next": "code-auditor"
+        },
+        {
+          "when": "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa",
+          "priority": 250,
+          "next": "code-auditor"
+        },
+        {
+          "when": "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
+          "priority": 260,
+          "next": "alignment-resolver"
         }
       ]
     }
@@ -572,6 +709,40 @@
           }
         ]
       }
+    },
+    "spec-v2": {
+      "task_kind": "slug",
+      "artifacts": {
+        "main": {
+          "path": "{task_id}/main.md",
+          "exists_as": "has_main",
+          "missing_reason": "Нет артефакта main — создай файл или поправь status.yaml artifacts.main.path"
+        },
+        "routing_state": {
+          "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+          "exists_as": "has_routing_state",
+          "missing_reason": "нет routing-state.json — нужен analyze-routing"
+        }
+      },
+      "collectors": [
+        {
+          "id": "routing_state",
+          "source": "routing_state"
+        }
+      ],
+      "stale": [],
+      "orchestrator": {},
+      "messages": {
+        "ready": "spec-v2 ready",
+        "ready_title": "spec-v2 без dispatch",
+        "ready_detail": "spec-v2 pack has no dispatch rules.",
+        "ready_fix": "Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
+        "stopped": "spec-v2 пайплайн остановлен."
+      },
+      "collector_mode": "routing_state",
+      "invariants": [],
+      "display": {},
+      "constants": {}
     }
   },
   "pipelines": {
@@ -688,6 +859,46 @@
           "persistent": true
         }
       }
+    },
+    "spec-v2": {
+      "step_to_subagent": {
+        "analyze-routing": "routing-analyzer",
+        "context-researcher": "context-researcher",
+        "spec-writer": "spec-writer",
+        "gap-resolver": "gap-resolver",
+        "spec-reviewer": "spec-reviewer",
+        "code-auditor": "code-auditor",
+        "alignment-resolver": "alignment-resolver"
+      },
+      "orchestrator_owned": [],
+      "gated_subagents": [
+        "routing-analyzer",
+        "context-researcher",
+        "spec-writer",
+        "gap-resolver",
+        "spec-reviewer",
+        "code-auditor",
+        "alignment-resolver"
+      ],
+      "restartable_steps": [
+        "analyze-routing",
+        "context-researcher",
+        "spec-writer",
+        "gap-resolver",
+        "spec-reviewer",
+        "code-auditor",
+        "alignment-resolver"
+      ],
+      "step_order": {
+        "analyze-routing": 0,
+        "context-researcher": 1,
+        "spec-writer": 2,
+        "gap-resolver": 3,
+        "spec-reviewer": 4,
+        "code-auditor": 5,
+        "alignment-resolver": 6
+      },
+      "delegate_modes": {}
     }
   },
   "predicates": {
@@ -731,6 +942,7 @@
       "needs_answer_alignment_only",
       "needs_answer_challenges_only",
       "needs_answer_with_gaps",
+      "needs_check_feature",
       "no_challenges_file",
       "not_has_alignment",
       "not_has_challenges",
@@ -748,6 +960,28 @@
       "pending_apply_with_gaps",
       "routing_state_needs_refresh",
       "routing_state_ready"
+    ],
+    "spec-v2": [
+      "agent_zakonchil_svoe_vypolnenie",
+      "eshche_odno_svoe_uslovie",
+      "file_missing_main",
+      "file_missing_routing_state",
+      "has_agent_zakonchil_svoe_vypolnenie",
+      "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
+      "has_feature_context_slug_md_eshche_net",
+      "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh",
+      "has_main",
+      "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili",
+      "has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply",
+      "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa",
+      "has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec",
+      "has_routing_state",
+      "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
+      "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
+      "has_v_decisions_est_needs_answer_s_relates_na_gap_open_g",
+      "not_has_main",
+      "not_has_routing_state",
+      "routing_state_needs_refresh"
     ]
   }
 }

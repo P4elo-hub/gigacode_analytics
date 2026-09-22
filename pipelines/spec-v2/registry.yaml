@@ -1,0 +1,25 @@
+step_to_subagent:
+  analyze-routing: routing-analyzer
+  context-researcher: context-researcher
+  spec-writer: spec-writer
+  gap-resolver: gap-resolver
+  spec-reviewer: spec-reviewer
+  code-auditor: code-auditor
+  alignment-resolver: alignment-resolver
+orchestrator_owned:
+gated_subagents:
+  - routing-analyzer
+  - context-researcher
+  - spec-writer
+  - gap-resolver
+  - spec-reviewer
+  - code-auditor
+  - alignment-resolver
+restartable_steps:
+  - analyze-routing
+  - context-researcher
+  - spec-writer
+  - gap-resolver
+  - spec-reviewer
+  - code-auditor
+  - alignment-resolver
