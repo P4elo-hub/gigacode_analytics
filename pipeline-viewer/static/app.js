@@ -152,6 +152,8 @@ const state = {
   catalogPipelines: [],
   catalogAgents: [],
   catalogSkills: [],
+  catalogPredicates: { core: [], by_pipeline: {} },
+  catalogRouting: {},
   agentsByCli: {},
   writeFeatureCycle: { profile: "", calls: [] },
   dismissedNotices: loadDismissedNotices(),
@@ -172,6 +174,9 @@ const schemaUndoByPack = {};
 const SCHEMA_NODE_KINDS = ["orchestrator", "step", "terminal", "ask", "cycle", "meta"];
 const SCHEMA_EDGE_KINDS = ["main", "branch", "loop"];
 const CYCLE_CLOSE = "on_done";
+const DISPATCH_OUTCOMES = ["ready", "stopped"];
+const ASK_HANDSHAKE_NOTE =
+  "Пауза на этой клетке, apply без смены шага. Между вопросом и apply перехода на другого агента нет.";
 const FORBIDDEN_CYCLE_AGENTS = new Set(["analyze-routing", "routing-analyzer"]);
 let pendingRestartPlan = null;
 let apiVersion = 0;
@@ -565,14 +570,43 @@ function initCytoscape() {
       {
         selector: "edge.schema-edge",
         style: {
-          opacity: 0.95,
+          opacity: 0.45,
+          "text-rotation": "none",
+          "text-wrap": "wrap",
+          "text-max-width": "92px",
+          "font-size": "9px",
+        },
+      },
+      {
+        selector: "edge.schema-edge.dim",
+        style: {
+          opacity: 0.12,
+        },
+      },
+      {
+        selector: "edge.schema-edge.outgoing",
+        style: {
+          opacity: 1,
+          width: 3,
+          "line-color": "#38bdf8",
+          "target-arrow-color": "#38bdf8",
+          color: "#e0f2fe",
+          "font-size": "10px",
+          "text-background-opacity": 0.92,
         },
       },
       {
         selector: 'edge.schema-edge[kind = "loop"]',
         style: {
-          opacity: 0.78,
+          opacity: 0.32,
           width: 1.8,
+        },
+      },
+      {
+        selector: 'edge.schema-edge.outgoing[kind = "loop"]',
+        style: {
+          opacity: 0.95,
+          width: 2.4,
         },
       },
       {
@@ -581,6 +615,9 @@ function initCytoscape() {
           width: 3.5,
           "line-color": "#fbbf24",
           "target-arrow-color": "#fbbf24",
+          color: "#fef3c7",
+          "font-size": "10px",
+          "text-background-opacity": 0.92,
           opacity: 1,
         },
       },
@@ -2268,6 +2305,7 @@ function highlightNode(nodeId, timelineSeq) {
       const node = packNodeById(el.id());
       if (node) applyCycleNodePresentation(el, node);
     });
+    highlightSchemaSelection();
     return;
   }
   if (!nodeId && !timelineSeq && !selectedElementId) return;
@@ -2496,6 +2534,7 @@ function emptyPackDraft() {
     edgeEdits: {},
     orchestrator: "",
     seededCycleCalls: {},
+    dispatchRules: null,
   };
 }
 
@@ -2532,6 +2571,7 @@ function getPackDraft(packId) {
     edgeEdits: objectMap(raw.edgeEdits),
     orchestrator: typeof raw.orchestrator === "string" ? raw.orchestrator : "",
     seededCycleCalls: objectMap(raw.seededCycleCalls),
+    dispatchRules: Array.isArray(raw.dispatchRules) ? raw.dispatchRules : null,
   };
 }
 
@@ -2620,6 +2660,11 @@ function sanitizePackDraft(draft) {
   }
   next.edgeEdits = edgeEdits;
   if (next.orchestrator && !ids.has(next.orchestrator)) next.orchestrator = "";
+  if (Array.isArray(next.dispatchRules)) {
+    next.dispatchRules = next.dispatchRules.map(normalizeDispatchRule);
+  } else {
+    next.dispatchRules = null;
+  }
   return next;
 }
 
@@ -2846,7 +2891,19 @@ function applyDraftToPack(basePack, draft) {
   }
 
   pack.graph.nodes = nodes;
-  pack.graph.edges = edges;
+  pack.graph.edges = edges.map((edge) => {
+    const next = { ...edge };
+    if (!next.condition) {
+      delete next.condition;
+      delete next.condition_label;
+    }
+    return next;
+  });
+
+  if (Array.isArray(draft.dispatchRules)) {
+    pack.dispatch = { ...(pack.dispatch || {}) };
+    pack.dispatch.rules = draft.dispatchRules.map(normalizeDispatchRule);
+  }
 
   if (draft.orchestrator && existing.has(draft.orchestrator)) {
     pack.graph.orchestrator = draft.orchestrator;
@@ -2910,7 +2967,7 @@ function schemaKindHint(uiKind) {
     return "Составная клетка: сначала очередь calls этой клетки, потом «спросить» или «зафиксировать» по ней же.";
   }
   if (uiKind === "ask") {
-    return "Пауза на этой клетке; apply без смены шага. Детали handshake — фаза 5.";
+    return ASK_HANDSHAKE_NOTE;
   }
   if (uiKind === "orchestrator") {
     return "Ровно одна клетка-оркестратор. Другой оркестратор станет шагом.";
@@ -2955,6 +3012,339 @@ function fillSubagentSelect(select, current) {
     select.appendChild(opt);
   }
   select.value = current || "";
+}
+
+function routingConditionsForPack(packId) {
+  const block = state.catalogRouting?.[packId || state.packId];
+  return block && typeof block === "object" ? block : {};
+}
+
+function whenCatalogEntries(packId) {
+  const id = packId || state.packId;
+  const preds = state.catalogPredicates || {};
+  const core = Array.isArray(preds.core) ? preds.core : [];
+  const byPipe = Array.isArray(preds.by_pipeline?.[id]) ? preds.by_pipeline[id] : [];
+  const edges = Array.isArray(routingConditionsForPack(id).edge_conditions)
+    ? routingConditionsForPack(id).edge_conditions
+    : [];
+  const labels = {};
+  for (const item of edges) {
+    const condId = String(item?.id || "").trim();
+    if (!condId) continue;
+    labels[condId] = String(item.label || condId).trim() || condId;
+  }
+  const ids = new Set([...core, ...byPipe, ...Object.keys(labels)]);
+  return [...ids]
+    .filter(Boolean)
+    .sort()
+    .map((condId) => ({
+      id: condId,
+      label: labels[condId] || condId,
+    }));
+}
+
+function conditionHumanLabel(conditionId, edge) {
+  const id = String(conditionId || "").trim();
+  if (!id) return String(edge?.condition_label || "").trim();
+  const found = whenCatalogEntries().find((item) => item.id === id);
+  if (found && found.label && found.label !== id) return found.label;
+  if (edge?.condition_label && edge.condition_label !== id) return edge.condition_label;
+  return found?.label || id;
+}
+
+function slugConditionId(text) {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function matchWhenCatalog(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  const entries = whenCatalogEntries();
+  return (
+    entries.find((item) => item.id.toLowerCase() === lower) ||
+    entries.find((item) => String(item.label || "").toLowerCase() === lower) ||
+    null
+  );
+}
+
+function conditionPatchFromText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return { condition: "", condition_label: "" };
+  const match = matchWhenCatalog(raw);
+  if (match) {
+    return {
+      condition: match.id,
+      condition_label: match.label && match.label !== match.id ? match.label : "",
+    };
+  }
+  return {
+    condition: slugConditionId(raw) || raw,
+    condition_label: raw,
+  };
+}
+
+function conditionTextForEdge(edge) {
+  if (!edge) return "";
+  if (edge.condition_label) return edge.condition_label;
+  if (edge.condition) return conditionHumanLabel(edge.condition, edge);
+  return "";
+}
+
+function fillWhenDatalist(datalist) {
+  if (!datalist) return;
+  datalist.innerHTML = "";
+  for (const item of whenCatalogEntries()) {
+    const optId = document.createElement("option");
+    optId.value = item.id;
+    optId.label = formatWhenOption(item);
+    datalist.appendChild(optId);
+    if (item.label && item.label !== item.id) {
+      const optLabel = document.createElement("option");
+      optLabel.value = item.label;
+      optLabel.label = item.id;
+      datalist.appendChild(optLabel);
+    }
+  }
+}
+
+function formatWhenOption(item) {
+  if (!item) return "";
+  return item.label && item.label !== item.id ? `${item.id} · ${item.label}` : item.id;
+}
+
+function fillWhenSelect(select, selectedId, opts = {}) {
+  if (!select) return;
+  const entries = whenCatalogEntries();
+  const current = String(selectedId || "").trim();
+  select.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = opts.emptyLabel || "(нет)";
+  select.appendChild(empty);
+  const known = new Set();
+  for (const item of entries) {
+    known.add(item.id);
+    const opt = document.createElement("option");
+    opt.value = item.id;
+    opt.textContent = formatWhenOption(item);
+    select.appendChild(opt);
+  }
+  if (current && !known.has(current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = `${current} · не в каталоге`;
+    select.appendChild(opt);
+  }
+  select.value = current;
+}
+
+function fillDispatchNextSelect(select, selectedNext, outcome) {
+  if (!select) return;
+  const nodes = state.pack?.graph?.nodes || [];
+  const current = selectedNext || (DISPATCH_OUTCOMES.includes(outcome) ? outcome : "");
+  select.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "(пусто)";
+  select.appendChild(empty);
+  for (const value of DISPATCH_OUTCOMES) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = value;
+    select.appendChild(opt);
+  }
+  for (const node of nodes) {
+    if (!node?.id) continue;
+    const opt = document.createElement("option");
+    opt.value = node.id;
+    opt.textContent = node.label && node.label !== node.id ? `${node.id} · ${node.label}` : node.id;
+    select.appendChild(opt);
+  }
+  if (current && ![...select.options].some((opt) => opt.value === current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = current;
+    select.appendChild(opt);
+  }
+  select.value = current || "";
+}
+
+function normalizeDispatchRule(rule) {
+  const rawPriority = Number(rule?.priority);
+  const when = String(rule?.when || "").trim();
+  let next = rule?.next;
+  if (next === "" || next === undefined) next = null;
+  let outcome = String(rule?.outcome || "").trim();
+  if (DISPATCH_OUTCOMES.includes(next)) {
+    outcome = next;
+    next = null;
+  }
+  if (!DISPATCH_OUTCOMES.includes(outcome)) outcome = "";
+  const item = {
+    priority: Number.isFinite(rawPriority) ? rawPriority : 0,
+    when,
+    next: next || null,
+  };
+  if (!item.next && outcome) item.outcome = outcome;
+  return item;
+}
+
+function baseDispatchRules() {
+  const rules = state.packBase?.dispatch?.rules;
+  return Array.isArray(rules) ? rules.map(normalizeDispatchRule) : [];
+}
+
+function liveDispatchRules() {
+  const draft = getPackDraft(state.packId);
+  if (Array.isArray(draft.dispatchRules)) return draft.dispatchRules.map(normalizeDispatchRule);
+  return (state.pack?.dispatch?.rules || baseDispatchRules()).map(normalizeDispatchRule);
+}
+
+function sortedDispatchRules(rules) {
+  return rules
+    .map((rule, index) => ({ rule, index }))
+    .sort((a, b) => {
+      if (a.rule.priority !== b.rule.priority) return a.rule.priority - b.rule.priority;
+      return a.index - b.index;
+    });
+}
+
+function dispatchPriorityCounts(rules) {
+  const counts = {};
+  for (const rule of rules) {
+    const key = String(rule.priority);
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+function ruleFromDispatchFields(priority, when, nextValue) {
+  const next = String(nextValue || "").trim();
+  if (DISPATCH_OUTCOMES.includes(next)) {
+    return normalizeDispatchRule({ priority, when, next: null, outcome: next });
+  }
+  return normalizeDispatchRule({ priority, when, next: next || null });
+}
+
+function commitDispatchRules(rules, opts = {}) {
+  if (!opts.skipUndo) armInspectorUndo();
+  const draft = getPackDraft(state.packId);
+  draft.dispatchRules = rules.map(normalizeDispatchRule);
+  persistDraftWithoutFit(draft);
+  renderSchemaDispatchTable();
+  renderPackSummary(state.pack);
+}
+
+function nextDispatchPriority(rules) {
+  const max = rules.reduce((acc, rule) => Math.max(acc, Number(rule.priority) || 0), 0);
+  return max + 10;
+}
+
+function addDispatchRule() {
+  const rules = liveDispatchRules();
+  pushSchemaUndo();
+  schemaInspectorUndoArmed = true;
+  rules.push(ruleFromDispatchFields(nextDispatchPriority(rules), "", ""));
+  commitDispatchRules(rules, { skipUndo: true });
+}
+
+function patchDispatchRule(index, patch, replace = false) {
+  const rules = liveDispatchRules();
+  if (!rules[index]) return;
+  const next = replace
+    ? normalizeDispatchRule(patch)
+    : normalizeDispatchRule({ ...rules[index], ...patch });
+  if (next.next) delete next.outcome;
+  rules[index] = next;
+  commitDispatchRules(rules);
+}
+
+function removeDispatchRule(index) {
+  const rules = liveDispatchRules();
+  if (!rules[index]) return;
+  pushSchemaUndo();
+  schemaInspectorUndoArmed = true;
+  rules.splice(index, 1);
+  commitDispatchRules(rules, { skipUndo: true });
+}
+
+function renderSchemaDispatchTable() {
+  const list = document.getElementById("schema-dispatch-rules");
+  const conflict = document.getElementById("schema-dispatch-conflict");
+  if (!list) return;
+  const rules = liveDispatchRules();
+  const counts = dispatchPriorityCounts(rules);
+  const dupes = Object.entries(counts)
+    .filter(([, n]) => n > 1)
+    .map(([priority]) => `P${priority}`);
+  if (conflict) {
+    conflict.textContent = dupes.length
+      ? `Конфликт: одинаковый priority ${dupes.join(", ")}. Нужны уникальные числа.`
+      : "";
+    conflict.classList.toggle("hidden", !dupes.length);
+  }
+  list.innerHTML = "";
+  if (!rules.length) {
+    const empty = document.createElement("p");
+    empty.className = "schema-dispatch-empty";
+    empty.textContent = "Нет правил (calibration-style). YAML не пишется.";
+    list.appendChild(empty);
+    return;
+  }
+  for (const { rule, index } of sortedDispatchRules(rules)) {
+    const li = document.createElement("li");
+    li.className = "schema-dispatch-rule";
+    li.dataset.index = String(index);
+    li.dataset.when = rule.when || "";
+    li.dataset.priority = String(rule.priority);
+    if ((counts[String(rule.priority)] || 0) > 1) li.classList.add("is-conflict");
+
+    const head = document.createElement("div");
+    head.className = "schema-dispatch-rule-head";
+
+    const pLabel = document.createElement("label");
+    pLabel.className = "schema-dispatch-priority";
+    pLabel.innerHTML = "<span>priority</span>";
+    const pInput = document.createElement("input");
+    pInput.type = "number";
+    pInput.name = "priority";
+    pInput.step = "1";
+    pInput.value = String(rule.priority);
+    pLabel.appendChild(pInput);
+
+    const whenLabel = document.createElement("label");
+    whenLabel.innerHTML = "<span>when</span>";
+    const whenSelect = document.createElement("select");
+    whenSelect.name = "when";
+    fillWhenSelect(whenSelect, rule.when, { emptyLabel: "(when)" });
+    whenLabel.appendChild(whenSelect);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn-secondary";
+    remove.dataset.action = "remove";
+    remove.textContent = "Удалить";
+
+    head.append(pLabel, whenLabel, remove);
+
+    const row = document.createElement("div");
+    row.className = "schema-dispatch-rule-row";
+    const nextLabel = document.createElement("label");
+    nextLabel.innerHTML = "<span>next / outcome</span>";
+    const nextSelect = document.createElement("select");
+    nextSelect.name = "next";
+    fillDispatchNextSelect(nextSelect, rule.next, rule.outcome);
+    nextLabel.appendChild(nextSelect);
+    row.appendChild(nextLabel);
+
+    li.append(head, row);
+    list.appendChild(li);
+  }
 }
 
 function uniqueCycleCallParam(calls) {
@@ -3426,6 +3816,7 @@ function resetSchemaInspectorForms() {
   document.getElementById("schema-inspector-empty")?.classList.remove("hidden");
   document.getElementById("schema-node-form")?.classList.add("hidden");
   document.getElementById("schema-edge-form")?.classList.add("hidden");
+  document.getElementById("schema-outgoing")?.classList.add("hidden");
   setSchemaInspectorError("");
   schemaInspectorUndoArmed = false;
 }
@@ -3459,10 +3850,103 @@ function packEdgeById(edgeId) {
 
 function packEdgeTooltip(edge) {
   const lines = [`${edge.from} → ${edge.to}`, `kind: ${edge.kind || "main"}`];
-  if (edge.label) lines.push(`label: ${edge.label}`);
-  if (edge.condition) lines.push(`condition: ${edge.condition}`);
+  const when = conditionTextForEdge(edge);
+  if (when) {
+    lines.push(
+      edge.condition && when !== edge.condition
+        ? `условие: ${edge.condition} · ${when}`
+        : `условие: ${when}`
+    );
+  } else {
+    lines.push("условие: нет");
+  }
+  if (edge.label && edge.label !== when) lines.push(`подпись: ${edge.label}`);
+  const fromNode = packNodeById(edge.from);
+  if (fromNode?.ask) {
+    lines.push("стрелка после apply; между вопросом и apply перехода нет");
+  }
   lines.push("черновик: YAML не пишется");
   return lines.join("\n");
+}
+
+function outgoingEdgesFrom(nodeId) {
+  if (!nodeId) return [];
+  return (state.pack?.graph?.edges || []).filter((edge) => edge.from === nodeId);
+}
+
+function packEdgeCanvasLabel(edge) {
+  const when = conditionTextForEdge(edge);
+  if (when) return when;
+  return edge.label || "";
+}
+
+function highlightSchemaSelection() {
+  if (!cy || !isSchemaMode()) return;
+  const outgoing = outgoingEdgesFrom(selectedNodeId);
+  const outgoingIds = new Set(outgoing.map((edge) => edge.id).filter(Boolean));
+  const focus = Boolean(selectedNodeId || selectedEdgeId);
+  cy.edges(".schema-edge").forEach((el) => {
+    const id = el.id();
+    const edge = packEdgeById(id);
+    const isOut = outgoingIds.has(id);
+    const isSel = selectedEdgeId === id;
+    el.removeClass("outgoing dim selected");
+    if (isSel) el.addClass("selected");
+    if (isOut) el.addClass("outgoing");
+    else if (focus && !isSel) el.addClass("dim");
+    const show = isOut || isSel;
+    el.data("label", show && edge ? packEdgeCanvasLabel(edge) : "");
+  });
+}
+
+function renderOutgoingEdges(node) {
+  const wrap = document.getElementById("schema-outgoing");
+  const list = document.getElementById("schema-outgoing-list");
+  if (!wrap || !list) return;
+  if (!node) {
+    wrap.classList.add("hidden");
+    list.innerHTML = "";
+    return;
+  }
+  wrap.classList.remove("hidden");
+  const edges = outgoingEdgesFrom(node.id);
+  list.innerHTML = "";
+  if (!edges.length) {
+    const empty = document.createElement("p");
+    empty.className = "schema-outgoing-empty";
+    empty.textContent = "Нет исходящих стрелок. Shift+клик или «Стрелка к…».";
+    list.appendChild(empty);
+    return;
+  }
+  for (const edge of edges) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "schema-outgoing-item";
+    item.dataset.edgeId = edge.id || "";
+    const to = document.createElement("span");
+    to.className = "schema-outgoing-to";
+    const target = packNodeById(edge.to);
+    to.textContent = `→ ${target?.label || edge.to}`;
+    const when = document.createElement("span");
+    const text = conditionTextForEdge(edge);
+    when.className = text ? "schema-outgoing-when" : "schema-outgoing-when is-empty";
+    when.textContent = text
+      ? edge.condition && text !== edge.condition
+        ? `${edge.condition} · ${text}`
+        : text
+      : "без условия";
+    item.append(to, when);
+    list.appendChild(item);
+  }
+}
+
+function selectSchemaEdge(edgeId) {
+  if (!edgeId || !packEdgeById(edgeId)) return;
+  selectedEdgeId = edgeId;
+  selectedNodeId = null;
+  selectedElementId = edgeId;
+  highlightNode(null, null);
+  showSchemaInspector();
 }
 
 function commitSchemaDraft(draft, opts = {}) {
@@ -3541,7 +4025,10 @@ function setSchemaConnectFrom(nodeId) {
   if (hint) {
     hint.classList.toggle("hidden", !schemaConnectFrom);
     if (schemaConnectFrom) {
-      hint.textContent = `Стрелка от «${schemaConnectFrom}»: кликните целевую клетку (Esc — отмена)`;
+      const fromNode = packNodeById(schemaConnectFrom);
+      hint.textContent = fromNode?.ask
+        ? `Стрелка от ask «${schemaConnectFrom}»: путь после apply. Между вопросом и apply перехода на другого агента нет.`
+        : `Стрелка от «${schemaConnectFrom}»: кликните целевую клетку (Esc — отмена)`;
     }
   }
   highlightNode(selectedNodeId, null);
@@ -3578,6 +4065,7 @@ function addSchemaEdge(from, to, fields = {}) {
     setSchemaInspectorError("Оба конца стрелки должны быть клетками на холсте.");
     return;
   }
+  const fromNode = packNodeById(from);
   pushSchemaUndo();
   const id = uniqueSchemaEdgeId(from, to);
   const draft = getPackDraft(state.packId);
@@ -3592,7 +4080,11 @@ function addSchemaEdge(from, to, fields = {}) {
     },
   ];
   commitSchemaDraft(draft, { selectEdge: id, skipFit: true });
-  setSchemaInspectorError("");
+  setSchemaInspectorError(
+    fromNode?.ask
+      ? "Стрелка с ask-клетки — только после apply. Между вопросом и apply перехода на другого агента нет."
+      : ""
+  );
 }
 
 function deleteSchemaEdge(edgeId) {
@@ -3708,6 +4200,11 @@ function renameSchemaNode(oldId, newIdRaw) {
     draft.edgeEdits[edgeId] = next;
   }
   if (draft.orchestrator === oldId) draft.orchestrator = newId;
+  if (Array.isArray(draft.dispatchRules)) {
+    draft.dispatchRules = draft.dispatchRules.map((rule) =>
+      rule.next === oldId ? { ...rule, next: newId } : rule
+    );
+  }
   selectedNodeId = newId;
   selectedElementId = newId;
   commitSchemaDraft(draft, { selectNode: newId, skipFit: true });
@@ -3734,13 +4231,14 @@ function refreshSchemaElementVisuals() {
     if (!edge.id) continue;
     const el = cy.getElementById(edge.id);
     if (!el.length) continue;
-    el.data("label", packEdgeLabel(edge));
+    el.data("label", packEdgeCanvasLabel(edge));
     el.data("kind", edge.kind || "main");
     el.data("color", PACK_EDGE_COLORS[edge.kind] || PACK_EDGE_COLORS.main);
     el.data("source", edge.from);
     el.data("target", edge.to);
   }
   renderPackSummary(state.pack);
+  highlightSchemaSelection();
 }
 
 function persistDraftWithoutFit(draft) {
@@ -3801,6 +4299,8 @@ function fillSchemaNodeForm(node) {
   if (kindEl) kindEl.value = SCHEMA_NODE_KINDS.includes(uiKind) ? uiKind : "step";
   if (hintEl) hintEl.textContent = schemaKindHint(uiKind);
   fillSubagentSelect(document.getElementById("schema-node-subagent"), node.subagent || "");
+  const askNote = document.getElementById("schema-ask-note");
+  askNote?.classList.toggle("hidden", uiKind !== "ask");
   fillSchemaCycleFields(node);
   schemaInspectorSyncing = false;
 }
@@ -3816,11 +4316,24 @@ function fillSchemaEdgeForm(edge) {
   schemaInspectorSyncing = true;
   fillNodeIdOptions(document.getElementById("schema-edge-from"), edge.from);
   fillNodeIdOptions(document.getElementById("schema-edge-to"), edge.to);
+  fillWhenDatalist(document.getElementById("schema-when-catalog"));
   const kindEl = document.getElementById("schema-edge-kind");
   const labelEl = document.getElementById("schema-edge-label");
+  const textEl = document.getElementById("schema-edge-condition-text");
+  const yamlEl = document.getElementById("schema-edge-condition-yaml");
   const kind = SCHEMA_EDGE_KINDS.includes(edge.kind) ? edge.kind : "main";
   if (kindEl) kindEl.value = kind;
   if (labelEl) labelEl.value = edge.label || "";
+  if (textEl) textEl.value = conditionTextForEdge(edge);
+  if (yamlEl) {
+    if (edge.condition) {
+      yamlEl.textContent = `в YAML: condition: ${edge.condition}`;
+      yamlEl.classList.remove("hidden");
+    } else {
+      yamlEl.textContent = "";
+      yamlEl.classList.add("hidden");
+    }
+  }
   markSchemaEdgeKindNotes(kind);
   schemaInspectorSyncing = false;
 }
@@ -3846,6 +4359,7 @@ function showSchemaInspector() {
     nodeForm?.classList.add("hidden");
     edgeForm?.classList.remove("hidden");
     fillSchemaEdgeForm(edge);
+    renderOutgoingEdges(null);
     setSchemaEdgeActionsVisible(true);
     return;
   }
@@ -3863,6 +4377,7 @@ function showSchemaInspector() {
     edgeForm?.classList.add("hidden");
     nodeForm?.classList.remove("hidden");
     fillSchemaNodeForm(node);
+    renderOutgoingEdges(node);
     setSchemaNodeActionsVisible(true);
     return;
   }
@@ -3921,13 +4436,13 @@ function formatPackNodeLabel(node, opts = {}) {
           lines.push(`${index + 1}. ${call.param || "—"}`);
         });
       }
-      lines.push("close: on_done");
+      lines.push("выход: on_done → внешний dispatch");
     } else if (ask) {
       lines.push(calls.length ? `cycle · спросить · ${calls.length}` : "cycle · спросить");
     } else {
       lines.push(calls.length ? `cycle · ${calls.length}` : "cycle");
     }
-  } else if (node.ask) lines.push("ask");
+  } else if (node.ask) lines.push("пауза · apply здесь");
   if (node.kind === "meta") lines.push("meta");
   return lines.join("\n");
 }
@@ -3968,7 +4483,10 @@ function packNodeTooltip(node) {
   if (node.draft) lines.push("черновик: клетка с палитры, не в YAML");
   const missing = node.subagent ? missingClisFor(node.subagent) : [];
   if (missing.length) lines.push(`нет в CLI: ${missing.join(", ")}`);
-  if (node.ask) lines.push("ask: пауза на этой клетке; apply без смены шага");
+  if (node.ask) {
+    lines.push("ask: пауза на этой клетке, apply без смены шага");
+    lines.push("между вопросом и apply перехода на другого агента нет");
+  }
   if (node.cycle && typeof node.cycle === "object") {
     const cycle = node.cycle;
     lines.push("cycle: как в YAML, одна клетка");
@@ -3996,7 +4514,11 @@ function packNodeTooltip(node) {
 }
 
 function packEdgeLabel(edge) {
-  return edge.label || edge.condition_label || edge.condition || "";
+  if (edge.condition) {
+    const human = conditionHumanLabel(edge.condition, edge);
+    return human && human !== edge.condition ? `${edge.condition} · ${human}` : edge.condition;
+  }
+  return edge.label || edge.condition_label || "";
 }
 
 function packNodeColor(node) {
@@ -4126,7 +4648,7 @@ function buildPackGraphElements(pack) {
         id,
         source: edge.from,
         target: edge.to,
-        label: packEdgeLabel(edge),
+        label: "",
         color: PACK_EDGE_COLORS[kind] || PACK_EDGE_COLORS.main,
         kind,
       },
@@ -4155,11 +4677,13 @@ function renderPackSummary(pack) {
   if (removed) draftBits.push(`−${removed} клеток`);
   if (removedEdges) draftBits.push(`−${removedEdges} стрелок`);
   if (edited) draftBits.push("правки инспектора");
+  if (Array.isArray(draft.dispatchRules)) draftBits.push("dispatch");
+  const rules = liveDispatchRules();
   const text = [
     `id: ${pack?.id || "—"}`,
     `label: ${graph.label || "—"}`,
     `оркестратор: ${graph.orchestrator || "—"}`,
-    `клеток: ${nodes.length} · стрелок: ${edges.length}`,
+    `клеток: ${nodes.length} · стрелок: ${edges.length} · dispatch: ${rules.length}`,
     draftBits.length ? `черновик: ${draftBits.join(", ")}` : "черновик: координаты в браузере",
   ].join("\n");
   if (el) el.textContent = text;
@@ -4179,6 +4703,7 @@ function renderPackGraph(pack, opts = {}) {
 
   state.pack = pack;
   renderPackSummary(pack);
+  renderSchemaDispatchTable();
 
   const graph = initCytoscape();
   if (!graph) return;
@@ -4560,6 +5085,74 @@ function bindSchemaDraftActions() {
     if (schemaInspectorSyncing || !selectedEdgeId) return;
     applyEdgeFieldPatch(selectedEdgeId, { label: event.target.value });
   });
+  const previewConditionPatch = (text) => {
+    const raw = String(text || "").trim();
+    const yamlEl = document.getElementById("schema-edge-condition-yaml");
+    if (!yamlEl) return conditionPatchFromText(raw);
+    if (!raw) {
+      yamlEl.textContent = "";
+      yamlEl.classList.add("hidden");
+      return { condition: "", condition_label: "" };
+    }
+    const patch = conditionPatchFromText(raw);
+    yamlEl.textContent = patch.condition ? `в YAML: condition: ${patch.condition}` : "";
+    yamlEl.classList.toggle("hidden", !patch.condition);
+    return patch;
+  };
+  document.getElementById("schema-edge-condition-text")?.addEventListener("input", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    previewConditionPatch(event.target.value);
+  });
+  document.getElementById("schema-edge-condition-text")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    applyEdgeFieldPatch(selectedEdgeId, previewConditionPatch(event.target.value));
+    highlightSchemaSelection();
+  });
+  document.getElementById("schema-outgoing-list")?.addEventListener("click", (event) => {
+    const item = event.target.closest(".schema-outgoing-item");
+    if (!item?.dataset.edgeId) return;
+    selectSchemaEdge(item.dataset.edgeId);
+  });
+
+  document.getElementById("schema-dispatch-add")?.addEventListener("click", () => {
+    if (!isSchemaMode()) return;
+    addDispatchRule();
+  });
+  document.getElementById("schema-dispatch")?.addEventListener("change", (event) => {
+    if (!isSchemaMode() || schemaInspectorSyncing) return;
+    const row = event.target.closest(".schema-dispatch-rule");
+    if (!row) return;
+    const index = Number(row.dataset.index);
+    if (Number.isNaN(index)) return;
+    const rule = liveDispatchRules()[index];
+    if (!rule) return;
+    const field = event.target.name;
+    if (field === "priority") {
+      patchDispatchRule(index, { priority: Number(event.target.value) });
+      return;
+    }
+    if (field === "when") {
+      patchDispatchRule(index, { when: event.target.value });
+      return;
+    }
+    if (field === "next") {
+      patchDispatchRule(
+        index,
+        ruleFromDispatchFields(rule.priority, rule.when, event.target.value),
+        true
+      );
+    }
+  });
+  document.getElementById("schema-dispatch")?.addEventListener("click", (event) => {
+    if (!isSchemaMode()) return;
+    const button = event.target.closest("button[data-action='remove']");
+    if (!button) return;
+    const row = button.closest(".schema-dispatch-rule");
+    if (!row) return;
+    const index = Number(row.dataset.index);
+    if (Number.isNaN(index)) return;
+    removeDispatchRule(index);
+  });
 
   document.addEventListener("keydown", (event) => {
     if (!isSchemaMode()) return;
@@ -4645,7 +5238,7 @@ function applyScreenModeChrome() {
   if (heading) heading.textContent = schema ? "Инспектор" : "Выбранный шаг";
   if (hint) {
     hint.textContent = schema
-      ? "Клетка или стрелка справа. Shift+клик — ребро. Cmd/Ctrl+Z — отмена. YAML не пишется."
+      ? "Клетка: исходящие стрелки. Стрелка: условие перехода. Shift+клик — ребро. YAML не пишется."
       : "Клик по узлу на графе. Жёлтая/оранжевая рамка — есть замечания.";
   }
   if (schema) {
@@ -4993,6 +5586,20 @@ async function init() {
     state.catalogPipelines = Array.isArray(catalog.pipelines) ? catalog.pipelines : [];
     state.catalogAgents = Array.isArray(catalog.agents) ? catalog.agents : [];
     state.catalogSkills = Array.isArray(catalog.skills) ? catalog.skills : [];
+    state.catalogPredicates =
+      catalog.predicates && typeof catalog.predicates === "object"
+        ? {
+            core: Array.isArray(catalog.predicates.core) ? catalog.predicates.core : [],
+            by_pipeline:
+              catalog.predicates.by_pipeline && typeof catalog.predicates.by_pipeline === "object"
+                ? catalog.predicates.by_pipeline
+                : {},
+          }
+        : { core: [], by_pipeline: {} };
+    state.catalogRouting =
+      catalog.routing_conditions && typeof catalog.routing_conditions === "object"
+        ? catalog.routing_conditions
+        : {};
     state.agentsByCli =
       catalog.agents_by_cli && typeof catalog.agents_by_cli === "object" ? catalog.agents_by_cli : {};
     state.writeFeatureCycle =
