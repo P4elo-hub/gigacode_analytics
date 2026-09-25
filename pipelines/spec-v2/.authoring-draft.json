@@ -1,0 +1,191 @@
+{
+  "packs": {
+    "spec-v2": {
+      "positions": {
+        "spec-v2-orchestrator": {
+          "x": 280,
+          "y": 72
+        },
+        "analyze-routing": {
+          "x": 510,
+          "y": 190
+        },
+        "done": {
+          "x": 280,
+          "y": 308
+        },
+        "context-researcher": {
+          "x": 740,
+          "y": 308
+        },
+        "spec-writer": {
+          "x": 970,
+          "y": 308
+        },
+        "gap-resolver": {
+          "x": 1200,
+          "y": 308
+        },
+        "spec-reviewer": {
+          "x": 1430,
+          "y": 308
+        },
+        "code-auditor": {
+          "x": 510,
+          "y": 72
+        },
+        "alignment-resolver": {
+          "x": 740,
+          "y": 72
+        }
+      },
+      "extraNodes": [],
+      "deletedIds": [],
+      "extraEdges": [],
+      "deletedEdgeIds": [],
+      "edgeEdits": {},
+      "orchestrator": "",
+      "dispatchRules": null,
+      "nodeEdits": {
+        "spec-writer": {
+          "uiKind": "cycle",
+          "kind": "step",
+          "cycle": {
+            "persistent": true,
+            "close": "on_done",
+            "ask_queue": false,
+            "assemble": "write_feature",
+            "param": "block_id",
+            "folder": "Feature-writing/{slug}",
+            "out": "{slug}.md",
+            "item_file": "{slug}.part-{param}.md",
+            "calls": [
+              {
+                "agent": "spec-writer",
+                "param": "goal",
+                "label": "Цель и бизнес-требования",
+                "skills": [
+                  "requirements-analysis"
+                ],
+                "sections": [
+                  "1.1"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "usecase-as-is",
+                "label": "Use Case AS IS",
+                "skills": [
+                  "use-case-analysis",
+                  "uml-diagram-analysis"
+                ],
+                "sections": [
+                  "1.2-usecase",
+                  "1.2-diagram"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "usecase-to-be",
+                "label": "Use Case TO BE",
+                "skills": [
+                  "use-case-analysis",
+                  "uml-diagram-analysis"
+                ],
+                "sections": [
+                  "1.3-usecase",
+                  "1.3-diagram"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "constraints",
+                "label": "Ограничения и допущения",
+                "skills": [
+                  "requirements-analysis"
+                ],
+                "sections": [
+                  "2"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "integration",
+                "label": "Интеграции и события",
+                "skills": [
+                  "integration-analysis"
+                ],
+                "sections": [
+                  "4.1.1"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "algorithm",
+                "label": "Алгоритм обработки",
+                "skills": [
+                  "use-case-analysis"
+                ],
+                "sections": [
+                  "4.2.2"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "data-model",
+                "label": "Модель данных",
+                "skills": [
+                  "data-model-analysis"
+                ],
+                "sections": [
+                  "4.2.3"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "field-mapping",
+                "label": "Маппинг полей (field lineage)",
+                "skills": [
+                  "data-mapping-analysis"
+                ],
+                "sections": [
+                  "4.2.3-mapping"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "nfr",
+                "label": "НФТ: безопасность, производительность, настройки, тогглы",
+                "skills": [
+                  "nfr-analysis"
+                ],
+                "sections": [
+                  "5.1",
+                  "5.2-performance",
+                  "5.2-reliability",
+                  "5.4",
+                  "5.5"
+                ]
+              },
+              {
+                "agent": "spec-writer",
+                "param": "observability",
+                "label": "Логирование и метрики",
+                "skills": [
+                  "observability-analysis"
+                ],
+                "sections": [
+                  "5.3.1",
+                  "5.3.2"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "seededCycleCalls": {
+        "spec-writer": true
+      }
+    }
+  }
+}
