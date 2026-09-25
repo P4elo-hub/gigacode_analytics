@@ -10,18 +10,12 @@ rules:
   - when: find_context
     priority: 110
     next: context-researcher
-  - when: agent_zakonchil_svoe_vypolnenie
-    priority: 150
-    next: analyze-routing
-  - when: eshche_odno_svoe_uslovie
-    priority: 160
-    next: analyze-routing
   - when: has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh
     priority: 170
     next: spec-writer
-  - when: has_agent_zakonchil_svoe_vypolnenie
+  - when: has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp
     priority: 180
-    next: analyze-routing
+    next: spec-reviewer
   - when: has_v_decisions_est_needs_answer_s_relates_na_gap_open_g
     priority: 190
     next: gap-resolver
@@ -31,13 +25,6 @@ rules:
   - when: has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply
     priority: 210
     next: gap-resolver
-  - when: has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp
-    priority: 220
-    next: spec-reviewer
-  - when: has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp
-    priority: 230
-    next: null
-    outcome: ready
   - when: has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili
     priority: 240
     next: code-auditor
@@ -47,3 +34,7 @@ rules:
   - when: has_v_alignment_est_critical_major_raskhozhdeniya_otchet
     priority: 260
     next: alignment-resolver
+  - when: has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp
+    priority: 300
+    next: null
+    outcome: ready

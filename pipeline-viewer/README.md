@@ -1,6 +1,6 @@
 # Pipeline Viewer
 
-Near-real-time граф spec/calibration пайплайна в браузере.
+Near-real-time граф пайплайна в браузере (все compiled packs: spec, calibration, routing-poc, spec-v2, …).
 
 ## Запуск
 
@@ -78,7 +78,7 @@ python3 pipeline-viewer/server.py \
 |------|----------|
 | `--slug` | Slug по умолчанию (необязательно) |
 | `--workspace` | Корень workspace |
-| `--pipeline` | Вкладка по умолчанию: `spec` \| `calibration` |
+| `--pipeline` | Вкладка по умолчанию: id из `known_pipeline_ids()` (обычно `spec`) |
 | `--port` | Порт (default 8765) |
 
 ## API

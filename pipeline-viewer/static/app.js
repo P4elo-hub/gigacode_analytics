@@ -10,15 +10,41 @@ const PROTECTED_PACKS = new Set(["spec", "calibration"]);
 const SCHEMA_CLIS = ["qwen", "gigacode", "opencode"];
 const PALETTE_DRAG_TYPE = "application/x-pipeline-agent";
 
+const TIMING_PALETTE = [
+  "#38bdf8",
+  "#22c55e",
+  "#a855f7",
+  "#f59e0b",
+  "#ec4899",
+  "#6366f1",
+  "#14b8a6",
+  "#f97316",
+  "#84cc16",
+  "#06b6d4",
+  "#e879f9",
+  "#f43f5e",
+];
+
+/** Known step ids (spec + common pack aliases). Unknown pack steps → stable palette hash. */
 const TIMING_STEP_COLORS = {
   "find-context": "#38bdf8",
+  "context-researcher": "#38bdf8",
   "write-feature": "#22c55e",
+  "spec-writer": "#22c55e",
   "check-feature": "#a855f7",
+  "spec-reviewer": "#a855f7",
   "resolve-gaps": "#f59e0b",
+  "gap-resolver": "#f59e0b",
   "challenge-feature": "#ec4899",
+  "spec-challenger": "#ec4899",
   "resolve-challenges": "#f472b6",
+  "challenge-resolver": "#f472b6",
   "check-feature-code": "#6366f1",
+  "code-auditor": "#6366f1",
   "resolve-code-alignment": "#818cf8",
+  "alignment-resolver": "#818cf8",
+  "analyze-routing": "#4338ca",
+  "routing-analyzer": "#4338ca",
   "orchestrator-idle": "#64748b",
 };
 
@@ -154,6 +180,8 @@ const state = {
   pack: null,
   packBase: null,
   catalogPipelines: [],
+  runPipelines: [],
+  allSlugs: [],
   catalogAgents: [],
   catalogSkills: [],
   catalogPredicates: { core: [], by_pipeline: {} },
@@ -1529,7 +1557,13 @@ function groupAgentInvocations(timeline, timingPasses) {
 }
 
 function timingStepColor(stepId) {
-  return TIMING_STEP_COLORS[stepId] || "#94a3b8";
+  if (!stepId) return "#94a3b8";
+  if (TIMING_STEP_COLORS[stepId]) return TIMING_STEP_COLORS[stepId];
+  let hash = 0;
+  for (let i = 0; i < stepId.length; i += 1) {
+    hash = (hash * 31 + stepId.charCodeAt(i)) >>> 0;
+  }
+  return TIMING_PALETTE[hash % TIMING_PALETTE.length];
 }
 
 function nestRoutingUnderAgents(invocations) {
@@ -1949,16 +1983,22 @@ function updateInfraPanel() {
 function buildTargetElements(data) {
   const elements = [];
   const spec = data.pipeline === "spec";
+  // Spec: analyze-routing is drawn as satellites under domain steps (legacy UX).
+  // Other packs: analyze-routing is a normal graph node — keep its edges.
   const bursts = spec ? routingBurstsByHost(data.timeline || []) : {};
   const liveHost = spec ? routingLiveHost(data) : null;
   const satelliteHosts = new Set(spec ? Object.keys(bursts) : []);
   if (liveHost) satelliteHosts.add(liveHost);
 
+  // Prefer positions from Schema draft (same pack id) so Прогон matches what you drew.
+  const draftPositions =
+    !spec && data.pipeline ? getPackDraft(data.pipeline).positions || {} : {};
+
   const nodeById = {};
   for (const node of data.nodes || []) {
     nodeById[node.id] = node;
     if (spec && node.id === ROUTING_STEP) continue;
-    const pos = node.position || { x: 0, y: 0 };
+    const pos = draftPositions[node.id] || node.position || { x: 0, y: 0 };
     elements.push({
       group: "nodes",
       data: {
@@ -1976,7 +2016,8 @@ function buildTargetElements(data) {
 
   for (const host of satelliteHosts) {
     const parent = nodeById[host];
-    if (!parent?.position) continue;
+    if (!parent?.position && !draftPositions[host]) continue;
+    const parentPos = draftPositions[host] || parent.position;
     const burst = bursts[host];
     const visual = satelliteVisual(host, data, burst, liveHost);
     elements.push({
@@ -1992,8 +2033,8 @@ function buildTargetElements(data) {
         seq: burst?.last?.seq || null,
       },
       position: {
-        x: parent.position.x,
-        y: parent.position.y + ROUTING_SATELLITE_DY,
+        x: parentPos.x,
+        y: parentPos.y + ROUTING_SATELLITE_DY,
       },
     });
     elements.push({
@@ -2011,7 +2052,7 @@ function buildTargetElements(data) {
   }
 
   for (const edge of data.edges || []) {
-    if (edge.from === ROUTING_STEP || edge.to === ROUTING_STEP) continue;
+    if (spec && (edge.from === ROUTING_STEP || edge.to === ROUTING_STEP)) continue;
     const kind = edge.kind || "main";
     const source = satelliteHosts.has(edge.from)
       ? routingSatelliteId(edge.from)
@@ -2701,8 +2742,29 @@ function nodeUiKind(node) {
   return node.kind === "step" ? "step" : node.kind || "step";
 }
 
+function writeFeatureCycleDefaults() {
+  const cat = state.writeFeatureCycle && typeof state.writeFeatureCycle === "object" ? state.writeFeatureCycle : {};
+  return {
+    persistent: true,
+    close: CYCLE_CLOSE,
+    assemble: String(cat.assemble || "write_feature"),
+    param: String(cat.param || "block_id"),
+    folder: "Feature-writing/{slug}",
+    out: "{slug}.md",
+    item_file: "{slug}.part-{param}.md",
+    ask_queue: false,
+  };
+}
+
 function defaultCycle() {
-  return { persistent: true, close: CYCLE_CLOSE };
+  return writeFeatureCycleDefaults();
+}
+
+function cycleNeedsCatalogFill(node) {
+  if (!node?.cycle || typeof node.cycle !== "object") return false;
+  const cycle = node.cycle;
+  const missingMeta = !cycle.assemble || !cycle.param || !cycle.folder || !cycle.out || !cycle.item_file;
+  return missingMeta || !packCycleCalls(node).length;
 }
 
 function parseCycleCallSections(value) {
@@ -4001,32 +4063,49 @@ async function fillSchemaCycleFromCatalog() {
 }
 
 async function seedAuthoredCycleCalls(packId, basePack) {
+  // Fill incomplete cycle cells in the *draft* (kind=cycle on canvas), not only YAML.
+  // Shell fields + sihist calls come from write-feature catalog; YAML is untouched until Apply.
   const draft = getPackDraft(packId);
   draft.seededCycleCalls = { ...(draft.seededCycleCalls || {}) };
-  const pending = (basePack?.graph?.nodes || []).filter(
-    (node) => node?.id && node.cycle && !packCycleCalls(node).length && !draft.seededCycleCalls[node.id]
-  );
-  if (!pending.length) return draft;
   await loadWriteFeatureCycleFallback();
+  const defaults = writeFeatureCycleDefaults();
   const preview = writeFeatureCatalogCalls();
-  if (!preview.length) return draft;
-  const calls = preview.map((call) =>
-    normalizeCycleCall({
-      agent: call.agent,
-      param: call.param,
-      skills: call.skills,
-      label: call.label,
-      sections: call.sections,
-    })
-  );
-  for (const node of pending) {
-    const cycle = applyCycleQueueMode(normalizeCycle(node.cycle), "pinned");
-    cycle.calls = calls.map((call) => ({ ...call }));
+  const live = applyDraftToPack(basePack, draft);
+  let changed = false;
+  for (const node of live?.graph?.nodes || []) {
+    if (!node?.id || !node.cycle) continue;
+    if (!cycleNeedsCatalogFill(node)) {
+      draft.seededCycleCalls[node.id] = true;
+      continue;
+    }
+    const merged = normalizeCycle({ ...defaults, ...node.cycle });
+    for (const key of ["assemble", "param", "folder", "out", "item_file"]) {
+      if (!merged[key]) merged[key] = defaults[key];
+    }
+    merged.persistent = merged.persistent !== false;
+    const cycle = applyCycleQueueMode(merged, "pinned");
+    if (!Array.isArray(cycle.calls) || !cycle.calls.length) {
+      if (!preview.length) continue;
+      cycle.calls = preview.map((call) =>
+        normalizeCycleCall({
+          agent: call.agent,
+          param: call.param,
+          skills: call.skills,
+          label: call.label,
+          sections: call.sections,
+        })
+      );
+    }
     draft.nodeEdits = { ...(draft.nodeEdits || {}) };
-    draft.nodeEdits[node.id] = { ...(draft.nodeEdits[node.id] || {}), cycle };
+    draft.nodeEdits[node.id] = {
+      ...(draft.nodeEdits[node.id] || {}),
+      uiKind: "cycle",
+      cycle,
+    };
     draft.seededCycleCalls[node.id] = true;
+    changed = true;
   }
-  setPackDraft(packId, draft);
+  if (changed) setPackDraft(packId, draft);
   return getPackDraft(packId);
 }
 
@@ -4421,14 +4500,26 @@ function applyNodeKindChange(nodeId, uiKind) {
   armInspectorUndo();
   const draft = getPackDraft(state.packId);
   const patched = applyUiKindToNode(node, uiKind);
+  let cycle = patched.cycle ? normalizeCycle(patched.cycle) : null;
+  if (uiKind === "cycle" && cycle) {
+    const defaults = writeFeatureCycleDefaults();
+    cycle = normalizeCycle({ ...defaults, ...cycle });
+    for (const key of ["assemble", "param", "folder", "out", "item_file"]) {
+      if (!cycle[key]) cycle[key] = defaults[key];
+    }
+    cycle = applyCycleQueueMode(cycle, packCycleCalls({ cycle }).length ? cycleQueueMode({ cycle }) : "pinned");
+  }
   patchDraftNode(draft, nodeId, {
     uiKind,
     kind: patched.kind,
     ask: patched.ask === true,
-    cycle: patched.cycle ? normalizeCycle(patched.cycle) : null,
+    cycle,
     label: patched.label,
     subagent: patched.subagent,
   });
+  if (uiKind === "cycle") {
+    delete (draft.seededCycleCalls || {})[nodeId];
+  }
   if (uiKind === "orchestrator") {
     const live = applyDraftToPack(state.packBase, draft);
     for (const other of live.graph.nodes || []) {
@@ -4449,6 +4540,13 @@ function applyNodeKindChange(nodeId, uiKind) {
   }
   commitSchemaDraft(draft, { selectNode: nodeId, skipFit: true });
   setSchemaInspectorError("");
+  if (uiKind === "cycle" && state.packBase) {
+    const packId = state.packId;
+    seedAuthoredCycleCalls(packId, state.packBase).then(() => {
+      if (state.packId !== packId) return;
+      commitSchemaDraft(getPackDraft(packId), { selectNode: nodeId, skipFit: true });
+    });
+  }
   return true;
 }
 
@@ -5196,6 +5294,54 @@ function renderPackGraph(pack, opts = {}) {
 
 let packLoadSeq = 0;
 
+async function pullServerAuthoringDraft(packId) {
+  // Disk overlay for schema draft (pipelines/<id>/.authoring-draft.json) — not pack YAML.
+  // Lets an agent fill cycle fields once; every browser picks them up before Apply.
+  try {
+    const res = await fetch(`/api/pack/draft?pipeline=${encodeURIComponent(packId)}`);
+    if (!res.ok) return getPackDraft(packId);
+    const data = await parseJsonResponse(res);
+    const remote = data && data.draft && typeof data.draft === "object" ? data.draft : null;
+    if (!remote) return getPackDraft(packId);
+    const draft = getPackDraft(packId);
+    const remoteEdits = remote.nodeEdits && typeof remote.nodeEdits === "object" ? remote.nodeEdits : {};
+    let changed = false;
+    draft.nodeEdits = { ...(draft.nodeEdits || {}) };
+    for (const [nodeId, edit] of Object.entries(remoteEdits)) {
+      if (!edit || typeof edit !== "object") continue;
+      const remoteCycle = edit.cycle && typeof edit.cycle === "object" ? edit.cycle : null;
+      if (!remoteCycle) continue;
+      const localEdit = draft.nodeEdits[nodeId] || {};
+      const localCycle = localEdit.cycle && typeof localEdit.cycle === "object" ? localEdit.cycle : null;
+      const localIncomplete =
+        !localCycle ||
+        !localCycle.assemble ||
+        !localCycle.folder ||
+        !Array.isArray(localCycle.calls) ||
+        !localCycle.calls.length;
+      const remoteComplete =
+        remoteCycle.assemble &&
+        remoteCycle.folder &&
+        Array.isArray(remoteCycle.calls) &&
+        remoteCycle.calls.length;
+      if (localIncomplete && remoteComplete) {
+        draft.nodeEdits[nodeId] = {
+          ...localEdit,
+          ...edit,
+          uiKind: edit.uiKind || localEdit.uiKind || "cycle",
+          cycle: remoteCycle,
+        };
+        draft.seededCycleCalls = { ...(draft.seededCycleCalls || {}), [nodeId]: true };
+        changed = true;
+      }
+    }
+    if (changed) setPackDraft(packId, draft);
+    return getPackDraft(packId);
+  } catch {
+    return getPackDraft(packId);
+  }
+}
+
 async function loadPackGraph() {
   const seq = ++packLoadSeq;
   const packId = state.packId;
@@ -5211,6 +5357,8 @@ async function loadPackGraph() {
     }
     clearError();
     state.packBase = data;
+    await pullServerAuthoringDraft(packId);
+    if (seq !== packLoadSeq || state.packId !== packId) return;
     const draft = await seedAuthoredCycleCalls(packId, data);
     if (seq !== packLoadSeq || state.packId !== packId) return;
     renderPackGraph(applyDraftToPack(data, draft));
@@ -6186,6 +6334,49 @@ function fillPackTabs() {
   setActivePackTab();
 }
 
+function fillPipelineTabs() {
+  const nav = document.getElementById("pipeline-tabs");
+  if (!nav) return;
+  nav.innerHTML = "";
+  const pipelines = state.runPipelines.length
+    ? state.runPipelines
+    : state.catalogPipelines.length
+      ? state.catalogPipelines
+      : [
+          { id: "spec", label: "Spec pipeline" },
+          { id: "calibration", label: "Calibration" },
+        ];
+  state.runPipelines = pipelines;
+  for (const item of pipelines) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tab";
+    btn.dataset.pipeline = item.id;
+    btn.textContent = item.id;
+    btn.title = item.label || item.id;
+    btn.addEventListener("click", () => {
+      if (state.pipeline === item.id) return;
+      state.pipeline = item.id;
+      setActiveTab(state.pipeline);
+      const preferred = fillSlugSelect(
+        { slugs: state.allSlugs },
+        { default_slug: "" },
+        { slug: state.slug }
+      );
+      state.slug = preferred;
+      updateRestartActions(selectedNodeId);
+      saveSelection();
+      if (!isSchemaMode()) connectStream();
+    });
+    nav.appendChild(btn);
+  }
+  const known = new Set(pipelines.map((item) => item.id));
+  if (!known.has(state.pipeline)) {
+    state.pipeline = pipelines.find((item) => item.id === "spec")?.id || pipelines[0]?.id || "spec";
+  }
+  setActiveTab(state.pipeline);
+}
+
 function setActivePackTab() {
   document.querySelectorAll("#pack-tabs .tab").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.pack === state.packId);
@@ -6270,12 +6461,21 @@ function renderGraph(data) {
   const empty = document.getElementById("empty-state");
   const noSlug = !data.slug;
   const nodes = data.nodes || [];
+  const hasTopology = nodes.length > 0;
 
-  empty.classList.toggle("hidden", !noSlug);
-  document.getElementById("cy").style.visibility = noSlug ? "hidden" : "visible";
+  empty.classList.toggle("hidden", hasTopology);
+  document.getElementById("cy").style.visibility = hasTopology ? "visible" : "hidden";
+  const emptyRun = empty?.querySelector(".empty-run");
+  if (emptyRun && !hasTopology) {
+    emptyRun.innerHTML =
+      `<p>Нет топологии для пайплайна <code>${escapeHtml(state.pipeline)}</code>.</p>` +
+      `<p class="hint">Проверьте, что пак скомпилирован: <code>pipeline_compile.py --apply</code></p>`;
+  }
 
   const runEl = document.getElementById("run-id");
-  if (data.pipeline === "calibration") {
+  if (data.target_only || noSlug) {
+    runEl.textContent = "целевой · без задачи";
+  } else if (data.pipeline === "calibration") {
     const cal = data.calibration_run_id ? `cal ${data.calibration_run_id}` : "cal —";
     const agent = data.run_id ? ` · agent ${data.run_id}` : "";
     runEl.textContent = cal + agent;
@@ -6289,7 +6489,7 @@ function renderGraph(data) {
   normalizeTimelineDisplay(data);
   state.graph = data;
 
-  if (noSlug) {
+  if (!hasTopology) {
     document.getElementById("timeline").innerHTML = "";
     document.getElementById("stats").textContent = "—";
     clearNodePanel();
@@ -6297,6 +6497,10 @@ function renderGraph(data) {
 
     if (cy) cy.elements().remove();
     return;
+  }
+
+  if (noSlug && state.graphView !== "target") {
+    state.graphView = "target";
   }
 
   setGraphViewTabs();
@@ -6409,20 +6613,15 @@ function disconnectStream() {
 function connectStream() {
   disconnectStream();
   if (isSchemaMode()) return;
-  if (!state.slug) {
-    renderGraph({ slug: "", nodes: [], edges: [], history: [] });
-    setConnection("idle", "нет задачи");
-    return;
-  }
   saveSelection();
-  setConnection("", "подключение…");
+  setConnection("", state.slug ? "подключение…" : "целевой граф…");
 
   const source = new EventSource(streamUrl());
   state.source = source;
 
   source.onopen = () => {
     if (state.source !== source || isSchemaMode()) return;
-    setConnection("live", "live");
+    setConnection("live", state.slug ? "live" : "live · целевой");
   };
 
   source.onmessage = (event) => {
@@ -6431,7 +6630,10 @@ function connectStream() {
       const data = JSON.parse(event.data);
       renderGraph(data);
       clearError();
-      setConnection("live", `live · ${data.updated_at || ""}`);
+      setConnection(
+        "live",
+        state.slug ? `live · ${data.updated_at || ""}` : "live · целевой"
+      );
     } catch (err) {
       console.error(err);
       showError(`Ошибка разбора данных: ${err.message}`);
@@ -6444,22 +6646,42 @@ function connectStream() {
     disconnectStream();
     setTimeout(() => {
       if (isSchemaMode()) return;
+      if (state.source) return;
       connectStream();
     }, 2000);
   };
+}
+
+function slugsForCurrentPipeline(allSlugs) {
+  const pipe = state.pipeline || "spec";
+  return (allSlugs || []).filter((item) => {
+    const pipes = Array.isArray(item.pipelines) ? item.pipelines : null;
+    if (pipes && pipes.length) return pipes.includes(pipe);
+    return pipe === "spec";
+  });
 }
 
 function fillSlugSelect(payload, config, saved) {
   const select = document.getElementById("slug-select");
   select.innerHTML = "";
 
-  if (!payload.slugs || payload.slugs.length === 0) {
-    select.innerHTML = '<option value="">— нет задач —</option>';
+  const all = Array.isArray(payload?.slugs) ? payload.slugs : state.allSlugs;
+  if (Array.isArray(payload?.slugs)) {
+    state.allSlugs = payload.slugs;
+  }
+  const filtered = slugsForCurrentPipeline(all);
+
+  if (!filtered.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = `— нет задач для ${state.pipeline} —`;
+    select.appendChild(opt);
+    select.value = "";
     return "";
   }
 
-  const withLogs = payload.slugs.filter((s) => s.has_agent_logs);
-  const withoutLogs = payload.slugs.filter((s) => !s.has_agent_logs);
+  const withLogs = filtered.filter((s) => s.has_agent_logs);
+  const withoutLogs = filtered.filter((s) => !s.has_agent_logs);
 
   function addGroup(label, items) {
     if (!items.length) return;
@@ -6474,18 +6696,26 @@ function fillSlugSelect(payload, config, saved) {
     select.appendChild(group);
   }
 
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "— без задачи (целевой граф) —";
+  select.appendChild(blank);
+
   addGroup("С телеметрией (agent-logs)", withLogs);
   addGroup("Только Feature-writing", withoutLogs);
 
-  const slugSet = new Set(payload.slugs.map((s) => s.slug));
-  let preferred =
-    saved.slug ||
-    config.default_slug ||
-    (withLogs[0] && withLogs[0].slug) ||
-    payload.slugs[0].slug;
-
-  if (!slugSet.has(preferred)) {
-    preferred = (withLogs[0] || payload.slugs[0]).slug;
+  const slugSet = new Set(filtered.map((s) => s.slug));
+  let preferred = saved?.slug || "";
+  if (preferred && !slugSet.has(preferred)) {
+    preferred = "";
+  }
+  if (!preferred && config?.default_slug && slugSet.has(config.default_slug)) {
+    preferred = config.default_slug;
+  }
+  // Spec: keep previous convenience — pick first telemetry slug if nothing selected.
+  // Other packs: leave empty → Целевой topology (same as Schema).
+  if (!preferred && state.pipeline === "spec") {
+    preferred = (withLogs[0] || filtered[0])?.slug || "";
   }
 
   select.value = preferred;
@@ -6549,6 +6779,7 @@ async function init() {
     state.staleCollapsed = saved.staleCollapsed !== false;
     state.screenMode = saved.screenMode === "schema" ? "schema" : "run";
     state.packId = typeof saved.packId === "string" && saved.packId ? saved.packId : "spec";
+    state.runPipelines = Array.isArray(config.pipelines) ? config.pipelines : [];
     state.catalogPipelines = Array.isArray(catalog.pipelines) ? catalog.pipelines : [];
     state.catalogAgents = Array.isArray(catalog.agents) ? catalog.agents : [];
     state.catalogSkills = Array.isArray(catalog.skills) ? catalog.skills : [];
@@ -6573,6 +6804,7 @@ async function init() {
         ? catalog.write_feature_cycle
         : { profile: "", calls: [] };
     fillPackTabs();
+    fillPipelineTabs();
     bindSchemaPalette();
     bindSchemaDraftActions();
     setActiveTab(state.pipeline);
@@ -6631,15 +6863,6 @@ async function init() {
     document.getElementById("slug-select").addEventListener("change", (e) => {
       state.slug = e.target.value;
       if (!isSchemaMode()) connectStream();
-    });
-
-    document.querySelectorAll("#pipeline-tabs .tab").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        state.pipeline = btn.dataset.pipeline;
-        setActiveTab(state.pipeline);
-        updateRestartActions(selectedNodeId);
-        if (!isSchemaMode()) connectStream();
-      });
     });
 
     if (isSchemaMode()) {

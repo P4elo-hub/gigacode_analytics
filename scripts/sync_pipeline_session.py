@@ -16,8 +16,8 @@ from agent_logs import (
     load_manifest,
     run_log_path,
 )
-from archive_subagent_passes import archive_linked_sessions
-from build_pipeline_graph import load_schema, parse_iso_ts, subagent_to_step
+from archive_subagent_passes import archive_linked_sessions, pack_schema_for_slug
+from build_pipeline_graph import parse_iso_ts, subagent_to_step
 from pipeline_validate import validate_slug, ValidationReport
 
 
@@ -110,7 +110,7 @@ def backfill_run_log_from_subagents(
     if not sub_dir.is_dir():
         return []
 
-    schema = load_schema()["pipelines"]["spec"]
+    schema = pack_schema_for_slug(root, slug)
     log_path = run_log_path(root, slug, run_id)
     existing = read_jsonl(log_path)
     appended: list[dict] = []

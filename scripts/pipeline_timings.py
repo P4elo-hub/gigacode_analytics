@@ -35,12 +35,41 @@ def _step_labels(schema: dict) -> dict[str, str]:
     return {n["id"]: n.get("label") or n["id"] for n in schema.get("nodes", [])}
 
 
+def _schema_step_ids(schema: dict) -> set[str]:
+    return {
+        str(node.get("id") or "")
+        for node in schema.get("nodes") or []
+        if isinstance(node, dict) and node.get("id")
+    }
+
+
+def _resolve_pack_step(schema: dict, *, step: str | None = None, subagent: str | None = None) -> str:
+    """Map a log/archive row onto a step id that exists in this pack schema.
+
+    Prefer subagent→node mapping for the *current* pack (spec-v2: spec-writer),
+    not a stale step stamped by session-sync against pipelines/spec
+    (write-feature / find-context / …).
+    """
+    step_ids = _schema_step_ids(schema)
+    mapped = subagent_to_step(schema, subagent) if subagent else None
+    if mapped and mapped in step_ids:
+        return mapped
+    recorded = str(step or "")
+    if recorded in step_ids:
+        return recorded
+    return ""
+
+
 def _archived_passes(root: Path, slug: str, schema: dict) -> list[dict]:
     """Timings from agent-logs/subagent-passes.jsonl (archived Qwen meta)."""
     rows = load_archived_passes(root, slug)
     passes: list[dict] = []
     for row in rows:
-        step = row.get("step") or subagent_to_step(schema, row.get("subagent") or "") or ""
+        step = _resolve_pack_step(
+            schema,
+            step=row.get("step"),
+            subagent=row.get("subagent") or row.get("agent_type") or "",
+        )
         if not step:
             continue
         duration = row.get("duration_sec")
@@ -80,7 +109,7 @@ def _event_passes(schema: dict, events: list[dict]) -> list[dict]:
         if event.get("type") != "agent.spawn":
             continue
         subagent = str(event.get("subagent_type") or "").strip()
-        step = subagent_to_step(schema, subagent) or ""
+        step = _resolve_pack_step(schema, subagent=subagent)
         if not step:
             continue
         spawns.append(
@@ -133,8 +162,18 @@ def _event_passes(schema: dict, events: list[dict]) -> list[dict]:
 
 def _run_log_passes(schema: dict, run_log: list[dict]) -> tuple[list[dict], float]:
     """Fallback: interval until next row; long gaps capped → idle overflow."""
-    step_ids = {n["id"] for n in schema.get("nodes", [])}
-    rows = [r for r in run_log if (r.get("step") or "") in step_ids]
+    rows = []
+    for row in run_log:
+        step = _resolve_pack_step(
+            schema,
+            step=row.get("step"),
+            subagent=row.get("subagent") or "",
+        )
+        if not step:
+            continue
+        copy = dict(row)
+        copy["step"] = step
+        rows.append(copy)
     sort_history_by_ts(rows)
     if not rows:
         return [], 0.0

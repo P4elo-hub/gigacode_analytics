@@ -197,7 +197,138 @@
         "id": "spec-writer",
         "label": "spec-writer",
         "kind": "step",
-        "subagent": "spec-writer"
+        "subagent": "spec-writer",
+        "cycle": {
+          "persistent": true,
+          "assemble": "write_feature",
+          "param": "block_id",
+          "folder": "Feature-writing/{slug}",
+          "out": "{slug}.md",
+          "item_file": "{slug}.part-{param}.md",
+          "close": "on_done",
+          "calls": [
+            {
+              "agent": "spec-writer",
+              "param": "goal",
+              "skills": [
+                "requirements-analysis"
+              ],
+              "label": "Цель и бизнес-требования",
+              "sections": [
+                "1.1"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "usecase-as-is",
+              "skills": [
+                "use-case-analysis",
+                "uml-diagram-analysis"
+              ],
+              "label": "Use Case AS IS",
+              "sections": [
+                "1.2-usecase",
+                "1.2-diagram"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "usecase-to-be",
+              "skills": [
+                "use-case-analysis",
+                "uml-diagram-analysis"
+              ],
+              "label": "Use Case TO BE",
+              "sections": [
+                "1.3-usecase",
+                "1.3-diagram"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "constraints",
+              "skills": [
+                "requirements-analysis"
+              ],
+              "label": "Ограничения и допущения",
+              "sections": [
+                "2"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "integration",
+              "skills": [
+                "integration-analysis"
+              ],
+              "label": "Интеграции и события",
+              "sections": [
+                "4.1.1"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "algorithm",
+              "skills": [
+                "use-case-analysis"
+              ],
+              "label": "Алгоритм обработки",
+              "sections": [
+                "4.2.2"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "data-model",
+              "skills": [
+                "data-model-analysis"
+              ],
+              "label": "Модель данных",
+              "sections": [
+                "4.2.3"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "field-mapping",
+              "skills": [
+                "data-mapping-analysis"
+              ],
+              "label": "Маппинг полей (field lineage)",
+              "sections": [
+                "4.2.3-mapping"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "nfr",
+              "skills": [
+                "nfr-analysis"
+              ],
+              "label": "НФТ: безопасность, производительность, настройки, тогглы",
+              "sections": [
+                "5.1",
+                "5.2-performance",
+                "5.2-reliability",
+                "5.4",
+                "5.5"
+              ]
+            },
+            {
+              "agent": "spec-writer",
+              "param": "observability",
+              "skills": [
+                "observability-analysis"
+              ],
+              "label": "Логирование и метрики",
+              "sections": [
+                "5.3.1",
+                "5.3.2"
+              ]
+            }
+          ],
+          "ask_queue": true
+        }
       },
       {
         "id": "gap-resolver",
@@ -373,24 +504,14 @@
           "next": "context-researcher"
         },
         {
-          "when": "agent_zakonchil_svoe_vypolnenie",
-          "priority": 150,
-          "next": "analyze-routing"
-        },
-        {
-          "when": "eshche_odno_svoe_uslovie",
-          "priority": 160,
-          "next": "analyze-routing"
-        },
-        {
           "when": "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh",
           "priority": 170,
           "next": "spec-writer"
         },
         {
-          "when": "has_agent_zakonchil_svoe_vypolnenie",
+          "when": "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
           "priority": 180,
-          "next": "analyze-routing"
+          "next": "spec-reviewer"
         },
         {
           "when": "has_v_decisions_est_needs_answer_s_relates_na_gap_open_g",
@@ -408,17 +529,6 @@
           "next": "gap-resolver"
         },
         {
-          "when": "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
-          "priority": 220,
-          "next": "spec-reviewer"
-        },
-        {
-          "when": "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
-          "priority": 230,
-          "next": null,
-          "outcome": "ready"
-        },
-        {
           "when": "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili",
           "priority": 240,
           "next": "code-auditor"
@@ -432,6 +542,12 @@
           "when": "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
           "priority": 260,
           "next": "alignment-resolver"
+        },
+        {
+          "when": "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
+          "priority": 300,
+          "next": null,
+          "outcome": "ready"
         }
       ]
     }
@@ -734,9 +850,9 @@
       "orchestrator": {},
       "messages": {
         "ready": "spec-v2 ready",
-        "ready_title": "spec-v2 без dispatch",
-        "ready_detail": "spec-v2 pack has no dispatch rules.",
-        "ready_fix": "Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
+        "ready_title": "spec-v2 — routing-state dispatch",
+        "ready_detail": "Delegate выбирает шаг по bool из routing-state.json (pack-local analyzer).",
+        "ready_fix": "Оркестратор: delegate → task → append_run_log → ingest → validate.",
         "stopped": "spec-v2 пайплайн остановлен."
       },
       "collector_mode": "routing_state",
@@ -864,13 +980,14 @@
       "step_to_subagent": {
         "analyze-routing": "routing-analyzer",
         "context-researcher": "context-researcher",
-        "spec-writer": "spec-writer",
         "gap-resolver": "gap-resolver",
         "spec-reviewer": "spec-reviewer",
         "code-auditor": "code-auditor",
         "alignment-resolver": "alignment-resolver"
       },
-      "orchestrator_owned": [],
+      "orchestrator_owned": [
+        "spec-writer"
+      ],
       "gated_subagents": [
         "routing-analyzer",
         "context-researcher",
@@ -898,7 +1015,13 @@
         "code-auditor": 5,
         "alignment-resolver": 6
       },
-      "delegate_modes": {}
+      "delegate_modes": {
+        "write_feature_cycle": {
+          "step": "spec-writer",
+          "subagent": "spec-writer",
+          "persistent": true
+        }
+      }
     }
   },
   "predicates": {
@@ -962,12 +1085,9 @@
       "routing_state_ready"
     ],
     "spec-v2": [
-      "agent_zakonchil_svoe_vypolnenie",
-      "eshche_odno_svoe_uslovie",
       "file_missing_main",
       "file_missing_routing_state",
       "find_context",
-      "has_agent_zakonchil_svoe_vypolnenie",
       "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
       "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh",
       "has_main",

@@ -20,6 +20,19 @@ from agent_logs import (
 from build_pipeline_graph import load_schema, parse_iso_ts, subagent_to_step
 
 
+def pack_schema_for_slug(root: Path, slug: str) -> dict:
+    """Compiled graph schema for the pack this slug is running (active-task pipeline)."""
+    from pipeline_active_task import load_active_task_for_slug
+    from pipeline_common import DEFAULT_PIPELINE_ID
+
+    task = load_active_task_for_slug(root, slug) or {}
+    pid = str(task.get("pipeline") or task.get("pipeline_id") or DEFAULT_PIPELINE_ID)
+    pipes = load_schema().get("pipelines") or {}
+    if pid not in pipes:
+        pid = DEFAULT_PIPELINE_ID if DEFAULT_PIPELINE_ID in pipes else next(iter(pipes), "spec")
+    return pipes[pid]
+
+
 def read_jsonl(path: Path) -> list[dict]:
     if not path.is_file():
         return []
@@ -95,11 +108,11 @@ def _meta_to_pass(
     run_id: str,
     cli: str,
     raw_meta_rel: str | None,
+    schema: dict,
 ) -> dict | None:
     subagent = str(meta.get("agentType") or meta.get("subagentName") or "").strip()
     if not subagent:
         return None
-    schema = load_schema()["pipelines"]["spec"]
     step = subagent_to_step(schema, subagent) or ""
     if not step:
         return None
@@ -159,6 +172,8 @@ def archive_session(
             dest_main = raw_dir(root, slug, run_id) / f"main-{session_id}.jsonl"
             shutil.copy2(main_chat, dest_main)
 
+    schema = pack_schema_for_slug(root, slug)
+
     for meta_path in sorted(sub_dir.glob("*.meta.json")):
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -187,6 +202,7 @@ def archive_session(
             run_id=run_id,
             cli=cli,
             raw_meta_rel=raw_meta_rel,
+            schema=schema,
         )
         if row:
             archived.append(row)

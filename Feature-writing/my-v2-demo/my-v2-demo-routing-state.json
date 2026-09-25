@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "slug": "my-v2-demo",
+  "generated_at": "2026-09-25T17:25:00Z",
+  "fields": {
+    "find_context": false,
+    "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh": false,
+    "has_v_decisions_est_needs_answer_s_relates_na_gap_open_g": false,
+    "has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec": false,
+    "has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply": false,
+    "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp": false,
+    "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp": true,
+    "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili": false,
+    "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa": false,
+    "has_v_alignment_est_critical_major_raskhozhdeniya_otchet": false
+  },
+  "position": {
+    "step": "analyze-routing",
+    "result": "ok",
+    "updated_at": "2026-09-25T14:24:23Z"
+  }
+}

@@ -19,10 +19,12 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(VIEWER))
 
 from artifact_paths import list_feature_slugs, workspace_root  # noqa: E402
-from build_pipeline_graph import build_graph  # noqa: E402
+from build_pipeline_graph import build_graph, build_pack_target_graph  # noqa: E402
 from sync_pipeline_session import sync_session  # noqa: E402
 from pipeline_common import known_pipeline_ids, pipeline_restartable_steps  # noqa: E402
 from pipeline_pack import DEFAULT_PIPELINE_ID, discover_pipeline_ids, export_pack_json  # noqa: E402
+from pipeline_active_task import feature_active_task_path  # noqa: E402
+from pipeline_runtime import load_pipeline_schema  # noqa: E402
 from pipeline_restart import (  # noqa: E402
     apply_restart_plan,
     build_restart_plan,
@@ -33,8 +35,46 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_PORT = 8765
 API_VERSION = 7
 POLL_INTERVAL = 1.0
-PIPELINES = ("spec", "calibration")
 CLI_AGENT_DIRS = (".qwen", ".gigacode", ".opencode")
+
+
+def authoring_draft_path(workspace: Path, pipeline_id: str) -> Path:
+    return workspace / "pipelines" / pipeline_id / ".authoring-draft.json"
+
+
+def load_authoring_draft_pack(workspace: Path, pipeline_id: str) -> dict | None:
+    """Browser schema draft overlay (not pack YAML). Written for authoring UI only."""
+    path = authoring_draft_path(workspace, pipeline_id)
+    if not path.is_file():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    packs = raw.get("packs")
+    if isinstance(packs, dict) and isinstance(packs.get(pipeline_id), dict):
+        return packs[pipeline_id]
+    # allow a bare pack draft object
+    if any(key in raw for key in ("nodeEdits", "positions", "extraNodes")):
+        return raw
+    return None
+
+
+def run_pipeline_tabs(workspace: Path) -> list[dict]:
+    """Прогон tabs: compiled pack ids (same set as build_graph / known_pipeline_ids)."""
+    labels: dict[str, str] = {}
+    try:
+        from pipeline_pack import load_all_packs
+
+        for pid, pack in load_all_packs(workspace).items():
+            graph = pack.get("graph") if isinstance(pack, dict) else None
+            if isinstance(graph, dict):
+                labels[pid] = str(graph.get("label") or pid)
+    except Exception:
+        pass
+    return [{"id": pid, "label": labels.get(pid, pid)} for pid in known_pipeline_ids()]
 
 
 def write_feature_cycle_preview() -> dict:
@@ -99,6 +139,101 @@ class Defaults:
     run_id: str = "auto"
 
 
+def _exclusive_pack_steps() -> dict[str, set[str]]:
+    """Step ids that appear in only one pack (used to attribute legacy run-logs)."""
+    step_sets: dict[str, set[str]] = {}
+    for pid in known_pipeline_ids():
+        try:
+            schema = load_pipeline_schema(pid)
+        except Exception:
+            continue
+        step_sets[pid] = {
+            str(node.get("id") or "")
+            for node in (schema.get("nodes") or [])
+            if isinstance(node, dict) and node.get("id")
+        }
+    exclusive: dict[str, set[str]] = {}
+    for pid, steps in step_sets.items():
+        others: set[str] = set()
+        for oid, ost in step_sets.items():
+            if oid != pid:
+                others |= ost
+        exclusive[pid] = {s for s in steps - others if s}
+    return exclusive
+
+
+def pipelines_for_slug(
+    workspace: Path,
+    slug: str,
+    *,
+    exclusive: dict[str, set[str]] | None = None,
+) -> list[str]:
+    """Which Прогон tabs should list this slug.
+
+    Explicit ``pipeline`` on active-task / run-log wins. Else unique step names
+    from run-log. Feature-writing without evidence → ``spec`` only (legacy).
+    """
+    known = set(known_pipeline_ids())
+    found: set[str] = set()
+    steps_seen: set[str] = set()
+
+    active_path = feature_active_task_path(workspace, slug)
+    if active_path.is_file():
+        try:
+            data = json.loads(active_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        if isinstance(data, dict):
+            raw = data.get("pipeline") or data.get("pipeline_id")
+            if raw and str(raw) in known:
+                found.add(str(raw))
+
+    runs_root = workspace / "agent-logs" / slug / "runs"
+    if runs_root.is_dir():
+        for run_dir in runs_root.iterdir():
+            if not run_dir.is_dir() or not run_dir.name.startswith("run-"):
+                continue
+            log_path = run_dir / "run-log.jsonl"
+            if not log_path.is_file():
+                continue
+            try:
+                text = log_path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                raw = row.get("pipeline") or row.get("pipeline_id")
+                if raw and str(raw) in known:
+                    found.add(str(raw))
+                step = row.get("step")
+                if step:
+                    steps_seen.add(str(step))
+
+    if found:
+        return sorted(found)
+
+    excl = exclusive if exclusive is not None else _exclusive_pack_steps()
+    for pid, steps in excl.items():
+        if steps_seen & steps:
+            found.add(pid)
+    if found:
+        return sorted(found)
+
+    has_logs = (workspace / "agent-logs" / slug).is_dir()
+    in_features = slug in set(list_feature_slugs(workspace))
+    if has_logs or in_features:
+        return [DEFAULT_PIPELINE_ID] if DEFAULT_PIPELINE_ID in known else []
+    return []
+
+
 def list_available_slugs(workspace: Path) -> list[dict]:
     logged: dict[str, dict] = {}
     logs_root = workspace / "agent-logs"
@@ -123,7 +258,8 @@ def list_available_slugs(workspace: Path) -> list[dict]:
             }
 
     slugs: dict[str, dict] = dict(logged)
-    for slug in list_feature_slugs(workspace):
+    feature_slugs = set(list_feature_slugs(workspace))
+    for slug in feature_slugs:
         if slug not in slugs:
             slugs[slug] = {
                 "slug": slug,
@@ -133,8 +269,12 @@ def list_available_slugs(workspace: Path) -> list[dict]:
             }
         else:
             slugs[slug]["in_feature_writing"] = True
+    exclusive = _exclusive_pack_steps()
     for entry in slugs.values():
-        entry.setdefault("in_feature_writing", entry["slug"] in set(list_feature_slugs(workspace)))
+        entry.setdefault("in_feature_writing", entry["slug"] in feature_slugs)
+        entry["pipelines"] = pipelines_for_slug(
+            workspace, entry["slug"], exclusive=exclusive
+        )
 
     def sort_key(item: dict) -> tuple:
         return (0 if item["has_agent_logs"] else 1, item["slug"])
@@ -213,22 +353,13 @@ def make_handler(workspace: Path, defaults: Defaults):
 
         def _query_params(self, qs: dict[str, list[str]]) -> tuple[str, str, str]:
             slug = (qs.get("slug") or [defaults.slug])[0]
-            pipeline = (qs.get("pipeline") or [defaults.pipeline])[0]
+            pipeline = _normalize_pipeline((qs.get("pipeline") or [defaults.pipeline])[0])
             run_id = (qs.get("run_id") or [defaults.run_id])[0]
-            if pipeline not in PIPELINES:
-                pipeline = "spec"
             return slug, pipeline, run_id
 
         def _build(self, slug: str, pipeline: str, run_id: str) -> dict:
             if not slug:
-                return {
-                    "slug": "",
-                    "pipeline": pipeline,
-                    "error": "No slug selected",
-                    "nodes": [],
-                    "edges": [],
-                    "history": [],
-                }
+                return build_pack_target_graph(pipeline)
             if pipeline == "spec" and slug:
                 try:
                     sync_session(workspace, slug, cli="qwen")
@@ -269,10 +400,7 @@ def make_handler(workspace: Path, defaults: Defaults):
                     {
                         "default_slug": default_slug,
                         "default_pipeline": defaults.pipeline,
-                        "pipelines": [
-                            {"id": "spec", "label": "Spec pipeline"},
-                            {"id": "calibration", "label": "Calibration"},
-                        ],
+                        "pipelines": run_pipeline_tabs(workspace),
                         "restartable_steps": list(pipeline_restartable_steps(DEFAULT_PIPELINE_ID)),
                         "restartable_steps_by_pipeline": {
                             pid: list(pipeline_restartable_steps(pid)) for pid in known_pipeline_ids()
@@ -334,6 +462,19 @@ def make_handler(workspace: Path, defaults: Defaults):
                     self._send_json({"error": str(exc)}, status=404)
                 except Exception as exc:
                     self._send_json({"error": str(exc), "pipeline": pipeline}, status=500)
+                return
+
+            if path == "/api/pack/draft":
+                pipeline = (qs.get("pipeline") or [""])[0].strip()
+                if not pipeline:
+                    self._send_json({"error": "pipeline required"}, status=400)
+                    return
+                known = set(discover_pipeline_ids(workspace))
+                if pipeline not in known:
+                    self._send_json({"error": f"unknown pack: {pipeline}"}, status=404)
+                    return
+                draft = load_authoring_draft_pack(workspace, pipeline)
+                self._send_json({"ok": True, "pipeline": pipeline, "draft": draft})
                 return
 
             if path == "/api/health":

@@ -40,7 +40,7 @@
 - [x] Сессия 1 — pack-local `analyze-routing`
 - [x] Сессия 2 — Apply/codegen: полный YAML + thin Python
 - [x] Сессия 3 — оркестратор md + UI (bool vs loop-after-step)
-- [ ] Сессия 4 — пилот `spec-v2` + smoke/golden + регрессия `spec`
+- [x] Сессия 4 — пилот `spec-v2` + smoke/golden + регрессия `spec`
 
 ---
 
@@ -293,6 +293,26 @@ PYTHONPATH=scripts python3 scripts/pipeline_delegate.py --pipeline spec-v2 --slu
 Пилот spec-v2 + golden + регрессия spec. Движок не переписывать.
 В конце: чеклист [x], итог «B1 закрыт / что осталось на B2».
 ```
+
+### Сессия 4 закрыта (handoff)
+
+Сделано:
+
+- `pipelines/spec-v2`: убраны `agent_zakonchil_*` / `eshche_odno_*`; петли → `after_step: true`; domain bool + stub `instruction`; messages про routing-state dispatch.
+- Golden: `scripts/fixtures/dispatch_golden/spec-v2/` (`01` all-false → analyze-routing, `02` find_context → context-researcher, `03` missing JSON → P5).
+- Регрессия: `pipeline_compile --check` PASS; dispatch golden **42/42** (spec + spec-v2 + …); coverage packs OK.
+- Smoke: `pipeline_delegate --pipeline spec-v2` — all false → `analyze-routing`; `find_context: true` → `context-researcher`.
+- Оркестратор md уже был (сессия 3).
+
+**B1 закрыт** (четыре сессии варианта B / full free-text codegen).
+
+Осталось на **B2+** (вне скоупа четырёх сессий):
+
+- Редактор сложных `expr` / AND-UI на холсте
+- Генерация доменных collectors из текста
+- Автогенерация текстов writer/reviewer skills
+- Перепись hooks / dispatch engine
+- Уточнение analyzer `instruction` у `spec-v2` status_fields (сейчас stub)
 
 ---
 

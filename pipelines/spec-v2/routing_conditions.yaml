@@ -1,12 +1,8 @@
 schema_version: 1
 status_fields:
-  agent_zakonchil_svoe_vypolnenie:
-    type: bool
-  eshche_odno_svoe_uslovie:
+  find_context:
     type: bool
   has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh:
-    type: bool
-  has_agent_zakonchil_svoe_vypolnenie:
     type: bool
   has_v_decisions_est_needs_answer_s_relates_na_gap_open_g:
     type: bool
@@ -23,10 +19,6 @@ status_fields:
   has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa:
     type: bool
   has_v_alignment_est_critical_major_raskhozhdeniya_otchet:
-    type: bool
-  routing_state_needs_refresh:
-    type: bool
-  find_context:
     type: bool
 edge_conditions:
   routing_state_needs_refresh:
@@ -49,24 +41,15 @@ edge_conditions:
       op: falsy
     label: no main
     reason: Нет артефакта main
-  agent_zakonchil_svoe_vypolnenie:
+  find_context:
     expr:
-      field: agent_zakonchil_svoe_vypolnenie
+      field: find_context
       op: truthy
     dispatch:
-      priority: 150
-      next: analyze-routing
-    label: Агент закончил своё выполнение
-    reason: Агент закончил своё выполнение
-  eshche_odno_svoe_uslovie:
-    expr:
-      field: eshche_odno_svoe_uslovie
-      op: truthy
-    dispatch:
-      priority: 160
-      next: analyze-routing
-    label: ещё одно своё условие
-    reason: ещё одно своё условие
+      priority: 110
+      next: context-researcher
+    label: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
+    reason: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
   has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh:
     expr:
       field: has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh
@@ -76,15 +59,6 @@ edge_conditions:
       next: spec-writer
     label: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
     reason: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
-  has_agent_zakonchil_svoe_vypolnenie:
-    expr:
-      field: has_agent_zakonchil_svoe_vypolnenie
-      op: truthy
-    dispatch:
-      priority: 180
-      next: analyze-routing
-    label: Агент закончил своё выполнение
-    reason: Агент закончил своё выполнение
   has_v_decisions_est_needs_answer_s_relates_na_gap_open_g:
     expr:
       field: has_v_decisions_est_needs_answer_s_relates_na_gap_open_g
@@ -117,7 +91,7 @@ edge_conditions:
       field: has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp
       op: truthy
     dispatch:
-      priority: 220
+      priority: 180
       next: spec-reviewer
     label: "SPEC есть, и после последней правки ещё не было успешного check-feature"
     reason: "SPEC есть, и после последней правки ещё не было успешного check-feature"
@@ -126,7 +100,7 @@ edge_conditions:
       field: has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp
       op: truthy
     dispatch:
-      priority: 230
+      priority: 300
       next: null
       outcome: ready
     label: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
@@ -158,15 +132,6 @@ edge_conditions:
       next: alignment-resolver
     label: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
     reason: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
-  find_context:
-    expr:
-      field: find_context
-      op: truthy
-    dispatch:
-      priority: 110
-      next: context-researcher
-    label: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
-    reason: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
 engine_fields:
   - has_routing_state
   - routing_state_invalid

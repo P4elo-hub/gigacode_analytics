@@ -102,6 +102,82 @@ def load_schema() -> dict:
     return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
+def build_pack_target_graph(pipeline: str = DEFAULT_PIPELINE_ID) -> dict:
+    """Topology-only Целевой graph: pack schema, no slug / no telemetry.
+
+    Orchestrator node is ok (green); everything else pending (gray). Same node
+    set as the Schema tab for that pack id.
+    """
+    from pipeline_common import known_pipeline_ids
+
+    pipe_name = pipeline if pipeline in known_pipeline_ids() else DEFAULT_PIPELINE_ID
+    schema_root = load_schema()
+    schema = schema_root["pipelines"][pipe_name]
+    orch = schema.get("orchestrator")
+    nodes = layout_nodes([dict(n) for n in schema.get("nodes") or []], pipe_name)
+    for node in nodes:
+        state = STATE_OK if orch and node.get("id") == orch else STATE_PENDING
+        node["state"] = state
+        node["color"] = RESULT_COLORS.get(state, RESULT_COLORS[STATE_PENDING])
+    edges = []
+    for edge in schema.get("edges") or []:
+        copy = dict(edge)
+        copy["state"] = STATE_PENDING
+        copy["color"] = RESULT_COLORS[STATE_PENDING]
+        copy["traversed"] = False
+        edges.append(copy)
+    pending = sum(1 for n in nodes if n.get("state") == STATE_PENDING)
+    return {
+        "slug": "",
+        "run_id": "",
+        "agent_run_ids": [],
+        "history_aggregate": False,
+        "calibration_run_id": None,
+        "pipeline": pipe_name,
+        "pipeline_label": schema.get("label"),
+        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "nodes": nodes,
+        "edges": edges,
+        "history": [],
+        "timeline": [],
+        "run_log_tail": [],
+        "last_pass": None,
+        "visit_counts": {},
+        "history_sources": {"run_log_lines": 0, "spawn_events": 0, "agent_runs": 0},
+        "traversed_edges": [],
+        "current": None,
+        "active_task": None,
+        "stats": {
+            "ok": 1 if orch else 0,
+            "pending": pending,
+            "fail": 0,
+            "retry": 0,
+            "active": 0,
+            "next": 0,
+        },
+        "watch_paths": {},
+        "manifest": {},
+        "dispatch": None,
+        "dispatch_fingerprint": "",
+        "outcome": None,
+        "divergence": {"summary": None, "items": [], "by_step": {}, "kinds": {}, "fingerprint": ""},
+        "restart": None,
+        "validation": None,
+        "timings": None,
+        "target_only": True,
+    }
+
+
+def schema_terminal_id(schema: dict, pipeline_id: str) -> str:
+    """Terminal node id from pack graph (spec: done, calibration: cal-done, …)."""
+    for node in schema.get("nodes") or []:
+        if isinstance(node, dict) and node.get("kind") == "terminal" and node.get("id"):
+            return str(node["id"])
+    if pipeline_id == "calibration":
+        return "cal-done"
+    return "done"
+
+
 def read_jsonl(path: Path) -> list[dict]:
     if not path.is_file():
         return []
@@ -1008,7 +1084,7 @@ def build_graph(
             pipe_name,
         )
 
-    terminal_id = "done" if pipe_name == "spec" else "cal-done"
+    terminal_id = schema_terminal_id(schema, pipe_name)
     if (
         pipe_name == "spec"
         and not live
@@ -1072,6 +1148,10 @@ def build_graph(
             terminal_id=terminal_id,
             pipeline_id=pipe_name,
         )
+        # Any dispatch pack (spec-v2, routing-poc, …): ready → paint terminal green.
+        dispatch_ready = bool((dispatch_snapshot or {}).get("ready"))
+        if dispatch_ready and terminal_id in node_states:
+            node_states[terminal_id] = STATE_OK
 
     mark_superseded_passes(timeline)
 
@@ -1164,13 +1244,14 @@ def build_graph(
         node["state"] = node_states.get(node["id"], STATE_PENDING)
         node["color"] = RESULT_COLORS.get(node["state"], RESULT_COLORS[STATE_PENDING])
         if (
-            pipe_name == "spec"
-            and dispatch_ready
+            dispatch_ready
             and node["id"] == terminal_id
-            and feature_verdict
+            and (feature_verdict or pipe_name != "spec")
         ):
-            node["label"] = feature_verdict
-
+            if feature_verdict:
+                node["label"] = feature_verdict
+            elif pipe_name != "spec":
+                node["label"] = "ready"
     attach_node_details(
         nodes,
         run_log=run_log,
@@ -1268,20 +1349,20 @@ def build_graph(
             validation = validate_slug(root, slug, pipeline=pipe_name).to_dict()
         except Exception as exc:  # noqa: BLE001 — viewer must not fail on validate
             validation = {"ok": False, "error": str(exc), "advice": []}
-        try:
-            from pipeline_timings import build_step_timings
+    try:
+        from pipeline_timings import build_step_timings
 
-            timings = build_step_timings(
-                schema=schema,
-                run_log=run_log,
-                events=events,
-                root=root,
-                slug=slug,
-                cli=manifest.get("cli") or "qwen",
-                agent_run_ids=agent_run_ids,
-            )
-        except Exception as exc:  # noqa: BLE001
-            timings = {"error": str(exc), "steps": [], "passes": [], "notes": []}
+        timings = build_step_timings(
+            schema=schema,
+            run_log=run_log,
+            events=events,
+            root=root,
+            slug=slug,
+            cli=manifest.get("cli") or "qwen",
+            agent_run_ids=agent_run_ids,
+        )
+    except Exception as exc:  # noqa: BLE001
+        timings = {"error": str(exc), "steps": [], "passes": [], "notes": []}
 
     return {
         "slug": slug,
@@ -1321,10 +1402,9 @@ def build_graph(
         "dispatch_fingerprint": dispatch_fingerprint,
         "outcome": (
             {"ready": dispatch_ready, "verdict": feature_verdict or "PASS"}
-            if pipe_name == "spec"
+            if pipe_name == "spec" or dispatch_ready
             else None
-        ),
-        "divergence": {
+        ),        "divergence": {
             "summary": divergence.get("summary"),
             "items": divergence.get("items"),
             "by_step": divergence.get("by_step"),

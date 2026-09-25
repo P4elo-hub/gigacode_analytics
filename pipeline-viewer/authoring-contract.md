@@ -74,7 +74,7 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 | Переключатели | Целевой/Факт/Время, slug | spec\|calibration (из catalog), не задача |
 | Источник | `build_pipeline_graph.py` | `export_pack_json()` |
 
-`/api/graph` не ломать. `/api/config`.pipelines сейчас захардкожен `spec`+`calibration`; список паков для «Схемы» — `GET /api/catalog` → `pipelines[]` (есть ещё `routing-poc`).
+`/api/graph` не ломать. `/api/config`.pipelines — все compiled pack ids (`known_pipeline_ids()`, с label из graph); вкладки Прогона рисуются динамически. Список паков для «Схемы» — `GET /api/catalog` → `pipelines[]`.
 
 ---
 

@@ -19,6 +19,95 @@ nodes:
     label: spec-writer
     kind: step
     subagent: spec-writer
+    cycle:
+      persistent: true
+      assemble: write_feature
+      param: block_id
+      folder: "Feature-writing/{slug}"
+      out: "{slug}.md"
+      item_file: "{slug}.part-{param}.md"
+      close: on_done
+      calls:
+        - agent: spec-writer
+          param: goal
+          skills:
+            - requirements-analysis
+          label: Цель и бизнес-требования
+          sections:
+            - 1.1
+        - agent: spec-writer
+          param: usecase-as-is
+          skills:
+            - use-case-analysis
+            - uml-diagram-analysis
+          label: Use Case AS IS
+          sections:
+            - 1.2-usecase
+            - 1.2-diagram
+        - agent: spec-writer
+          param: usecase-to-be
+          skills:
+            - use-case-analysis
+            - uml-diagram-analysis
+          label: Use Case TO BE
+          sections:
+            - 1.3-usecase
+            - 1.3-diagram
+        - agent: spec-writer
+          param: constraints
+          skills:
+            - requirements-analysis
+          label: Ограничения и допущения
+          sections:
+            - 2
+        - agent: spec-writer
+          param: integration
+          skills:
+            - integration-analysis
+          label: Интеграции и события
+          sections:
+            - 4.1.1
+        - agent: spec-writer
+          param: algorithm
+          skills:
+            - use-case-analysis
+          label: Алгоритм обработки
+          sections:
+            - 4.2.2
+        - agent: spec-writer
+          param: data-model
+          skills:
+            - data-model-analysis
+          label: Модель данных
+          sections:
+            - 4.2.3
+        - agent: spec-writer
+          param: field-mapping
+          skills:
+            - data-mapping-analysis
+          label: Маппинг полей (field lineage)
+          sections:
+            - 4.2.3-mapping
+        - agent: spec-writer
+          param: nfr
+          skills:
+            - nfr-analysis
+          label: "НФТ: безопасность, производительность, настройки, тогглы"
+          sections:
+            - 5.1
+            - 5.2-performance
+            - 5.2-reliability
+            - 5.4
+            - 5.5
+        - agent: spec-writer
+          param: observability
+          skills:
+            - observability-analysis
+          label: Логирование и метрики
+          sections:
+            - 5.3.1
+            - 5.3.2
+      ask_queue: true
   - id: gap-resolver
     label: gap-resolver
     kind: step
@@ -104,6 +193,7 @@ edges:
     to: analyze-routing
     kind: loop
     label: после завершения шага
+    after_step: true
   - id: e-analyze-routing-context-researcher
     from: analyze-routing
     to: context-researcher
@@ -117,23 +207,28 @@ edges:
     to: analyze-routing
     kind: loop
     label: после завершения шага
+    after_step: true
   - id: e-spec-writer-analyze-routing
     from: spec-writer
     to: analyze-routing
     kind: loop
     label: после завершения шага
+    after_step: true
   - id: e-gap-resolver-analyze-routing
     from: gap-resolver
     to: analyze-routing
     kind: loop
     label: после завершения шага
+    after_step: true
   - id: e-spec-reviewer-analyze-routing
     from: spec-reviewer
     to: analyze-routing
     kind: loop
     label: после завершения шага
+    after_step: true
   - id: e-code-auditor-analyze-routing
     from: code-auditor
     to: analyze-routing
     kind: loop
     label: после завершения шага
+    after_step: true
