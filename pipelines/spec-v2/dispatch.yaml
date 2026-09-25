@@ -7,8 +7,8 @@ rules:
   - when: routing_state_needs_refresh
     priority: 5
     next: analyze-routing
-  - when: has_feature_context_slug_md_eshche_net
-    priority: 140
+  - when: find_context
+    priority: 110
     next: context-researcher
   - when: agent_zakonchil_svoe_vypolnenie
     priority: 150

@@ -112,7 +112,7 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 - `POST /api/pack/init` — `--init-pack` (routing-state | full-dispatch | orchestrator-only). Пустой холст в `--from-json` нельзя.
 - Стрелка с `condition` / `conditions` без `dispatch.rules.when` — ошибка на стрелке, Apply скрыт. `unknown when:` — ошибка, диск не пишется. Каждому when: нужен ряд в таблице.
 
-Не нужны: запись `.qwen/agents`, редактор `expr`, правка `collectors.py`.
+Не нужны: редактор `expr`, правка доменных collectors. Orchestrator md — пишет Apply из шаблона (сессия 3).
 
 ---
 
@@ -120,14 +120,15 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 
 | Не рисуем | Где живёт | Зачем не трогать |
 |-----------|-----------|------------------|
-| Тексты скиллов / агентов | `.qwen|gigacode|opencode/skills|agents/*.md` | catalog даёт только имена |
+| Тексты скиллов / domain-агентов | `.qwen|gigacode|opencode/skills|agents/*.md` | catalog даёт только имена; orchestrator md — Apply из шаблона |
 | Формулы `expr` | `routing_conditions.edge_conditions.*.expr` | палитра id + label; не редактор формул |
 | Запуск Qwen/GigaCode с холста | runtime loop | это вкладка Прогон |
 | Оверлей live-таймлайна на схему пака | `/api/graph` history | два режима экрана, не смесь |
-| `status_fields.instruction` / collectors.py | status YAML | вне холста; при save копируются из открытого пака / шаблона |
-| Создание оркестратора-агента из UI | `--init-pack` не пишет `.qwen/` | только предупреждение «файла нет» |
+| `status_fields.instruction` / collectors.py | status YAML | вне холста; Apply пишет generic overlay |
 | Координаты в YAML | — | localStorage / черновик |
 | Новый пак «с нуля» без шаблона | `--init-pack` | фаза 6: сначала template, потом overlay холста |
+
+**Сессия 3 (full codegen):** на стрелке UI различает bool-условие analyzer и `after_step` петлю к `analyze-routing` (без when:). Apply создаёт `<id>-orchestrator.md` без silent overwrite.
 
 ---
 

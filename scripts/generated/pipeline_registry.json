@@ -171,7 +171,7 @@
     "spec-v2": [
       {
         "id": "spec-v2-orchestrator",
-        "label": "spec-v2-orchestrator",
+        "label": "spec-orchestrator-v2",
         "kind": "orchestrator",
         "subagent": null
       },
@@ -368,8 +368,8 @@
           "next": "analyze-routing"
         },
         {
-          "when": "has_feature_context_slug_md_eshche_net",
-          "priority": 140,
+          "when": "find_context",
+          "priority": 110,
           "next": "context-researcher"
         },
         {
@@ -966,9 +966,9 @@
       "eshche_odno_svoe_uslovie",
       "file_missing_main",
       "file_missing_routing_state",
+      "find_context",
       "has_agent_zakonchil_svoe_vypolnenie",
       "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
-      "has_feature_context_slug_md_eshche_net",
       "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh",
       "has_main",
       "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili",

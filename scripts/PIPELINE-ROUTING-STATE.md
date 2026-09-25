@@ -11,8 +11,9 @@ delegate → (missing/stale) analyze-routing → routing-analyzer
 ```
 
 Orchestrator runtime loop is unchanged: delegate → action → append_run_log →
-ingest → validate (`--pipeline <id>`). Analyzer is a graph step on **spec**
-and `routing-poc`.
+ingest → validate (`--pipeline <id>`). Analyzer is a graph step on any pack
+that declares `analyze-routing` (today: **spec**, `routing-poc`; others via
+their `graph.yaml` / `routing_conditions.yaml`).
 
 ## Artifact
 
@@ -41,10 +42,20 @@ Helper: `scripts/pipeline_routing_state.py` (`load_routing_state`,
 `apply_routing_state_fields`, `overlay_collector`, `spec_overlay_collector`).
 Pack collector id: `routing_state`. Spec `status.yaml`: `collector_mode: routing_state`.
 
-## Spec status fields the router uses
+## Status fields (pack-local SSOT)
 
-Inventory from `pipelines/spec/status.yaml` + `predicates.py` (dispatch `when:`).
-Analyzer populates the same names so overlay is 1:1.
+Analyzer field names and fill instructions come from the **current** pack:
+
+`pipelines/<pipeline_id>/routing_conditions.yaml` → `status_fields`.
+
+Do not hardcode `pipelines/spec/…` as the only source. A pack like `dev-agent`
+must read `pipelines/dev-agent/routing_conditions.yaml`, not copy GAP/DECISIONS
+algorithms from spec.
+
+### Pack `spec` inventory (example)
+
+Inventory from `pipelines/spec/status.yaml` + routing predicates (dispatch `when:`).
+Analyzer for `--pipeline spec` populates the same names so overlay is 1:1.
 
 | Field | Source | Predicates / invariant |
 |-------|--------|------------------------|
@@ -76,7 +87,9 @@ Artifact `exists_as` (`has_spec`, `has_context`, …) is also re-applied from di
 after overlay so a stale JSON snapshot cannot hide a file (e.g. `has_spec: false`
 must not re-queue write-feature when SPEC exists).
 
-Full mapping: `pipelines/spec/routing_conditions.yaml` (`status_fields` SSOT for the skill;
+Full mapping for pack `spec`: `pipelines/spec/routing_conditions.yaml`
+(`status_fields` + `edge_conditions`). For any pack: same file under
+`pipelines/<pipeline_id>/` (`status_fields` SSOT for the skill;
 `edge_conditions` SSOT for `when:` bodies — Phase 13).
 Parity / replay: [PIPELINE-PARITY.md](PIPELINE-PARITY.md).
 
@@ -133,8 +146,9 @@ Golden `25-check-feature-stamped-json`. See
 
 | Pack | Role |
 |------|------|
-| `spec` | Overlay always on. Graph node `analyze-routing`. `routing_conditions.yaml` SSOT. |
-| `routing-poc` | Reference cutover (refresh → overlay `open_gaps`). Unchanged. |
+| `spec` | Overlay always on. Graph node `analyze-routing`. Own `routing_conditions.yaml` SSOT. |
+| `routing-poc` | Reference cutover (refresh → overlay `open_gaps`). Own YAML (narrow `status_fields`). |
+| other | Same contract: analyzer reads **that** pack’s `status_fields`; engine unchanged. |
 
 ## Phase 12 cutover checklist
 
@@ -168,7 +182,7 @@ Phase 13: `routing_conditions.yaml` is the SSOT for **two** things:
 
 | Section | Who reads it | Purpose |
 |---------|--------------|---------|
-| `status_fields` | analyze-routing skill, `--catalog` field palette, baseline | Analyzer JSON field names + instructions |
+| `status_fields` | analyze-routing skill (`pipelines/<pipeline_id>/…`), `--catalog` field palette, baseline | Analyzer JSON field names + instructions for **that** pack |
 | `edge_conditions` | interpreter + codegen + `--catalog` edge editor | `when:` formulas (`expr`) + `dispatch` (priority / next / outcome) |
 
 Runtime choice **A**: `scripts/pipeline_edge_conditions.evaluate_edge_condition`. Spec

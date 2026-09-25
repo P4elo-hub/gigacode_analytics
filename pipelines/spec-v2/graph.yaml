@@ -2,7 +2,7 @@ label: spec-v2 pipeline
 orchestrator: spec-v2-orchestrator
 nodes:
   - id: spec-v2-orchestrator
-    label: spec-v2-orchestrator
+    label: spec-orchestrator-v2
     kind: orchestrator
   - id: analyze-routing
     label: analyze-routing
@@ -39,32 +39,8 @@ edges:
   - id: e-orch-ar
     from: spec-v2-orchestrator
     to: analyze-routing
-    kind: branch
+    kind: main
     label: routing-state missing/stale
-    condition: routing_state_needs_refresh
-    condition_label: routing_state_needs_refresh
-    condition_labels:
-      routing_state_needs_refresh: routing_state_needs_refresh
-  - id: e-ar-cr
-    from: analyze-routing
-    to: context-researcher
-    kind: branch
-    condition: has_feature_context_slug_md_eshche_net
-    condition_label: "Feature-context/{slug}.md ещё нет"
-    condition_labels:
-      has_feature_context_slug_md_eshche_net: "Feature-context/{slug}.md ещё нет"
-  - id: e-cr-ar
-    from: context-researcher
-    to: analyze-routing
-    kind: loop
-    condition: agent_zakonchil_svoe_vypolnenie
-    condition_label: Агент закончил своё выполнение
-    conditions:
-      - agent_zakonchil_svoe_vypolnenie
-      - eshche_odno_svoe_uslovie
-    condition_labels:
-      agent_zakonchil_svoe_vypolnenie: Агент закончил своё выполнение
-      eshche_odno_svoe_uslovie: ещё одно своё условие
   - id: e-ar-sw
     from: analyze-routing
     to: spec-writer
@@ -73,14 +49,6 @@ edges:
     condition_label: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
     condition_labels:
       has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
-  - id: e-sw-ar
-    from: spec-writer
-    to: analyze-routing
-    kind: loop
-    condition: has_agent_zakonchil_svoe_vypolnenie
-    condition_label: Агент закончил своё выполнение
-    condition_labels:
-      has_agent_zakonchil_svoe_vypolnenie: Агент закончил своё выполнение
   - id: e-ar-gr
     from: analyze-routing
     to: gap-resolver
@@ -95,14 +63,6 @@ edges:
       has_v_decisions_est_needs_answer_s_relates_na_gap_open_g: "в DECISIONS есть needs-answer с Relates на GAP, open_gaps не пустые"
       has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec: решения по GAP уже есть — нужно применить в SPEC
       has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply: open_gaps не пустые (после ревью / без pending-apply)
-  - id: e-gr-ar
-    from: gap-resolver
-    to: analyze-routing
-    kind: loop
-    condition: has_agent_zakonchil_svoe_vypolnenie
-    condition_label: Агент закончил своё выполнение
-    condition_labels:
-      has_agent_zakonchil_svoe_vypolnenie: Агент закончил своё выполнение
   - id: e-ar-sr
     from: analyze-routing
     to: spec-reviewer
@@ -111,14 +71,6 @@ edges:
     condition_label: "SPEC есть, и после последней правки ещё не было успешного check-feature"
     condition_labels:
       has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp: "SPEC есть, и после последней правки ещё не было успешного check-feature"
-  - id: e-sr-ar
-    from: spec-reviewer
-    to: analyze-routing
-    kind: loop
-    condition: has_agent_zakonchil_svoe_vypolnenie
-    condition_label: Агент закончил своё выполнение
-    condition_labels:
-      has_agent_zakonchil_svoe_vypolnenie: Агент закончил своё выполнение
   - id: e-ar-done
     from: analyze-routing
     to: done
@@ -127,14 +79,6 @@ edges:
     condition_label: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
     condition_labels:
       has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
-  - id: e-ca-ar
-    from: code-auditor
-    to: analyze-routing
-    kind: loop
-    condition: has_agent_zakonchil_svoe_vypolnenie
-    condition_label: Агент закончил своё выполнение
-    condition_labels:
-      has_agent_zakonchil_svoe_vypolnenie: Агент закончил своё выполнение
   - id: e-analyze-routing-code-auditor
     from: analyze-routing
     to: code-auditor
@@ -159,7 +103,37 @@ edges:
     from: alignment-resolver
     to: analyze-routing
     kind: loop
-    condition: has_agent_zakonchil_svoe_vypolnenie
-    condition_label: Агент закончил своё выполнение
+    label: после завершения шага
+  - id: e-analyze-routing-context-researcher
+    from: analyze-routing
+    to: context-researcher
+    kind: branch
+    condition: find_context
+    condition_label: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
     condition_labels:
-      has_agent_zakonchil_svoe_vypolnenie: Агент закончил своё выполнение
+      find_context: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
+  - id: e-context-researcher-analyze-routing
+    from: context-researcher
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага
+  - id: e-spec-writer-analyze-routing
+    from: spec-writer
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага
+  - id: e-gap-resolver-analyze-routing
+    from: gap-resolver
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага
+  - id: e-spec-reviewer-analyze-routing
+    from: spec-reviewer
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага
+  - id: e-code-auditor-analyze-routing
+    from: code-auditor
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага

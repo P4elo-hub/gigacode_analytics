@@ -134,7 +134,7 @@ def init_pack(pipeline_id: str, template: str = "minimal", root: Path | None = N
     written = apply_pack_json(payload, root)
     if template == "routing-state":
         collectors = folder / "collectors.py"
-        collectors.write_text(_ROUTING_STATE_COLLECTORS, encoding="utf-8")
+        collectors.write_text(ROUTING_STATE_COLLECTORS, encoding="utf-8")
         written.append(collectors)
     return written
 
@@ -248,12 +248,17 @@ def _template_full_dispatch(pipeline_id: str) -> dict:
     return payload
 
 
-_ROUTING_STATE_COLLECTORS = '''"""Overlay collector for a routing-state pack (Phase 13 template)."""
+# Canonical overlay collectors.py for every routing-state authoring pack.
+# Domain field names live only in routing_conditions.yaml / routing-state.json.
+ROUTING_STATE_COLLECTORS = '''"""Overlay collector for a routing-state pack (Phase 13 template)."""
 
 from pipeline_routing_state import overlay_collector
 
 COLLECTORS = {"routing_state": overlay_collector}
 '''
+
+# Back-compat alias for older imports / tests.
+_ROUTING_STATE_COLLECTORS = ROUTING_STATE_COLLECTORS
 
 
 def _routing_conditions_stub(pipeline_id: str, first_step: str = "first-step") -> dict:

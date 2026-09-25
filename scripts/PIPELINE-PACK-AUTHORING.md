@@ -16,7 +16,7 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 
 1. **Два уровня валидации.** `validate_pack_json` (schema) проверяет форму payload: `id` / `graph` / `status` / `registry`. Не проверяет `when:` в predicate catalog и наличие agents — это compile `validate_source`. Тесты: `test_unknown_subagent_tells_author_to_add_agent`, `test_schema_ok_unknown_when_fails_compile`.
 2. **Schema runtime — subset, не `jsonschema`.** Файл [pipeline_pack_schema.json](pipeline_pack_schema.json) (`$schema` Draft 2020-12) — контракт для UI. Python ходит по нему через `_validate_schema()` (type / required / properties / items / pattern). Для текущих pack достаточно. Если фронт начнёт слать сложные payload — подключить `jsonschema` поверх того же файла, без смены schema.
-3. **Orchestrator agent — руками.** Шаблон: [fixtures/pack_authoring/orchestrator-agent.md](fixtures/pack_authoring/orchestrator-agent.md). `--init-pack` **не** пишет `.qwen/` / `.gigacode/` / `.opencode/`. Шаг 2 чеклиста.
+3. **Orchestrator agent.** Шаблон: [fixtures/pack_authoring/orchestrator-agent.md](fixtures/pack_authoring/orchestrator-agent.md). `--init-pack` **не** пишет `.qwen/` / `.gigacode/` / `.opencode/`. Viewer **Apply** создаёт `<id>-orchestrator.md` во всех трёх CLI из шаблона; повторный Apply **не** затирает ручные правки без `overwrite_orchestrator: true` (чекбокс в модалке).
 4. **`--init-pack` без `--apply`.** Generated JSON обновляется только `--apply` (или `--from-json`, который apply делает). До apply: `--check` = drift, delegate = `unknown pipeline_id`.
 5. **Golden (Phase 9 done).** Каждый pack: `fixtures/dispatch_golden/<id>/cases.json` или `WAIVER.md` (только no-dispatch). Spec — эталон 24+, не сокращать. `full-dispatch` template компилируется; после init добавь golden. Policy + parity test: [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
 
@@ -191,6 +191,23 @@ stub, overlay collector, and P5 `routing_state_needs_refresh`. `--from-json` wit
 `status.collector_mode: routing_state` gets the same stub if `routing_conditions` is missing.
 Gate-step hook stamp is opt-in: `status.routing_state_sync.sync_after_steps` (spec:
 `check-feature`). Mutating steps are not listed — JSON stays stale → analyzer.
+
+### Viewer Apply (pipeline-viewer)
+
+`pack_authoring_api.apply_assembled` after free-text edges:
+
+1. Stubs the same `when_id` into `dispatch.rules`, `edge_conditions` (`expr: field truthy`), and `status_fields.instruction`.
+2. Merges routing-state `status` bits only (collector_mode / routing_state artifact) — does **not** copy spec domain artifacts.
+3. Writes generic `collectors.py` = `COLLECTORS = {"routing_state": overlay_collector}` (never overwrites `pipelines/spec`).
+4. Writes thin `predicates.py` reasons from labels **only if missing** (hand-written packs kept).
+5. Writes CLI orchestrator md from the pack_authoring template (no silent overwrite).
+6. Edges with `after_step: true` (work-step → `analyze-routing` refresh loop) keep **no** `when:` / bool field — not `has_agent_zakonchil_*`.
+7. Response includes `checklist`: YAML / collectors / orchestrator / pack-local analyzer.
+
+Universality gate: `PYTHONPATH=scripts:pipeline-viewer python3 scripts/pack_authoring_codegen_test.py`.
+Session 3: `PYTHONPATH=scripts:pipeline-viewer python3 scripts/pack_authoring_session3_test.py`.
+
+**UI dispatch table:** Apply treats the priority table as authoritative. Changed priority/next are written into `edge_conditions.*.dispatch`; deleted rows drop the when: from dispatch + (for authored bool stubs) from `status_fields` / graph edges, so stubs cannot resurrect them. Thin `predicates.py` is regenerated when still codegen-shaped.
 
 ### Add one edge condition (no predicates.py)
 

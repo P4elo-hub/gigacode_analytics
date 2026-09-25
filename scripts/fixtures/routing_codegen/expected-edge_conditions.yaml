@@ -1,5 +1,6 @@
 # Snapshot of codegen stubs from spec-sample.puml on an empty pack (not spec SSOT).
 # Spec formulas live in pipelines/spec/routing_conditions.yaml edge_conditions.
+# Free-text / named fields use truthy (pack authoring Apply contract).
 edge_conditions:
   not_has_context:
     expr:
@@ -14,7 +15,7 @@ edge_conditions:
   routing_state_needs_refresh:
     expr:
       field: routing_state_needs_refresh
-      op: non_empty
+      op: truthy
     dispatch:
       priority: 20
       next: analyze-routing
@@ -23,7 +24,7 @@ edge_conditions:
   open_gaps:
     expr:
       field: open_gaps
-      op: non_empty
+      op: truthy
     dispatch:
       priority: 30
       next: resolve-gaps
@@ -32,7 +33,7 @@ edge_conditions:
   alignment_pass:
     expr:
       field: alignment_pass
-      op: non_empty
+      op: truthy
     dispatch:
       priority: 40
       next: null

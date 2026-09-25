@@ -92,6 +92,7 @@
         <div id="schema-save-status" class="schema-save-status" role="status">
           <p id="schema-save-status-line"></p>
           <ul id="schema-save-errors" class="schema-save-errors hidden"></ul>
+          <ul id="schema-save-checklist" class="schema-runnable-checklist hidden" aria-label="Runnable после Apply"></ul>
         </div>
         <span id="schema-connect-hint" class="graph-view-hint hidden">Кликните целевую клетку (Esc — отмена)</span>
         <span class="graph-view-hint">Shift+клик: стрелка · клик по клетке — исходящие · клик по линии — условие</span>
@@ -311,8 +312,22 @@
             <li data-kind="branch"><b>branch</b> — ветка по условию, не главный шаг (пунктир).</li>
             <li data-kind="loop"><b>loop</b> — возврат: перепроверить шаг или освежить routing (точки).</li>
           </ul>
-          <div class="schema-edge-conditions-block">
-            <span class="schema-edge-conditions-title">условие перехода</span>
+          <fieldset id="schema-edge-routing-mode" class="schema-edge-routing-mode">
+            <legend>Тип перехода</legend>
+            <label class="schema-edge-routing-option">
+              <input type="radio" name="schema-edge-routing" id="schema-edge-routing-bool" value="bool" checked />
+              <span><b>Условие-факт</b> — bool для analyzer (свободный текст → has_… + instruction)</span>
+            </label>
+            <label class="schema-edge-routing-option" id="schema-edge-routing-after-wrap">
+              <input type="radio" name="schema-edge-routing" id="schema-edge-routing-after" value="after_step" />
+              <span><b>После завершения шага</b> → снова analyze-routing (не bool, JSON станет stale)</span>
+            </label>
+            <p id="schema-edge-routing-hint" class="sidebar-hint">
+              Bool — факт из routing-state. «После шага» — петля к analyzer без when: has_agent_zakonchil_….
+            </p>
+          </fieldset>
+          <div class="schema-edge-conditions-block" id="schema-edge-conditions-block">
+            <span class="schema-edge-conditions-title">условие перехода (bool)</span>
             <ul id="schema-edge-conditions" class="schema-edge-conditions"></ul>
             <label>
               <span class="visually-hidden">Текст условия</span>
@@ -326,11 +341,14 @@
             <button type="button" id="schema-edge-condition-add-btn" class="btn-secondary">Добавить условие</button>
             <p id="schema-edge-condition-yaml" class="schema-condition-label hidden"></p>
           </div>
+          <p id="schema-edge-after-step-note" class="schema-edge-after-step-note hidden" role="status">
+            Петля «после завершения»: в YAML не будет when: bool. Движок после шага увидит stale routing-state и снова вызовет analyze-routing.
+          </p>
           <label>
             <span>подпись на холсте (если нет условия)</span>
             <input id="schema-edge-label" name="label" placeholder="необязательно" />
           </label>
-          <p class="sidebar-hint">
+          <p class="sidebar-hint" id="schema-edge-bool-hint">
             Пишите условие обычным текстом. При «Проверить» / «Применить» система сама
             придумает id (has_…), запишет его в status_fields.instruction = ваш текст,
             создаст edge_conditions и строку dispatch (priority + when).
@@ -403,6 +421,11 @@
       <h2 id="schema-apply-title">Применить пак</h2>
       <p id="schema-apply-summary" class="modal-summary"></p>
       <p id="schema-apply-warn" class="schema-apply-warn hidden"></p>
+      <label class="schema-apply-overwrite">
+        <input type="checkbox" id="schema-apply-overwrite-orch" />
+        <span>Перезаписать orchestrator md из шаблона (если уже правили вручную)</span>
+      </label>
+      <ul id="schema-apply-checklist" class="schema-runnable-checklist hidden" aria-label="Runnable после Apply"></ul>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" data-schema-close="apply">Отмена</button>
         <button type="button" id="schema-apply-confirm" class="btn-danger">Записать YAML и compile</button>
@@ -414,7 +437,7 @@
     <div class="modal-backdrop" data-schema-close="init"></div>
     <div class="modal-card">
       <h2 id="schema-init-title">Новый пак</h2>
-      <p class="sidebar-hint">Не пустой холст в --from-json. Сначала шаблон (--init-pack), потом overlay с холста. Markdown агентов не создаём.</p>
+      <p class="sidebar-hint">Сначала шаблон (--init-pack), потом overlay с холста. Apply создаст orchestrator md из шаблона, если файла ещё нет.</p>
       <form id="schema-init-form" class="schema-inspector-form" autocomplete="off">
         <label>
           <span>id</span>
@@ -437,6 +460,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=50"></script>
+  <script src="/static/app.js?v=51"></script>
 </body>
 </html>

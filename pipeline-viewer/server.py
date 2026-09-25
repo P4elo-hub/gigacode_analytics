@@ -480,15 +480,21 @@ def make_handler(workspace: Path, defaults: Defaults):
                     checked["preview"] = preview_payload(assembled)
                     self._send_json(checked, status=400)
                     return
-                applied = apply_assembled(assembled, workspace)
+                applied = apply_assembled(
+                    assembled,
+                    workspace,
+                    overwrite_orchestrator=payload.get("overwrite_orchestrator") is True,
+                )
                 self._send_json(
                     {
                         "ok": True,
-                        "warnings": notes,
+                        "warnings": [*notes, *list(applied.get("notes") or [])],
                         "preview": preview_payload(assembled),
                         "written": applied["written"],
                         "compiled": applied["compiled"],
                         "pack": applied["pack"],
+                        "checklist": applied.get("checklist") or [],
+                        "orchestrator_notes": applied.get("orchestrator_notes") or [],
                     }
                 )
             except FileNotFoundError as exc:

@@ -75,7 +75,7 @@ It pauses only for real questions (write-feature section plan, `needs-answer` in
 | `apply-calibration` | Apply approved L1 skill patches |
 | `benchmark-rerun` | Isolated rerun workspace under `Calibration/.../rerun/` |
 | `calibrate` | Full calibration chain (calibration-orchestrator) |
-| `analyze-routing` | Writes `<slug>-routing-state.json` (spec graph node; overlay for live dispatch) |
+| `analyze-routing` | Writes `<slug>-routing-state.json` from pack `status_fields` (overlay for live dispatch) |
 
 ## Slash commands and subagents
 

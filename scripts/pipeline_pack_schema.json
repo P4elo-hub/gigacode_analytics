@@ -98,6 +98,10 @@
                 "type": "array",
                 "description": "All when: ids on this arrow. First is also written as condition.",
                 "items": { "type": "string" }
+              },
+              "after_step": {
+                "type": "boolean",
+                "description": "Work-step → analyze-routing refresh loop. Not a bool routing-state fact; no when:/status_field."
               }
             }
           }

@@ -830,6 +830,116 @@ body.screen-schema #step-detail {
   gap: 6px;
 }
 
+.schema-edge-conditions-block.hidden {
+  display: none;
+}
+
+.schema-edge-routing-mode {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-edge-routing-mode legend {
+  padding: 0 4px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.schema-edge-routing-option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #e2e8f0;
+}
+
+.schema-edge-routing-option.hidden {
+  display: none;
+}
+
+.schema-edge-routing-option input {
+  margin-top: 3px;
+}
+
+.schema-edge-after-step-note {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1e1b4b;
+  border: 1px solid #4338ca;
+  color: #c7d2fe;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.schema-edge-after-step-note.hidden {
+  display: none;
+}
+
+.schema-apply-overwrite {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #cbd5e1;
+}
+
+.schema-apply-overwrite input {
+  margin-top: 3px;
+}
+
+.schema-runnable-checklist {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-runnable-checklist.hidden {
+  display: none;
+}
+
+.schema-runnable-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.schema-runnable-item.is-ok {
+  border-color: #166534;
+  background: #052e16;
+  color: #bbf7d0;
+}
+
+.schema-runnable-item.is-bad {
+  border-color: #991b1b;
+  background: #450a0a;
+  color: #fecaca;
+}
+
+.schema-runnable-mark {
+  font-weight: 600;
+  min-width: 1.1rem;
+}
+
 .schema-edge-conditions-title {
   font-size: 0.68rem;
   text-transform: uppercase;
@@ -1278,6 +1388,10 @@ body.screen-schema .graph-view-toolbar {
   color: #fed7aa;
   font-size: 0.82rem;
   line-height: 1.4;
+}
+
+.schema-save-status .schema-runnable-checklist {
+  margin-top: 8px;
 }
 
 .schema-dispatch-rule.is-save-error,

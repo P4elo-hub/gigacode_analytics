@@ -1,44 +1,33 @@
 schema_version: 1
 status_fields:
-  has_feature_context_slug_md_eshche_net:
-    type: bool
-    instruction: "Feature-context/{slug}.md ещё нет"
   agent_zakonchil_svoe_vypolnenie:
     type: bool
-    instruction: Агент закончил своё выполнение
   eshche_odno_svoe_uslovie:
     type: bool
-    instruction: ещё одно своё условие
   has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh:
     type: bool
-    instruction: "контекст уже есть, а Feature-writing/{slug}/{slug}.md ещё нет"
   has_agent_zakonchil_svoe_vypolnenie:
     type: bool
-    instruction: Агент закончил своё выполнение
   has_v_decisions_est_needs_answer_s_relates_na_gap_open_g:
     type: bool
-    instruction: "в DECISIONS есть needs-answer с Relates на GAP, open_gaps не пустые"
   has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec:
     type: bool
-    instruction: решения по GAP уже есть — нужно применить в SPEC
   has_open_gaps_ne_pustye_posle_revyu_bez_pending_apply:
     type: bool
-    instruction: open_gaps не пустые (после ревью / без pending-apply)
   has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp:
     type: bool
-    instruction: "SPEC есть, и после последней правки ещё не было успешного check-feature"
   has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp:
     type: bool
-    instruction: "ALIGNMENT свежий, verdict PASS или PASS WITH GAPS — spec готов"
   has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili:
     type: bool
-    instruction: "Нет отчёта или он устарел Коротко: ALIGNMENT нет или старше SPEC Чуть точнее: сверки с кодом ещё не было, или SPEC новее ALIGNMENT"
   has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa:
     type: bool
-    instruction: "Отчёт есть, но без PASS Коротко: ALIGNMENT без PASS / PASS WITH GAPS Чуть точнее: отчёт есть и не stale, но verdict не PASS — нужен повторный аудит"
   has_v_alignment_est_critical_major_raskhozhdeniya_otchet:
     type: bool
-    instruction: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
+  routing_state_needs_refresh:
+    type: bool
+  find_context:
+    type: bool
 edge_conditions:
   routing_state_needs_refresh:
     expr:
@@ -60,15 +49,6 @@ edge_conditions:
       op: falsy
     label: no main
     reason: Нет артефакта main
-  has_feature_context_slug_md_eshche_net:
-    expr:
-      field: has_feature_context_slug_md_eshche_net
-      op: truthy
-    dispatch:
-      priority: 140
-      next: context-researcher
-    label: "Feature-context/{slug}.md ещё нет"
-    reason: "Feature-context/{slug}.md ещё нет"
   agent_zakonchil_svoe_vypolnenie:
     expr:
       field: agent_zakonchil_svoe_vypolnenie
@@ -178,6 +158,15 @@ edge_conditions:
       next: alignment-resolver
     label: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
     reason: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
+  find_context:
+    expr:
+      field: find_context
+      op: truthy
+    dispatch:
+      priority: 110
+      next: context-researcher
+    label: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
+    reason: Не создан файл с описанием контекста по данной задаче или ранее вызванный find-context упал с ошибкой (вебхук не вернул ок)
 engine_fields:
   - has_routing_state
   - routing_state_invalid

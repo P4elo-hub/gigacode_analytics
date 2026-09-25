@@ -34,6 +34,7 @@ const RESULT_COLORS = {
 };
 
 const ROUTING_STEP = "analyze-routing";
+const AFTER_STEP_LABEL = "после завершения шага";
 const ROUTING_SATELLITE_DY = 50;
 const ROUTING_SAT_COLOR = "#4338ca";
 
@@ -2381,7 +2382,7 @@ function bindGraphInteractions(graph) {
         return;
       }
       if (shift && selectedNodeId && selectedNodeId !== nodeId) {
-        addSchemaEdge(selectedNodeId, nodeId, { kind: "main" });
+        addSchemaEdge(selectedNodeId, nodeId);
         hideTooltip();
         return;
       }
@@ -2915,6 +2916,17 @@ function applyDraftToPack(basePack, draft) {
   pack.graph.nodes = nodes;
   pack.graph.edges = edges.map((edge) => {
     const next = { ...edge };
+    if (edgeIsAfterStep(next) || next.after_step === true) {
+      next.after_step = true;
+      next.kind = "loop";
+      if (!String(next.label || "").trim()) next.label = AFTER_STEP_LABEL;
+      delete next.condition;
+      delete next.conditions;
+      delete next.condition_label;
+      delete next.condition_labels;
+      return next;
+    }
+    delete next.after_step;
     const labels = { ...(next.condition_labels || {}) };
     const ids = [];
     const seen = new Set();
@@ -4058,23 +4070,70 @@ function renderSchemaCanvasIssues(pack) {
   el.classList.toggle("hidden", !issues.length);
 }
 
+function edgeLooksLikeAgentFinished(edge) {
+  const parts = [
+    edge?.label,
+    edge?.condition_label,
+    edge?.condition,
+    ...(Array.isArray(edge?.conditions)
+      ? edge.conditions.map((item) => (typeof item === "string" ? item : item?.id || item?.label || ""))
+      : []),
+    ...Object.values(edge?.condition_labels || {}),
+  ];
+  const blob = parts.join(" ").toLowerCase();
+  return blob.includes("zakonchil") || blob.includes("закончил");
+}
+
+function edgeIsAfterStep(edge) {
+  if (!edge) return false;
+  if (edge.after_step === true) return true;
+  if (String(edge.to || "") !== ROUTING_STEP) return false;
+  if (String(edge.kind || "") === "loop" && edgeLooksLikeAgentFinished(edge)) return true;
+  return false;
+}
+
+function canUseAfterStepMode(edge) {
+  if (!edge || String(edge.to || "") !== ROUTING_STEP) return false;
+  const from = packNodeById(edge.from);
+  if (!from) return true;
+  return from.kind !== "orchestrator";
+}
+
+function afterStepEdgePatch(label) {
+  return {
+    after_step: true,
+    kind: "loop",
+    label: String(label || "").trim() || AFTER_STEP_LABEL,
+    condition: "",
+    condition_label: "",
+    conditions: [],
+    condition_labels: {},
+  };
+}
+
 function packEdgeById(edgeId) {
   return (state.pack?.graph?.edges || []).find((edge) => edge.id === edgeId) || null;
 }
 
 function packEdgeTooltip(edge) {
   const lines = [`${edge.from} → ${edge.to}`, `kind: ${edge.kind || "main"}`];
-  const ids = edgeConditionIds(edge);
-  if (!ids.length) {
-    lines.push("условие: нет");
-  } else if (ids.length === 1) {
-    lines.push(`условие: ${formatConditionId(ids[0], edge)}`);
+  if (edgeIsAfterStep(edge)) {
+    lines.push("тип: после завершения шага → analyze-routing");
+    lines.push("не bool / нет when: в routing-state");
   } else {
-    lines.push(`условия: ${ids.join(", ")}`);
-    ids.forEach((id) => lines.push(`  ${formatConditionId(id, edge)}`));
+    const ids = edgeConditionIds(edge);
+    if (!ids.length) {
+      lines.push("условие: нет");
+    } else if (ids.length === 1) {
+      lines.push(`условие (bool): ${formatConditionId(ids[0], edge)}`);
+    } else {
+      lines.push(`условия (bool): ${ids.join(", ")}`);
+      ids.forEach((id) => lines.push(`  ${formatConditionId(id, edge)}`));
+    }
   }
   const when = conditionTextForEdge(edge);
-  if (edge.label && edge.label !== when) lines.push(`подпись: ${edge.label}`);
+  if (edge.label && edge.label !== when && !edgeIsAfterStep(edge)) lines.push(`подпись: ${edge.label}`);
+  if (edgeIsAfterStep(edge) && edge.label) lines.push(`подпись: ${edge.label}`);
   const fromNode = packNodeById(edge.from);
   if (fromNode?.ask) {
     lines.push("стрелка после apply; между вопросом и apply перехода нет");
@@ -4089,6 +4148,9 @@ function outgoingEdgesFrom(nodeId) {
 }
 
 function packEdgeCanvasLabel(edge) {
+  if (edgeIsAfterStep(edge)) {
+    return edge.label || AFTER_STEP_LABEL;
+  }
   const ids = edgeConditionIds(edge);
   if (ids.length) {
     return ids.map((id) => conditionHumanLabel(id, edge) || id).join(" · ");
@@ -4263,7 +4325,12 @@ function finishSchemaConnect(toId) {
   const fromId = schemaConnectFrom;
   cancelSchemaConnect();
   if (!fromId || !toId) return;
-  addSchemaEdge(fromId, toId, { kind: "main" });
+  const fromNode = packNodeById(fromId);
+  const fields =
+    toId === ROUTING_STEP && fromNode?.kind !== "orchestrator"
+      ? { kind: "loop", after_step: true, label: AFTER_STEP_LABEL }
+      : { kind: "main" };
+  addSchemaEdge(fromId, toId, fields);
 }
 
 function addSchemaEdge(from, to, fields = {}) {
@@ -4282,24 +4349,32 @@ function addSchemaEdge(from, to, fields = {}) {
     return;
   }
   const fromNode = packNodeById(from);
+  const afterStep =
+    fields.after_step === true ||
+    (to === ROUTING_STEP && fromNode?.kind !== "orchestrator" && fields.after_step !== false);
   pushSchemaUndo();
   const id = uniqueSchemaEdgeId(from, to);
   const draft = getPackDraft(state.packId);
-  draft.extraEdges = [
-    ...(draft.extraEdges || []),
-    {
-      id,
-      from,
-      to,
-      kind: SCHEMA_EDGE_KINDS.includes(fields.kind) ? fields.kind : "main",
-      label: fields.label || "",
-    },
-  ];
+  const edge = {
+    id,
+    from,
+    to,
+    kind: SCHEMA_EDGE_KINDS.includes(fields.kind) ? fields.kind : afterStep ? "loop" : "main",
+    label: fields.label || (afterStep ? AFTER_STEP_LABEL : ""),
+  };
+  if (afterStep) {
+    edge.after_step = true;
+    edge.kind = "loop";
+    if (!edge.label) edge.label = AFTER_STEP_LABEL;
+  }
+  draft.extraEdges = [...(draft.extraEdges || []), edge];
   commitSchemaDraft(draft, { selectEdge: id, skipFit: true });
   setSchemaInspectorError(
     fromNode?.ask
       ? "Стрелка с ask-клетки — только после apply. Между вопросом и apply перехода на другого агента нет."
-      : ""
+      : afterStep
+        ? "Стрелка «после завершения» → analyze-routing (не bool-условие)."
+        : ""
   );
 }
 
@@ -4578,6 +4653,50 @@ function renderSchemaEdgeConditions(edge) {
   yamlEl.classList.remove("hidden");
 }
 
+function syncEdgeRoutingModeUi(edge) {
+  const afterOk = canUseAfterStepMode(edge);
+  const after = edgeIsAfterStep(edge);
+  const afterWrap = document.getElementById("schema-edge-routing-after-wrap");
+  const boolRadio = document.getElementById("schema-edge-routing-bool");
+  const afterRadio = document.getElementById("schema-edge-routing-after");
+  const condBlock = document.getElementById("schema-edge-conditions-block");
+  const afterNote = document.getElementById("schema-edge-after-step-note");
+  const boolHint = document.getElementById("schema-edge-bool-hint");
+  afterWrap?.classList.toggle("hidden", !afterOk);
+  if (boolRadio) boolRadio.checked = !after;
+  if (afterRadio) afterRadio.checked = after;
+  condBlock?.classList.toggle("hidden", after);
+  afterNote?.classList.toggle("hidden", !after);
+  boolHint?.classList.toggle("hidden", after);
+}
+
+function applySelectedEdgeRoutingMode(mode) {
+  if (!selectedEdgeId) return;
+  const edge = mergedDraftEdge(selectedEdgeId) || packEdgeById(selectedEdgeId);
+  if (!edge) return;
+  if (mode === "after_step") {
+    if (!canUseAfterStepMode(edge)) {
+      setSchemaInspectorError("«После завершения» только для стрелки к analyze-routing с рабочего шага.");
+      syncEdgeRoutingModeUi(edge);
+      return;
+    }
+    applyEdgeFieldPatch(selectedEdgeId, afterStepEdgePatch(edge.label), { rebuild: true });
+    setSchemaInspectorError("");
+    return;
+  }
+  const patch = {
+    after_step: false,
+  };
+  if (edge.kind === "loop" && edgeIsAfterStep(edge)) {
+    patch.kind = "branch";
+  }
+  if (edge.label === AFTER_STEP_LABEL) {
+    patch.label = "";
+  }
+  applyEdgeFieldPatch(selectedEdgeId, patch, { rebuild: true });
+  setSchemaInspectorError("");
+}
+
 function fillSchemaEdgeForm(edge) {
   schemaInspectorSyncing = true;
   fillNodeIdOptions(document.getElementById("schema-edge-from"), edge.from);
@@ -4591,6 +4710,7 @@ function fillSchemaEdgeForm(edge) {
   if (addEl) addEl.value = "";
   renderSchemaEdgeConditions(edge);
   markSchemaEdgeKindNotes(kind);
+  syncEdgeRoutingModeUi(edge);
   schemaInspectorSyncing = false;
 }
 
@@ -4607,6 +4727,10 @@ function addSelectedEdgeCondition(rawText) {
   if (!selectedEdgeId) return;
   const edge = mergedDraftEdge(selectedEdgeId);
   if (!edge.from && !packEdgeById(selectedEdgeId)) return;
+  if (edgeIsAfterStep(edge)) {
+    setSchemaInspectorError("На петле «после завершения» нет bool-условия — переключите тип перехода.");
+    return;
+  }
   const raw = String(rawText || "").trim();
   if (!raw) {
     setSchemaInspectorError("Напишите условие по-русски.");
@@ -4634,7 +4758,7 @@ function addSelectedEdgeCondition(rawText) {
       ...(parsed.condition_label ? { [id]: parsed.condition_label } : {}),
     },
   };
-  applyEdgeFieldPatch(selectedEdgeId, conditionPatchFromIds(ids, withLabel));
+  applyEdgeFieldPatch(selectedEdgeId, { ...conditionPatchFromIds(ids, withLabel), after_step: false });
   ensureDispatchRuleForWhen(id, edge.to);
   const addEl = document.getElementById("schema-edge-condition-add");
   if (addEl) addEl.value = "";
@@ -5398,6 +5522,9 @@ function setSaveStatus(kind, line, errors) {
     row.appendChild(btn);
     list.appendChild(row);
   }
+  if (items.length) {
+    renderRunnableChecklist([], "schema-save-checklist");
+  }
 }
 
 function updateSchemaSaveChrome() {
@@ -5406,6 +5533,7 @@ function updateSchemaSaveChrome() {
   const save = state.packSave || {};
   const errors = Array.isArray(save.errors) ? save.errors : [];
   const warnings = Array.isArray(save.warnings) ? save.warnings : [];
+  const checklist = Array.isArray(save.checklist) ? save.checklist : [];
   if (applyBtn) {
     applyBtn.classList.toggle("hidden", !save.ok);
     applyBtn.disabled = !save.ok;
@@ -5419,6 +5547,15 @@ function updateSchemaSaveChrome() {
   if (save.ok) {
     const extra = warnings.length ? ` ${warnings.join("; ")}` : "";
     setSaveStatus("is-ok", `Проверка ок.${extra} Применить доступен, диск не писали.`);
+    return;
+  }
+  if (checklist.length) {
+    const checklistLine = checklist.map((item) => `${item.ok ? "✓" : "✗"} ${item.label}`).join(" · ");
+    setSaveStatus(
+      checklist.some((item) => !item.ok) ? "is-warn" : "is-ok",
+      `Runnable: ${checklistLine}`
+    );
+    renderRunnableChecklist(checklist, "schema-save-checklist");
     return;
   }
   if (warnings.length) {
@@ -5510,16 +5647,36 @@ function closeSchemaModal(which) {
   document.getElementById(id)?.classList.add("hidden");
 }
 
+function renderRunnableChecklist(items, targetId) {
+  const list = document.getElementById(targetId || "schema-apply-checklist");
+  if (!list) return;
+  const rows = Array.isArray(items) ? items : [];
+  list.innerHTML = "";
+  list.classList.toggle("hidden", !rows.length);
+  for (const item of rows) {
+    const li = document.createElement("li");
+    li.className = `schema-runnable-item ${item.ok ? "is-ok" : "is-bad"}`;
+    const mark = document.createElement("span");
+    mark.className = "schema-runnable-mark";
+    mark.textContent = item.ok ? "✓" : "✗";
+    const text = document.createElement("span");
+    text.textContent = `${item.label || item.id}: ${item.detail || (item.ok ? "ok" : "нет")}`;
+    li.append(mark, text);
+    list.appendChild(li);
+  }
+}
+
 function openApplyModal() {
   if (!state.packSave?.ok) return;
   const modal = document.getElementById("schema-apply-modal");
   const summary = document.getElementById("schema-apply-summary");
   const warn = document.getElementById("schema-apply-warn");
+  const overwrite = document.getElementById("schema-apply-overwrite-orch");
   const preview = state.packSave.preview || {};
   if (summary) {
     summary.textContent = [
       `Пак ${state.packId}: ${preview.nodes ?? "?"} клеток, ${preview.edges ?? "?"} стрелок, ${preview.rules ?? "?"} правил.`,
-      "Запишем YAML (граф + dispatch + registry из клеток). status и expr не из черновика.",
+      "Запишем YAML + collectors/predicates при необходимости + orchestrator md (если нет).",
     ].join(" ");
   }
   if (warn) {
@@ -5529,6 +5686,8 @@ function openApplyModal() {
       : "";
     warn.classList.toggle("hidden", !protectedPack);
   }
+  if (overwrite) overwrite.checked = false;
+  renderRunnableChecklist([], "schema-apply-checklist");
   modal?.classList.remove("hidden");
 }
 
@@ -5538,11 +5697,16 @@ async function confirmApplyPack() {
   if (confirmBtn) confirmBtn.disabled = true;
   const overlay = overlayPackBody();
   const previous = overlayPackBodyFromPack(state.packBase);
+  const overwriteOrch = document.getElementById("schema-apply-overwrite-orch")?.checked === true;
   try {
     const res = await fetch("/api/pack/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...overlay, confirm: true }),
+      body: JSON.stringify({
+        ...overlay,
+        confirm: true,
+        overwrite_orchestrator: overwriteOrch,
+      }),
     });
     const data = await parseJsonResponse(res);
     if (!data.ok) {
@@ -5564,8 +5728,22 @@ async function confirmApplyPack() {
     closeSchemaModal("apply");
     clearPackDraftKeepPositions(state.packId);
     schemaUndoByPack[state.packId] = { past: [] };
-    state.packSave = { ok: false, errors: [], warnings: data.warnings || [], preview: data.preview || null };
-    setSaveStatus("is-ok", `Записано: ${(data.written || []).join(", ") || "YAML"}. Схема перечитывается.`);
+    const checklist = Array.isArray(data.checklist) ? data.checklist : [];
+    state.packSave = {
+      ok: false,
+      errors: [],
+      warnings: data.warnings || [],
+      preview: data.preview || null,
+      checklist,
+    };
+    const checklistLine = checklist.length
+      ? checklist.map((item) => `${item.ok ? "✓" : "✗"} ${item.label}`).join(" · ")
+      : "";
+    setSaveStatus(
+      checklist.some((item) => !item.ok) ? "is-warn" : "is-ok",
+      `Записано: ${(data.written || []).join(", ") || "YAML"}.${checklistLine ? ` Runnable: ${checklistLine}.` : ""} Схема перечитывается.`
+    );
+    renderRunnableChecklist(checklist, "schema-save-checklist");
     clearError();
     await refreshCatalogAndPack(data.pack);
   } catch (err) {
@@ -5848,7 +6026,22 @@ function bindSchemaDraftActions() {
   });
   document.getElementById("schema-edge-to")?.addEventListener("change", (event) => {
     if (schemaInspectorSyncing || !selectedEdgeId) return;
-    applyEdgeFieldPatch(selectedEdgeId, { to: event.target.value }, { rebuild: true });
+    const to = event.target.value;
+    const edge = mergedDraftEdge(selectedEdgeId) || packEdgeById(selectedEdgeId);
+    const fromNode = packNodeById(edge?.from);
+    const patch = { to };
+    if (to === ROUTING_STEP && fromNode?.kind !== "orchestrator") {
+      Object.assign(patch, afterStepEdgePatch(edge?.label));
+    } else if (edgeIsAfterStep(edge)) {
+      patch.after_step = false;
+    }
+    applyEdgeFieldPatch(selectedEdgeId, patch, { rebuild: true });
+  });
+  document.getElementById("schema-edge-routing-mode")?.addEventListener("change", (event) => {
+    if (schemaInspectorSyncing || !selectedEdgeId) return;
+    const radio = event.target.closest('input[name="schema-edge-routing"]');
+    if (!radio) return;
+    applySelectedEdgeRoutingMode(radio.value);
   });
   document.getElementById("schema-edge-kind")?.addEventListener("change", (event) => {
     if (schemaInspectorSyncing || !selectedEdgeId) return;

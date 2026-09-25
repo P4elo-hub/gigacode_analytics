@@ -66,7 +66,8 @@ def _stub_expr(condition_id: str) -> dict:
     match = KNOWN_NOT_HAS.fullmatch(condition_id)
     if match:
         return {"field": f"has_{match.group(1)}", "op": "falsy"}
-    return {"field": condition_id, "op": "non_empty"}
+    # Free-text / authored bool field → truthy (pack authoring Apply contract).
+    return {"field": condition_id, "op": "truthy"}
 
 
 def _next_priority(existing: dict[str, dict]) -> int:
@@ -126,15 +127,12 @@ def field_stubs_for(new_conditions: dict[str, dict], existing_fields: dict) -> d
         field = str(expr.get("field") or "")
         if not field or field in existing_fields or field in stubs:
             continue
-        if field.startswith("has_"):
-            stubs[field] = {
-                "type": "bool",
-                "instruction": f"True iff artifact for {field} exists. Stub from codegen — fill in.",
-            }
-            continue
         stubs[field] = {
-            "type": "list",
-            "instruction": f"TODO: analyzer instruction for {field} (codegen stub).",
+            "type": "bool",
+            "instruction": (
+                f"True iff analyzer sets {field} from feature facts. "
+                "Stub from codegen — refine instruction for the pack analyzer."
+            ),
         }
     return stubs
 
