@@ -5,6 +5,8 @@ step_to_subagent:
   spec-reviewer: spec-reviewer
   code-auditor: code-auditor
   alignment-resolver: alignment-resolver
+  spec-challenger: spec-challenger
+  challenge-resolver: challenge-resolver
 orchestrator_owned:
   - spec-writer
 gated_subagents:
@@ -15,6 +17,8 @@ gated_subagents:
   - spec-reviewer
   - code-auditor
   - alignment-resolver
+  - spec-challenger
+  - challenge-resolver
 restartable_steps:
   - analyze-routing
   - context-researcher
@@ -23,6 +27,8 @@ restartable_steps:
   - spec-reviewer
   - code-auditor
   - alignment-resolver
+  - spec-challenger
+  - challenge-resolver
 delegate_modes:
   write_feature_cycle:
     step: spec-writer

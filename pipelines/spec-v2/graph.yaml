@@ -107,11 +107,12 @@ nodes:
           sections:
             - 5.3.1
             - 5.3.2
-      ask_queue: true
+      ask_queue: false
   - id: gap-resolver
     label: gap-resolver
     kind: step
     subagent: gap-resolver
+    ask: true
   - id: spec-reviewer
     label: spec-reviewer
     kind: step
@@ -124,6 +125,15 @@ nodes:
     label: alignment-resolver
     kind: step
     subagent: alignment-resolver
+  - id: spec-challenger
+    label: spec-challenger
+    kind: step
+    subagent: spec-challenger
+    ask: true
+  - id: challenge-resolver
+    label: challenge-resolver
+    kind: step
+    subagent: challenge-resolver
 edges:
   - id: e-orch-ar
     from: spec-v2-orchestrator
@@ -228,6 +238,40 @@ edges:
     after_step: true
   - id: e-code-auditor-analyze-routing
     from: code-auditor
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага
+    after_step: true
+  - id: e-analyze-routing-spec-challenger
+    from: analyze-routing
+    to: spec-challenger
+    kind: branch
+    condition: has_faila_slug_challenges_md_eshche_net_gaps_zakryty_che
+    condition_label: "файла {slug}-challenges.md ещё нет (gaps закрыты, check-feature уже успешен)"
+    condition_labels:
+      has_faila_slug_challenges_md_eshche_net_gaps_zakryty_che: "файла {slug}-challenges.md ещё нет (gaps закрыты, check-feature уже успешен)"
+  - id: e-spec-challenger-analyze-routing
+    from: spec-challenger
+    to: analyze-routing
+    kind: loop
+    label: после завершения шага
+    after_step: true
+  - id: e-analyze-routing-challenge-resolver
+    from: analyze-routing
+    to: challenge-resolver
+    kind: branch
+    condition: has_v_decisions_est_needs_answer_s_relates_na_ch
+    condition_label: "в DECISIONS есть needs-answer с Relates на CH-*"
+    conditions:
+      - has_v_decisions_est_needs_answer_s_relates_na_ch
+      - has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec
+      - has_est_fail_challenges_i_challenges_open_0
+    condition_labels:
+      has_v_decisions_est_needs_answer_s_relates_na_ch: "в DECISIONS есть needs-answer с Relates на CH-*"
+      has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec: решения по CH уже есть — нужно применить в SPEC
+      has_est_fail_challenges_i_challenges_open_0: "есть файл CHALLENGES и challenges.open > 0"
+  - id: e-challenge-resolver-analyze-routing
+    from: challenge-resolver
     to: analyze-routing
     kind: loop
     label: после завершения шага

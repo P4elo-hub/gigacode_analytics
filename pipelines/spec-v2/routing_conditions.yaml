@@ -20,6 +20,14 @@ status_fields:
     type: bool
   has_v_alignment_est_critical_major_raskhozhdeniya_otchet:
     type: bool
+  has_faila_slug_challenges_md_eshche_net_gaps_zakryty_che:
+    type: bool
+  has_v_decisions_est_needs_answer_s_relates_na_ch:
+    type: bool
+  has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec:
+    type: bool
+  has_est_fail_challenges_i_challenges_open_0:
+    type: bool
 edge_conditions:
   routing_state_needs_refresh:
     expr:
@@ -132,6 +140,42 @@ edge_conditions:
       next: alignment-resolver
     label: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
     reason: "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, лимит 3 итераций ещё не исчерпан"
+  has_faila_slug_challenges_md_eshche_net_gaps_zakryty_che:
+    expr:
+      field: has_faila_slug_challenges_md_eshche_net_gaps_zakryty_che
+      op: truthy
+    dispatch:
+      priority: 215
+      next: spec-challenger
+    label: "файла {slug}-challenges.md ещё нет (gaps закрыты, check-feature уже успешен)"
+    reason: "файла {slug}-challenges.md ещё нет (gaps закрыты, check-feature уже успешен)"
+  has_v_decisions_est_needs_answer_s_relates_na_ch:
+    expr:
+      field: has_v_decisions_est_needs_answer_s_relates_na_ch
+      op: truthy
+    dispatch:
+      priority: 220
+      next: challenge-resolver
+    label: "в DECISIONS есть needs-answer с Relates на CH-*"
+    reason: "в DECISIONS есть needs-answer с Relates на CH-*"
+  has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec:
+    expr:
+      field: has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec
+      op: truthy
+    dispatch:
+      priority: 225
+      next: challenge-resolver
+    label: решения по CH уже есть — нужно применить в SPEC
+    reason: решения по CH уже есть — нужно применить в SPEC
+  has_est_fail_challenges_i_challenges_open_0:
+    expr:
+      field: has_est_fail_challenges_i_challenges_open_0
+      op: truthy
+    dispatch:
+      priority: 230
+      next: challenge-resolver
+    label: "есть файл CHALLENGES и challenges.open > 0"
+    reason: "есть файл CHALLENGES и challenges.open > 0"
 engine_fields:
   - has_routing_state
   - routing_state_invalid
