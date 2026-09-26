@@ -3152,21 +3152,31 @@ function routingConditionsForPack(packId) {
 }
 
 function whenCatalogEntries(packId) {
+  // Authoring when-picker: only conditions on this pack's edges.
+  // Do not merge predicates.core (union across packs) or by_pipeline —
+  // those leak foreign has_spec / has_gaps_map into another pack's UI.
   const id = packId || state.packId;
-  const preds = state.catalogPredicates || {};
-  const core = Array.isArray(preds.core) ? preds.core : [];
-  const byPipe = Array.isArray(preds.by_pipeline?.[id]) ? preds.by_pipeline[id] : [];
-  const edges = Array.isArray(routingConditionsForPack(id).edge_conditions)
+  const labels = {};
+  const catalogEdges = Array.isArray(routingConditionsForPack(id).edge_conditions)
     ? routingConditionsForPack(id).edge_conditions
     : [];
-  const labels = {};
-  for (const item of edges) {
+  for (const item of catalogEdges) {
     const condId = String(item?.id || "").trim();
     if (!condId) continue;
     labels[condId] = String(item.label || condId).trim() || condId;
   }
-  const ids = new Set([...core, ...byPipe, ...Object.keys(labels)]);
-  return [...ids]
+  // Draft arrows may invent when-ids before Apply refreshes catalogRouting.
+  if (!packId || id === state.packId) {
+    for (const edge of state.pack?.graph?.edges || []) {
+      const edgeLabels = edge?.condition_labels || {};
+      for (const condId of edgeConditionIds(edge)) {
+        if (!condId || labels[condId]) continue;
+        const human = String(edgeLabels[condId] || edge.condition_label || "").trim();
+        labels[condId] = human && human !== condId ? human : condId;
+      }
+    }
+  }
+  return Object.keys(labels)
     .filter(Boolean)
     .sort()
     .map((condId) => ({
