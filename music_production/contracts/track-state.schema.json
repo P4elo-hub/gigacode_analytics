@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/track-state.schema.json",
+  "title": "Track state",
+  "description": "State is the last completed operation. Version records live in VersionStore and versions.json, not in this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "track_id",
+    "created_at",
+    "state",
+    "current_version_id",
+    "base_version_id",
+    "revision_iteration",
+    "revision_budget_remaining",
+    "open_critical_defects",
+    "open_major_defects"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "BRIEF_READY",
+        "PACKAGE_READY",
+        "PACKAGE_APPROVED",
+        "GENERATING",
+        "AWAITING_BASE_SELECTION",
+        "REVISING",
+        "FINAL_QC",
+        "AWAITING_FINAL_APPROVAL",
+        "APPROVED",
+        "PAUSED",
+        "FAILED"
+      ]
+    },
+    "current_version_id": { "type": ["string", "null"], "minLength": 1 },
+    "base_version_id": { "type": ["string", "null"], "minLength": 1 },
+    "revision_iteration": { "type": "integer", "minimum": 0 },
+    "revision_budget_remaining": { "type": "integer", "minimum": 0 },
+    "open_critical_defects": { "type": "integer", "minimum": 0 },
+    "open_major_defects": { "type": "integer", "minimum": 0 }
+  }
+}

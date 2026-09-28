@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/song-package.schema.json",
+  "title": "Song package",
+  "description": "Agreed package after lyrics and sound direction. Points at those input versions. Does not store a human PASS and does not carry Suno API fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "track_id",
+    "created_at",
+    "version_id",
+    "lyrics_version_id",
+    "sound_direction_version_id"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "version_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identity of this package version. Later requests cite it."
+    },
+    "lyrics_version_id": { "type": "string", "minLength": 1 },
+    "sound_direction_version_id": { "type": "string", "minLength": 1 }
+  }
+}

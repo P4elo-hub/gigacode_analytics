@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/brief.schema.json",
+  "title": "Song assignment",
+  "description": "One ready song assignment for one track_id. Budget figures are this assignment's limits, not hidden product defaults. No market, promotion, distribution, or play-count fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "track_id",
+    "created_at",
+    "assignment",
+    "package_review_required",
+    "reference_use_permitted",
+    "budget"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "track_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "assignment": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The ready song assignment. Downstream steps write and check lyrics and design sound from this text."
+    },
+    "package_review_required": {
+      "type": "boolean",
+      "default": true,
+      "description": "Optional human gate before the first generation. Default for the pilot is on."
+    },
+    "reference_use_permitted": {
+      "type": "boolean",
+      "description": "True only when use of a voice or reference is explicitly permitted. Lack of permission is not permission."
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configurable limits. Reaching a limit pauses the track for a human decision. A network retry is not a new creative attempt.",
+      "required": [
+        "max_batch",
+        "max_defect_fix_attempts",
+        "max_iterations",
+        "max_api_wait_seconds",
+        "max_cost"
+      ],
+      "properties": {
+        "max_batch": { "type": "integer", "minimum": 0 },
+        "max_defect_fix_attempts": { "type": "integer", "minimum": 0 },
+        "max_iterations": { "type": "integer", "minimum": 0 },
+        "max_api_wait_seconds": { "type": "integer", "minimum": 0 },
+        "max_cost": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

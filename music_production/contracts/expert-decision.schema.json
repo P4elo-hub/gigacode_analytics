@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/expert-decision.schema.json",
+  "title": "Expert decision",
+  "description": "Alex's own decision. An agent must not write or rewrite this document. Each gate accepts only its own verdicts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "track_id",
+    "created_at",
+    "decision_id",
+    "gate",
+    "verdict",
+    "decided_by"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "gate": { "const": "PACKAGE_APPROVAL" } },
+        "required": ["gate"]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "enum": ["APPROVE_PACKAGE", "CHANGE_LYRICS", "CHANGE_PRODUCTION", "STOP"]
+          }
+        },
+        "required": ["song_package_version_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "gate": { "const": "BASE_SELECTION" } },
+        "required": ["gate"]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "enum": [
+              "SELECT_AS_BASE",
+              "REGENERATE_BATCH",
+              "COMBINE_DIRECTION",
+              "CHANGE_LYRICS",
+              "CHANGE_PRODUCTION",
+              "STOP"
+            ]
+          }
+        },
+        "required": ["candidate_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "gate": { "const": "REVISION_ESCALATION" } },
+        "required": ["gate"]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "enum": ["ACCEPT_REVISION", "RETRY_REVISION", "ROLLBACK", "STOP"]
+          }
+        },
+        "required": ["version_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "gate": { "const": "FINAL_APPROVAL" } },
+        "required": ["gate"]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "enum": ["APPROVE_FINAL", "REQUEST_REVISION", "STOP"]
+          }
+        },
+        "required": ["version_id"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "decision_id": { "type": "string", "minLength": 1 },
+    "gate": {
+      "type": "string",
+      "enum": [
+        "PACKAGE_APPROVAL",
+        "BASE_SELECTION",
+        "REVISION_ESCALATION",
+        "FINAL_APPROVAL"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "APPROVE_PACKAGE",
+        "CHANGE_LYRICS",
+        "CHANGE_PRODUCTION",
+        "SELECT_AS_BASE",
+        "REGENERATE_BATCH",
+        "COMBINE_DIRECTION",
+        "ACCEPT_REVISION",
+        "RETRY_REVISION",
+        "ROLLBACK",
+        "APPROVE_FINAL",
+        "REQUEST_REVISION",
+        "STOP"
+      ]
+    },
+    "decided_by": { "type": "string", "minLength": 1 },
+    "comment": { "type": "string" },
+    "song_package_version_id": { "type": "string", "minLength": 1 },
+    "candidate_id": { "type": "string", "minLength": 1 },
+    "version_id": { "type": "string", "minLength": 1 }
+  }
+}

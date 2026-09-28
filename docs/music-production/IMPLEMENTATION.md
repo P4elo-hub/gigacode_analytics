@@ -99,7 +99,7 @@ pipelines/music-production/
   music-knowledge-capturer.md
 .gigacode/skills/music-{brief,lyrics,lyrics-review,sound-direction,package-review,suno-prompt,candidate-review,defect-diagnosis,revision-plan,version-comparison,knowledge-capture}/SKILL.md
 .gigacode/commands/music-production.md
-music-production/
+music_production/
   contracts/{brief,song-package,track-state,generation-request,defect,expert-decision}.schema.json
   runtime/{base,gigacode,llm_provider,prompt_registry}.py
   adapters/{base,mock_suno,suno,capabilities}.py
@@ -107,7 +107,7 @@ music-production/
   fixtures/{sample-brief,mock-generations,sample-expert-decisions}.json
   README.md
 scripts/fixtures/dispatch_golden/music-production/{cases.json,COVERAGE.md}
-tests/music-production/{test_graph_dispatch,test_suno_adapter_contract,test_version_lineage,test_audio_qc,test_end_to_end_mock}.py
+tests/music_production/{test_graph_dispatch,test_suno_adapter_contract,test_version_lineage,test_audio_qc,test_end_to_end_mock}.py
 Music-runs/<track_id>/             # runtime output, ignored by Git
 ```
 
@@ -138,7 +138,7 @@ Music-runs/<track_id>/             # runtime output, ignored by Git
 ```text
 Задача только: создать схемы и fixtures для одного музыкального трека. Перед правками проверь ветку feature/music-production, git status и существующий стиль файлов. Прочитай разделы 1–5 Music_Production_Implementation_Spec_and_Cursor_Prompts.md, если документ добавлен в рабочий контекст Cursor; иначе попроси меня приложить его. Не выдумывай требования.
 
-Разрешены только music-production/contracts/*.schema.json, music-production/fixtures/*.json и tests/music-production/test_contracts.py. Не трогай pipelines/, .gigacode/, scripts/ и старые файлы. Сделай схемы для brief, song-package, track-state, generation-request, defect, expert-decision; каждый документ имеет schema_version и track_id. Сделай по одному валидному примеру для полного задания и экспертного решения, отрицательные cases для отсутствующих id, неверного времени и недопустимого verdict. Определи явный список enum для состояний, решений и операций; неизвестную Suno-операцию не объявляй доступной.
+Разрешены только music_production/contracts/*.schema.json, music_production/fixtures/*.json и tests/music_production/test_contracts.py. Не трогай pipelines/, .gigacode/, scripts/ и старые файлы. Сделай схемы для brief, song-package, track-state, generation-request, defect, expert-decision; каждый документ имеет schema_version и track_id. Сделай по одному валидному примеру для полного задания и экспертного решения, отрицательные cases для отсутствующих id, неверного времени и недопустимого verdict. Определи явный список enum для состояний, решений и операций; неизвестную Suno-операцию не объявляй доступной.
 
 Проверки должны реально валидировать fixtures по схемам, а не повторять логику реализации. Если нужной библиотеки JSON Schema нет, не добавляй зависимость скрытно: покажи варианты и остановись. После тестов покажи diff и остановись. Не делай этап 2.
 ```
@@ -148,7 +148,7 @@ Music-runs/<track_id>/             # runtime output, ignored by Git
 ```text
 Задача только: создать независимый pack music-production поверх существующего движка. Прочитай существующие pack calibration/spec, PIPELINE-PACK-AUTHORING.md, PIPELINE-REGISTRY.md, PIPELINE-GOLDEN.md и контракты этапа 1. Не копируй graph/spec и не применяй generic cycle к lyrics. Начни с простого маршрута brief → lyrics-write → lyrics-review → sound-design → package-review → prompt-compile → generate-batch → candidate-review → select-base → diagnose-defects → plan-revision → execute-edit → compare-versions → final-qc → final-approval → capture-knowledge → done. Укажи в графе возвраты для REVISE/REJECT и лимит паузы. Запуск последовательный допустим.
 
-Разрешены: pipelines/music-production/{graph,dispatch,status,registry,routing_conditions}.yaml, pipelines/music-production/{collectors,validate}.py, pipelines/music-production/README.md, scripts/fixtures/dispatch_golden/music-production/{cases.json,COVERAGE.md}, tests/music-production/test_graph_dispatch.py и только минимальные заглушки .gigacode/agents/music-*.md, требуемые компилятором. Сначала dry-run/validation, затем compile --apply лишь после проверки diff. Generated registry/schema могут измениться как ожидаемый вывод компиляции; не редактируй их руками. Не трогай spec/calibration/spec-v2. Начинай этот этап только при чистом baseline после этапа 0Б или при доказанно стабильной ревизии из этапа 0.
+Разрешены: pipelines/music-production/{graph,dispatch,status,registry,routing_conditions}.yaml, pipelines/music-production/{collectors,validate}.py, pipelines/music-production/README.md, scripts/fixtures/dispatch_golden/music-production/{cases.json,COVERAGE.md}, tests/music_production/test_graph_dispatch.py и только минимальные заглушки .gigacode/agents/music-*.md, требуемые компилятором. Сначала dry-run/validation, затем compile --apply лишь после проверки diff. Generated registry/schema могут измениться как ожидаемый вывод компиляции; не редактируй их руками. Не трогай spec/calibration/spec-v2. Начинай этот этап только при чистом baseline после этапа 0Б или при доказанно стабильной ревизии из этапа 0.
 
 Golden cases: нет брифа; lyrics требуют правки; package готов; запрос отправлен и ожидается; кандидаты готовы и нужен выбор; база выбрана; дефект открыт; сравнение отклонило правку; правка принята; лимит исчерпан; финальный QC не прошел; финальное решение ожидается; approved. Для каждого зафиксируй next_step или остановку. Если текущий router не способен выразить нужный переход без правки ядра, остановись и покажи минимальный patch-план, а не переписывай engine. Прогони compile, golden, имеющиеся регрессионные тесты и остановись.
 ```
@@ -156,7 +156,7 @@ Golden cases: нет брифа; lyrics требуют правки; package г�
 ### Промт 3 — агенты подготовки пакета
 
 ```text
-Задача только: реализовать music-brief-analyst, music-lyrics-writer, music-lyrics-editor, music-sound-director, music-package-reviewer и music-suno-prompt-compiler, их SKILL.md и команду запуска music-production. Первый локальный runtime — GigaCode CLI, но тексты агентов и JSON-контракты не должны ссылаться на особенности конкретной модели. Прочитай интерфейсы pack и схемы. Разрешены соответствующие .gigacode/agents/music-*.md, .gigacode/skills/music-*/SKILL.md, .gigacode/commands/music-production.md, music-production/fixtures/* и один тест сценария подготовки пакета. Не меняй другие агенты, банковские skills, общие rules и engine.
+Задача только: реализовать music-brief-analyst, music-lyrics-writer, music-lyrics-editor, music-sound-director, music-package-reviewer и music-suno-prompt-compiler, их SKILL.md и команду запуска music-production. Первый локальный runtime — GigaCode CLI, но тексты агентов и JSON-контракты не должны ссылаться на особенности конкретной модели. Прочитай интерфейсы pack и схемы. Разрешены соответствующие .gigacode/agents/music-*.md, .gigacode/skills/music-*/SKILL.md, .gigacode/commands/music-production.md, music_production/fixtures/* и один тест сценария подготовки пакета. Не меняй другие агенты, банковские skills, общие rules и engine.
 
 Для каждого агента укажи: входные файлы, один выходной файл, критерии PASS/REVISE/BLOCKED и запрет утверждать, что он слышал аудио, когда аудио не передано. lyrics-editor проверяет текст, удобство пения и структуру; sound-director описывает звук по готовому брифу; compiler переводит согласованный пакет в абстрактный request для adapter и НЕ придумывает поля недоступного Suno API. Решение человека о package фиксируется отдельно, если package_review_required=true. Проверка: mock-прогон от sample brief до schema-valid generation-request и возврат lyrics-review → lyrics-write. Покажи diff и остановись.
 ```
@@ -164,7 +164,7 @@ Golden cases: нет брифа; lyrics требуют правки; package г�
 ### Промт 4 — версии, budget и MockSunoAdapter
 
 ```text
-Задача только: реализовать music-production/adapters/{base,mock_suno,capabilities}.py и services/{job_runner,version_store,budget_guard}.py с нужными тестами. Не создавай реальных HTTP-запросов. Разрешены только перечисленные файлы, тесты этих модулей, fixtures и точечная интеграция с music-production pack. Не писать suno.py как рабочую интеграцию.
+Задача только: реализовать music_production/adapters/{base,mock_suno,capabilities}.py и services/{job_runner,version_store,budget_guard}.py с нужными тестами. Не создавай реальных HTTP-запросов. Разрешены только перечисленные файлы, тесты этих модулей, fixtures и точечная интеграция с music-production pack. Не писать suno.py как рабочую интеграцию.
 
 Контракт adapter: submit_generation(request, idempotency_key) -> job_id; get_job(job_id) -> pending/succeeded/failed; get_outputs(job_id) -> список provider output ids и локальных audio_uri; submit_edit(...) только когда capability включена. Mock должен создавать воспроизводимые результаты и позволять управлять pending, fail и timeout через fixture. VersionStore создает неизменяемые записи с parent_version_id/checksum и безопасно меняет current_version_id после принятия версии. BudgetGuard отделяет retry доставки от новой оплачиваемой попытки. Тесты: повторный submit с тем же ключом, сетевой retry, истечение лимита, отказ от недоступной операции, rollback с сохранением истории. Не объявлять mock-аудио музыкально качественным. Покажи проверку и остановись.
 ```
@@ -172,7 +172,7 @@ Golden cases: нет брифа; lyrics требуют правки; package г�
 ### Промт 4Б — граница Agent Runtime
 
 ```text
-Задача только: определить программную границу между pipeline engine и LLM runtime. Разрешены music-production/runtime/{base,gigacode,llm_provider,prompt_registry}.py, их unit tests и минимальная документация. Не реализуй прямой вызов платной LLM и не запускай GigaCode через небезопасную shell-строку.
+Задача только: определить программную границу между pipeline engine и LLM runtime. Разрешены music_production/runtime/{base,gigacode,llm_provider,prompt_registry}.py, их unit tests и минимальная документация. Не реализуй прямой вызов платной LLM и не запускай GigaCode через небезопасную shell-строку.
 
 AgentRuntime принимает agent_id, проверенные пути входных артефактов, JSON schema ожидаемого результата, correlation_id и deadline; возвращает structured result со status succeeded/blocked/failed, output artifact и usage metadata. GigaCodeRuntimeAdapter пока может быть явной заглушкой или безопасным локальным wrapper по фактически доступному CLI-контракту; если такой контракт не подтвержден, возвращай NOT_CONFIGURED. LLMProvider — интерфейс будущего прямого API. PromptRegistry связывает agent_id с versioned instruction bundle и не хранит секреты. Тесты подтверждают, что pipeline не зависит от имени модели и что смена runtime не меняет артефактный контракт. Покажи diff и остановись.
 ```
@@ -180,7 +180,7 @@ AgentRuntime принимает agent_id, проверенные пути вхо
 ### Промт 5 — проверка аудио и выбор базовой версии
 
 ```text
-Задача только: добавить AudioAnalyzer с детерминированной проверкой файлов и music-candidate-critic со skill; связать готовый batch с select-base human gate. Разрешены music-production/services/audio_analyzer.py, соответствующий agent/skill, fixtures, tests/music-production/test_audio_qc.py и необходимые pack-local файлы. Без реального Suno API и без UI.
+Задача только: добавить AudioAnalyzer с детерминированной проверкой файлов и music-candidate-critic со skill; связать готовый batch с select-base human gate. Разрешены music_production/services/audio_analyzer.py, соответствующий agent/skill, fixtures, tests/music_production/test_audio_qc.py и необходимые pack-local файлы. Без реального Suno API и без UI.
 
 AudioAnalyzer проверяет формат/читаемость, длительность, обрыв/пустоту, clipping/peak в рамках доступного декодирования. Для неподдержанного формата возвращает BLOCKED/UNSUPPORTED, не PASS. Не приписывай DSP-метрикам способность доказать «живость» исполнения. candidate-critic получает факты измерения и, если доступно восприятие аудио в используемом runtime, отдельный результат прослушивания; иначе помечает творческую оценку как pending human review. Алекс выбирает version_id из реального batch или NEW_BATCH/STOP; отсутствие решения означает паузу, а не автоматический выбор. Тесты используют реальные короткие звуковые fixtures/сигналы для технических параметров и отдельный mock human verdict. Покажи diff и остановись.
 ```
@@ -188,7 +188,7 @@ AudioAnalyzer проверяет формат/читаемость, длител
 ### Промт 6 — диагностика и петля правок
 
 ```text
-Задача только: реализовать music-defect-diagnostician, music-revision-planner, music-version-comparator, их skills, запись defects/revision/comparison и маршруты петли. Разрешены соответствующие music-агенты/skills, music-production/contracts/defect.schema.json, pack-local файлы, tests/music-production/test_version_lineage.py и test_end_to_end_mock.py. Не менять банковский pack или общую логику spec.
+Задача только: реализовать music-defect-diagnostician, music-revision-planner, music-version-comparator, их skills, запись defects/revision/comparison и маршруты петли. Разрешены соответствующие music-агенты/skills, music_production/contracts/defect.schema.json, pack-local файлы, tests/music_production/test_version_lineage.py и test_end_to_end_mock.py. Не менять банковский pack или общую логику spec.
 
 Диагноз содержит version_id и таймкод, не утверждает неуслышанных свойств. План правки привязан к одному дефекту, фиксирует preserve/change и выбирает только capability, отмеченную adapter как доступная. В mock первой версии поддержи точечную правку только как симуляцию новой дочерней версии. Comparator сравнивает parent/child с целью правки, возвращает accept/reject/escalate, не перезаписывает экспертное решение. Покрой тестами: исправление принято; регрессия отклонена и current_version_id не меняется; попытки закончились → PAUSED; новая версия по другому parent → BLOCKED; закрытие всех blocking defects → final-qc. Не делай настоящих вызовов Suno. Покажи diff и остановись.
 ```
@@ -196,7 +196,7 @@ AudioAnalyzer проверяет формат/читаемость, длител
 ### Промт 7 — экспертное решение и накопление знаний
 
 ```text
-Задача только: реализовать ExpertDecisionStore, music-knowledge-capturer, его skill и два human gate (select-base, final-approval). Разрешены music-production/services/expert_decisions.py, соответствующие agent/skill, schemas/fixtures, pack-local файлы и тесты expert flow. Запись решения immutable: кто принял, версия/дефект, verdict, комментарий, timestamp. Система не подписывает решения именем Алекса автоматически. Из каждого подтвержденного выбора сформируй candidate_case: исходная версия, диагноз, промт, новая версия, технические факты, экспертный verdict. Не обновляй автоматически production prompts/skills по одному кейсу.
+Задача только: реализовать ExpertDecisionStore, music-knowledge-capturer, его skill и два human gate (select-base, final-approval). Разрешены music_production/services/expert_decisions.py, соответствующие agent/skill, schemas/fixtures, pack-local файлы и тесты expert flow. Запись решения immutable: кто принял, версия/дефект, verdict, комментарий, timestamp. Система не подписывает решения именем Алекса автоматически. Из каждого подтвержденного выбора сформируй candidate_case: исходная версия, диагноз, промт, новая версия, технические факты, экспертный verdict. Не обновляй автоматически production prompts/skills по одному кейсу.
 
 Проверки: отсутствие ответа оставляет PAUSED/awaiting; APPROVE после чистого QC завершает граф; REVISE возвращает к дефекту; двойная доставка одного решения не дублирует кейс; экспертные заметки не теряются. Выведи один mock end-to-end trace с путем по графу, но не выдавай его за реальную оценку музыки. Покажи diff и остановись.
 ```
@@ -214,7 +214,7 @@ AudioAnalyzer проверяет формат/читаемость, длител
 ```text
 Пока НЕ выполняй это задание без официальной или договорной документации API и тестовых учетных данных, предоставленных владельцем проекта через штатные секреты окружения. Сначала составь таблицу: операция графа → подтвержденный endpoint/метод → вход → выход → лимиты → права → доступна/недоступна. Если контракт не подтверждает Replace Section, Extend, Remaster или stems, оставь capability выключенной и сохрани human fallback.
 
-После одобрения таблицы реализуй только music-production/adapters/suno.py, его contract/integration tests, конфигурацию через переменные окружения и минимальные необходимые wiring-правки. Не используй cookies или непубличные веб-вызовы; не логируй секреты. Отдельный маленький smoke на тестовом аккаунте, с лимитом расходов и без массовой генерации. Покажи фактический ответ API без токенов и остановись.
+После одобрения таблицы реализуй только music_production/adapters/suno.py, его contract/integration tests, конфигурацию через переменные окружения и минимальные необходимые wiring-правки. Не используй cookies или непубличные веб-вызовы; не логируй секреты. Отдельный маленький smoke на тестовом аккаунте, с лимитом расходов и без массовой генерации. Покажи фактический ответ API без токенов и остановись.
 ```
 
 ## 7. Передача результата и критерий готовности

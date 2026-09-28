@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-09-28T12:00:00Z",
+  "assignment": "Песня от первого лица о ночном поезде домой.",
+  "package_review_required": true,
+  "reference_use_permitted": false,
+  "budget": {
+    "max_batch": 2,
+    "max_defect_fix_attempts": 3,
+    "max_iterations": 5,
+    "max_api_wait_seconds": 120,
+    "max_cost": 0
+  }
+}

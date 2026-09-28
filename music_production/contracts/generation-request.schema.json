@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/generation-request.schema.json",
+  "title": "Generation request",
+  "description": "Abstract adapter request compiled from an agreed song package. Not a Suno API payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "track_id",
+    "created_at",
+    "operation",
+    "idempotency_key",
+    "song_package_version_id",
+    "prompt_id"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "generate-batch",
+        "regenerate-batch",
+        "replace-section",
+        "extend",
+        "remaster",
+        "extract-stems",
+        "stem-cover"
+      ],
+      "description": "Closed list of engine operations. A value in this enum is not confirmation that the operation is available in the Suno API. Availability is checked later by CapabilityRegistry."
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Provider requests carry an idempotency key. A network retry reuses it and is not a new creative attempt."
+    },
+    "song_package_version_id": { "type": "string", "minLength": 1 },
+    "prompt_id": { "type": "string", "minLength": 1 }
+  }
+}

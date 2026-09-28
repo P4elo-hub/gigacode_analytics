@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T14:00:00Z",
+  "state": "AWAITING_BASE_SELECTION",
+  "current_version_id": "ver-001",
+  "base_version_id": null,
+  "revision_iteration": 0,
+  "revision_budget_remaining": 3,
+  "open_critical_defects": 0,
+  "open_major_defects": 0
+}
