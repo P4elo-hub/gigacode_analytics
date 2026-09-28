@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -1632,6 +1633,55 @@ def init_new_pack(pipeline_id: str, template: str, root: Path) -> dict:
         "pack": pack,
         "warnings": warnings,
         "written": [_rel(path, root) for path in written],
+    }
+
+
+def delete_pack(
+    pipeline_id: str,
+    root: Path,
+    *,
+    delete_orchestrator: bool = True,
+) -> dict:
+    """Remove pipelines/<id>/ and recompile registry. Optionally drop orchestrator md."""
+    if not PACK_ID_RE.fullmatch(pipeline_id):
+        raise ValueError(f"pack id must be kebab-case, got {pipeline_id!r}")
+    known = set(discover_pipeline_ids(root))
+    if pipeline_id not in known:
+        raise FileNotFoundError(f"unknown pack: {pipeline_id}")
+    folder = packs_dir(root) / pipeline_id
+    if not folder.is_dir():
+        raise FileNotFoundError(f"pack folder missing: {folder}")
+
+    removed: list[str] = []
+    shutil.rmtree(folder)
+    removed.append(_rel(folder, root))
+
+    if delete_orchestrator:
+        for path in orchestrator_agent_paths(pipeline_id, root):
+            if path.is_file():
+                path.unlink()
+                removed.append(_rel(path, root))
+
+    _clear_pack_loader_caches()
+    data = merge_compiled_source(root)
+    compile_errors = validate_source(data)
+    if compile_errors:
+        raise ValueError(
+            "пак удалён с диска, но compile после удаления не прошёл:\n  "
+            + "\n  ".join(compile_errors)
+        )
+    schema_text, registry_text = compile_outputs(data)
+    REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SCHEMA_PATH.write_text(schema_text, encoding="utf-8")
+    REGISTRY_PATH.write_text(registry_text, encoding="utf-8")
+    _clear_pack_loader_caches()
+
+    remaining = discover_pipeline_ids(root)
+    return {
+        "id": pipeline_id,
+        "removed": removed,
+        "compiled": [_rel(SCHEMA_PATH, root), _rel(REGISTRY_PATH, root)],
+        "remaining": remaining,
     }
 
 

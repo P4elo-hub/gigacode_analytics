@@ -539,6 +539,9 @@ def make_handler(workspace: Path, defaults: Defaults):
             if path == "/api/pack/init":
                 self._pack_init()
                 return
+            if path == "/api/pack/delete":
+                self._pack_delete()
+                return
             if path != "/api/restart":
                 self.send_error(404)
                 return
@@ -663,6 +666,36 @@ def make_handler(workspace: Path, defaults: Defaults):
                 self._send_json(result)
             except FileExistsError as exc:
                 self._send_json({"ok": False, "error": str(exc)}, status=409)
+            except ValueError as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=400)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
+
+        def _pack_delete(self) -> None:
+            from pack_authoring_api import delete_pack
+
+            payload, err = self._read_json_body()
+            if err:
+                self._send_json({"ok": False, "error": err}, status=400)
+                return
+            pack_id = str(payload.get("id") or "").strip()
+            if not pack_id:
+                self._send_json({"ok": False, "error": "id required"}, status=400)
+                return
+            if payload.get("confirm") is not True:
+                self._send_json({"ok": False, "error": "confirm: true required"}, status=400)
+                return
+            delete_orch = payload.get("delete_orchestrator") is not False
+            try:
+                result = delete_pack(
+                    pack_id,
+                    workspace,
+                    delete_orchestrator=delete_orch,
+                )
+                result["ok"] = True
+                self._send_json(result)
+            except FileNotFoundError as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=404)
             except ValueError as exc:
                 self._send_json({"ok": False, "error": str(exc)}, status=400)
             except Exception as exc:

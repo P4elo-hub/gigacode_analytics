@@ -53,7 +53,7 @@
           "cycle": {
             "persistent": true,
             "close": "on_done",
-            "ask_queue": false,
+            "ask_queue": true,
             "assemble": "write_feature",
             "param": "block_id",
             "folder": "Feature-writing/{slug}",

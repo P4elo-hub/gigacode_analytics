@@ -107,7 +107,7 @@ nodes:
           sections:
             - 5.3.1
             - 5.3.2
-      ask_queue: false
+      ask_queue: true
   - id: gap-resolver
     label: gap-resolver
     kind: step

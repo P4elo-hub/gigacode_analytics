@@ -4093,7 +4093,8 @@ async function seedAuthoredCycleCalls(packId, basePack) {
       if (!merged[key]) merged[key] = defaults[key];
     }
     merged.persistent = merged.persistent !== false;
-    const cycle = applyCycleQueueMode(merged, "pinned");
+    // Keep ask_queue / queue mode from the node; do not force "зафиксировать".
+    const cycle = applyCycleQueueMode(merged, cycleQueueMode({ cycle: merged }));
     if (!Array.isArray(cycle.calls) || !cycle.calls.length) {
       if (!preview.length) continue;
       cycle.calls = preview.map((call) =>
@@ -5307,6 +5308,7 @@ let packLoadSeq = 0;
 async function pullServerAuthoringDraft(packId) {
   // Disk overlay for schema draft (pipelines/<id>/.authoring-draft.json) — not pack YAML.
   // Lets an agent fill cycle fields once; every browser picks them up before Apply.
+  // Never override a cycle that already lives in pack YAML (after Apply / committed graph).
   try {
     const res = await fetch(`/api/pack/draft?pipeline=${encodeURIComponent(packId)}`);
     if (!res.ok) return getPackDraft(packId);
@@ -5315,12 +5317,27 @@ async function pullServerAuthoringDraft(packId) {
     if (!remote) return getPackDraft(packId);
     const draft = getPackDraft(packId);
     const remoteEdits = remote.nodeEdits && typeof remote.nodeEdits === "object" ? remote.nodeEdits : {};
+    const baseById = {};
+    for (const node of state.packBase?.graph?.nodes || []) {
+      if (node?.id) baseById[node.id] = node;
+    }
     let changed = false;
     draft.nodeEdits = { ...(draft.nodeEdits || {}) };
     for (const [nodeId, edit] of Object.entries(remoteEdits)) {
       if (!edit || typeof edit !== "object") continue;
       const remoteCycle = edit.cycle && typeof edit.cycle === "object" ? edit.cycle : null;
       if (!remoteCycle) continue;
+      const baseCycle =
+        baseById[nodeId]?.cycle && typeof baseById[nodeId].cycle === "object"
+          ? baseById[nodeId].cycle
+          : null;
+      const baseComplete =
+        Boolean(baseCycle?.assemble) &&
+        Boolean(baseCycle?.folder) &&
+        Array.isArray(baseCycle?.calls) &&
+        baseCycle.calls.length > 0;
+      // YAML already has a full cycle — stale disk draft must not flip ask_queue / calls.
+      if (baseComplete) continue;
       const localEdit = draft.nodeEdits[nodeId] || {};
       const localCycle = localEdit.cycle && typeof localEdit.cycle === "object" ? localEdit.cycle : null;
       const localIncomplete =
@@ -5655,6 +5672,27 @@ function formatSaveError(item) {
   return humanSaveError(item);
 }
 
+function syncSaveStatusVisibility() {
+  const box = document.getElementById("schema-save-status");
+  if (!box) return;
+  const line = (document.getElementById("schema-save-status-line")?.textContent || "").trim();
+  const errors = document.getElementById("schema-save-errors");
+  const checklist = document.getElementById("schema-save-checklist");
+  const hasErrors = errors && !errors.classList.contains("hidden") && errors.children.length > 0;
+  const hasChecklist =
+    checklist && !checklist.classList.contains("hidden") && checklist.children.length > 0;
+  const visible = Boolean(line || hasErrors || hasChecklist);
+  box.classList.toggle("hidden", !visible);
+}
+
+function dismissSaveStatus() {
+  if (state.packSave && typeof state.packSave === "object") {
+    state.packSave = { ...state.packSave, dismissed: true, checklist: [] };
+  }
+  setSaveStatus("", "");
+  renderRunnableChecklist([], "schema-save-checklist");
+}
+
 function setSaveStatus(kind, line, errors) {
   const box = document.getElementById("schema-save-status");
   const lineEl = document.getElementById("schema-save-status-line");
@@ -5665,7 +5703,10 @@ function setSaveStatus(kind, line, errors) {
   }
   if (lineEl) lineEl.textContent = line || "";
   else if (box && !list) box.textContent = line || "";
-  if (!list) return;
+  if (!list) {
+    syncSaveStatusVisibility();
+    return;
+  }
   list.innerHTML = "";
   const items = Array.isArray(errors) ? errors.filter(Boolean) : [];
   list.classList.toggle("hidden", !items.length);
@@ -5683,11 +5724,13 @@ function setSaveStatus(kind, line, errors) {
   if (items.length) {
     renderRunnableChecklist([], "schema-save-checklist");
   }
+  syncSaveStatusVisibility();
 }
 
 function updateSchemaSaveChrome() {
   const applyBtn = document.getElementById("schema-apply");
   const rollbackBtn = document.getElementById("schema-rollback");
+  const deletePackBtn = document.getElementById("schema-delete-pack");
   const save = state.packSave || {};
   const errors = Array.isArray(save.errors) ? save.errors : [];
   const warnings = Array.isArray(save.warnings) ? save.warnings : [];
@@ -5697,6 +5740,15 @@ function updateSchemaSaveChrome() {
     applyBtn.disabled = !save.ok;
   }
   if (rollbackBtn) rollbackBtn.disabled = !appliedRecord(state.packId)?.previous;
+  if (deletePackBtn) {
+    deletePackBtn.disabled = !state.packId;
+    deletePackBtn.title = "Удалить текущий пак с диска";
+  }
+  if (save.dismissed) {
+    setSaveStatus("", "");
+    renderRunnableChecklist([], "schema-save-checklist");
+    return;
+  }
   if (errors.length) {
     const n = errors.length;
     setSaveStatus("is-error", `${n} ${n === 1 ? "ошибка" : n < 5 ? "ошибки" : "ошибок"} — Применить скрыт, диск не пишется.`, errors);
@@ -5705,22 +5757,26 @@ function updateSchemaSaveChrome() {
   if (save.ok) {
     const extra = warnings.length ? ` ${warnings.join("; ")}` : "";
     setSaveStatus("is-ok", `Проверка ок.${extra} Применить доступен, диск не писали.`);
+    renderRunnableChecklist([], "schema-save-checklist");
     return;
   }
   if (checklist.length) {
     const checklistLine = checklist.map((item) => `${item.ok ? "✓" : "✗"} ${item.label}`).join(" · ");
+    const prefix = save.applyDone ? "Записано. " : "";
     setSaveStatus(
       checklist.some((item) => !item.ok) ? "is-warn" : "is-ok",
-      `Runnable: ${checklistLine}`
+      `${prefix}Runnable: ${checklistLine}`
     );
     renderRunnableChecklist(checklist, "schema-save-checklist");
     return;
   }
   if (warnings.length) {
     setSaveStatus("is-warn", warnings.join(" · "));
+    renderRunnableChecklist([], "schema-save-checklist");
     return;
   }
   setSaveStatus("", "");
+  renderRunnableChecklist([], "schema-save-checklist");
 }
 
 function highlightSaveErrors() {
@@ -5801,8 +5857,13 @@ async function validatePackDraft() {
 }
 
 function closeSchemaModal(which) {
-  const id = which === "init" ? "schema-init-modal" : "schema-apply-modal";
-  document.getElementById(id)?.classList.add("hidden");
+  const map = {
+    init: "schema-init-modal",
+    apply: "schema-apply-modal",
+    "delete-pack": "schema-delete-pack-modal",
+  };
+  const id = map[which] || "";
+  if (id) document.getElementById(id)?.classList.add("hidden");
 }
 
 function renderRunnableChecklist(items, targetId) {
@@ -5821,6 +5882,9 @@ function renderRunnableChecklist(items, targetId) {
     text.textContent = `${item.label || item.id}: ${item.detail || (item.ok ? "ok" : "нет")}`;
     li.append(mark, text);
     list.appendChild(li);
+  }
+  if ((targetId || "schema-apply-checklist") === "schema-save-checklist") {
+    syncSaveStatusVisibility();
   }
 }
 
@@ -5893,15 +5957,9 @@ async function confirmApplyPack() {
       warnings: data.warnings || [],
       preview: data.preview || null,
       checklist,
+      dismissed: false,
+      applyDone: true,
     };
-    const checklistLine = checklist.length
-      ? checklist.map((item) => `${item.ok ? "✓" : "✗"} ${item.label}`).join(" · ")
-      : "";
-    setSaveStatus(
-      checklist.some((item) => !item.ok) ? "is-warn" : "is-ok",
-      `Записано: ${(data.written || []).join(", ") || "YAML"}.${checklistLine ? ` Runnable: ${checklistLine}.` : ""} Схема перечитывается.`
-    );
-    renderRunnableChecklist(checklist, "schema-save-checklist");
     clearError();
     await refreshCatalogAndPack(data.pack);
   } catch (err) {
@@ -6012,6 +6070,85 @@ async function confirmInitPack() {
   }
 }
 
+function forgetPackLocalState(packId) {
+  const draftStore = loadDraftStore();
+  if (draftStore.packs?.[packId]) {
+    delete draftStore.packs[packId];
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftStore));
+  }
+  const applied = loadAppliedStore();
+  if (applied.packs?.[packId]) {
+    delete applied.packs[packId];
+    localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(applied));
+  }
+  if (schemaUndoByPack[packId]) delete schemaUndoByPack[packId];
+}
+
+function openDeletePackModal() {
+  const errEl = document.getElementById("schema-delete-pack-error");
+  errEl?.classList.add("hidden");
+  const id = state.packId;
+  if (!id) return;
+  const summary = document.getElementById("schema-delete-pack-summary");
+  if (summary) {
+    const builtin = PROTECTED_PACKS.has(id)
+      ? ` Внимание: ${id} — встроенный пак репозитория.`
+      : "";
+    summary.textContent = `Удалит pipelines/${id}/ с диска и пересоберёт registry. Действие необратимо.${builtin}`;
+  }
+  const orch = document.getElementById("schema-delete-pack-orch");
+  if (orch) orch.checked = true;
+  document.getElementById("schema-delete-pack-modal")?.classList.remove("hidden");
+}
+
+async function confirmDeletePack() {
+  const id = state.packId;
+  const errEl = document.getElementById("schema-delete-pack-error");
+  if (!id) return;
+  const deleteOrch = document.getElementById("schema-delete-pack-orch")?.checked !== false;
+  const confirmBtn = document.getElementById("schema-delete-pack-confirm");
+  if (confirmBtn) confirmBtn.disabled = true;
+  try {
+    const res = await fetch("/api/pack/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, confirm: true, delete_orchestrator: deleteOrch }),
+    });
+    const data = await parseJsonResponse(res);
+    if (!data.ok) {
+      if (errEl) {
+        errEl.textContent = data.error || "не удалось удалить пак";
+        errEl.classList.remove("hidden");
+      }
+      return;
+    }
+    closeSchemaModal("delete-pack");
+    forgetPackLocalState(id);
+    clearError();
+    const remaining = Array.isArray(data.remaining) ? data.remaining : [];
+    const nextId = remaining.includes("spec")
+      ? "spec"
+      : remaining[0] || "";
+    state.packId = nextId;
+    state.packBase = null;
+    state.pack = null;
+    state.packSave = { ok: false, errors: [], warnings: [], preview: null };
+    saveSelection();
+    await refreshCatalogAndPack(null);
+    setSaveStatus(
+      "is-ok",
+      nextId ? `Пак ${id} удалён. Открыт ${nextId}.` : `Пак ${id} удалён. Паков больше нет.`
+    );
+  } catch (err) {
+    if (errEl) {
+      errEl.textContent = err.message || String(err);
+      errEl.classList.remove("hidden");
+    }
+  } finally {
+    if (confirmBtn) confirmBtn.disabled = false;
+  }
+}
+
 async function refreshCatalogAndPack(pack) {
   try {
     const catalogRes = await fetch("/api/catalog");
@@ -6066,6 +6203,7 @@ function bindSchemaDraftActions() {
   });
   document.getElementById("schema-undo")?.addEventListener("click", () => undoSchemaDraft());
   document.getElementById("schema-validate")?.addEventListener("click", () => validatePackDraft());
+  document.getElementById("schema-save-status-dismiss")?.addEventListener("click", () => dismissSaveStatus());
   document.getElementById("schema-save-errors")?.addEventListener("click", (event) => {
     const btn = event.target.closest(".schema-save-error");
     if (!btn) return;
@@ -6084,8 +6222,10 @@ function bindSchemaDraftActions() {
   document.getElementById("schema-apply")?.addEventListener("click", () => openApplyModal());
   document.getElementById("schema-rollback")?.addEventListener("click", () => rollbackLastApply());
   document.getElementById("schema-init")?.addEventListener("click", () => openInitModal());
+  document.getElementById("schema-delete-pack")?.addEventListener("click", () => openDeletePackModal());
   document.getElementById("schema-apply-confirm")?.addEventListener("click", () => confirmApplyPack());
   document.getElementById("schema-init-confirm")?.addEventListener("click", () => confirmInitPack());
+  document.getElementById("schema-delete-pack-confirm")?.addEventListener("click", () => confirmDeletePack());
   document.getElementById("schema-init-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     confirmInitPack();
@@ -6391,6 +6531,7 @@ function setActivePackTab() {
   document.querySelectorAll("#pack-tabs .tab").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.pack === state.packId);
   });
+  updateSchemaSaveChrome();
 }
 
 function applyScreenModeChrome() {

@@ -85,11 +85,21 @@
           <button type="button" id="schema-apply" class="btn-secondary schema-apply hidden" disabled>Применить</button>
           <button type="button" id="schema-rollback" class="btn-secondary" disabled>Откат</button>
           <button type="button" id="schema-init" class="btn-secondary">Новый пак</button>
+          <button type="button" id="schema-delete-pack" class="btn-secondary">Удалить пак</button>
         </div>
-        <div id="schema-save-status" class="schema-save-status" role="status">
-          <p id="schema-save-status-line"></p>
-          <ul id="schema-save-errors" class="schema-save-errors hidden"></ul>
-          <ul id="schema-save-checklist" class="schema-runnable-checklist hidden" aria-label="Runnable после Apply"></ul>
+        <div id="schema-save-status" class="schema-save-status hidden" role="status">
+          <button
+            type="button"
+            id="schema-save-status-dismiss"
+            class="schema-save-status-dismiss"
+            aria-label="Скрыть уведомление"
+            title="Скрыть"
+          >×</button>
+          <div class="schema-save-status-body">
+            <p id="schema-save-status-line"></p>
+            <ul id="schema-save-errors" class="schema-save-errors hidden"></ul>
+            <ul id="schema-save-checklist" class="schema-runnable-checklist hidden" aria-label="Runnable после Apply"></ul>
+          </div>
         </div>
         <span id="schema-connect-hint" class="graph-view-hint hidden">Кликните целевую клетку (Esc — отмена)</span>
         <span class="graph-view-hint">Shift+клик: стрелка · клик по клетке — исходящие · клик по линии — условие</span>
@@ -457,6 +467,23 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=55"></script>
+  <div id="schema-delete-pack-modal" class="modal hidden" role="dialog" aria-labelledby="schema-delete-pack-title">
+    <div class="modal-backdrop" data-schema-close="delete-pack"></div>
+    <div class="modal-card">
+      <h2 id="schema-delete-pack-title">Удалить пак</h2>
+      <p id="schema-delete-pack-summary" class="sidebar-hint"></p>
+      <label class="schema-apply-overwrite">
+        <input type="checkbox" id="schema-delete-pack-orch" checked />
+        <span>Также удалить orchestrator md (.qwen / .gigacode / .opencode)</span>
+      </label>
+      <p id="schema-delete-pack-error" class="schema-inspector-error hidden" role="alert"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-schema-close="delete-pack">Отмена</button>
+        <button type="button" id="schema-delete-pack-confirm" class="btn-danger">Удалить с диска</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=59"></script>
 </body>
 </html>

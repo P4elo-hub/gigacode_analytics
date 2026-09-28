@@ -56,32 +56,6 @@
         "subagent": null
       }
     ],
-    "routing-poc": [
-      {
-        "id": "routing-poc-orchestrator",
-        "label": "routing-poc-orchestrator",
-        "kind": "orchestrator",
-        "subagent": null
-      },
-      {
-        "id": "analyze-routing",
-        "label": "analyze-routing",
-        "kind": "step",
-        "subagent": "routing-analyzer"
-      },
-      {
-        "id": "resolve-gaps",
-        "label": "resolve-gaps",
-        "kind": "step",
-        "subagent": "gap-resolver"
-      },
-      {
-        "id": "done",
-        "label": "ready",
-        "kind": "terminal",
-        "subagent": null
-      }
-    ],
     "spec": [
       {
         "id": "spec-orchestrator",
@@ -327,7 +301,7 @@
               ]
             }
           ],
-          "ask_queue": false
+          "ask_queue": true
         }
       },
       {
@@ -371,32 +345,6 @@
     ]
   },
   "dispatch": {
-    "routing-poc": {
-      "invariant_after_priority": 30,
-      "invariants": [],
-      "fallback": {
-        "next": "analyze-routing",
-        "reason": "routing-state не готов"
-      },
-      "rules": [
-        {
-          "priority": 10,
-          "when": "routing_state_needs_refresh",
-          "next": "analyze-routing"
-        },
-        {
-          "priority": 20,
-          "when": "open_gaps",
-          "next": "resolve-gaps"
-        },
-        {
-          "priority": 30,
-          "when": "routing_state_ready",
-          "next": null,
-          "outcome": "ready"
-        }
-      ]
-    },
     "spec": {
       "invariant_after_priority": 70,
       "invariants": [],
@@ -599,55 +547,6 @@
         "ready_detail": "Calibration pack has no dispatch rules.",
         "ready_fix": "Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
         "stopped": "Calibration пайплайн остановлен."
-      },
-      "invariants": [],
-      "display": {},
-      "constants": {}
-    },
-    "routing-poc": {
-      "task_kind": "slug",
-      "collector_mode": "routing_state",
-      "routing_state_sync": {
-        "skip_after_steps": [
-          "analyze-routing"
-        ],
-        "sync_after_steps": "[]"
-      },
-      "artifacts": {
-        "routing_state": {
-          "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
-          "exists_as": "has_routing_state",
-          "missing_reason": "нет routing-state.json — нужен analyze-routing"
-        },
-        "spec": {
-          "path": "Feature-writing/{task_id}/{task_id}.md",
-          "exists_as": "has_spec",
-          "missing_reason": "спецификация не написана"
-        }
-      },
-      "collectors": [
-        {
-          "id": "routing_state",
-          "source": "routing_state"
-        }
-      ],
-      "stale": [
-        {
-          "id": "routing_state",
-          "when": "artifact_older_than",
-          "left": "routing_state",
-          "right": "spec"
-        }
-      ],
-      "orchestrator": {},
-      "messages": {
-        "ready": "routing-state актуален, открытых фактов нет.",
-        "ready_title": "Routing-state POC готов",
-        "ready_detail": "нет open_gaps в JSON",
-        "ready_fix": "Финальный ответ; spec cutover — Phase 11.",
-        "stopped": "Routing-state POC остановлен.",
-        "ask_user": "НЕ вызывай task.",
-        "write_cycle": "не используется"
       },
       "invariants": [],
       "display": {},
@@ -935,26 +834,6 @@
       },
       "delegate_modes": {}
     },
-    "routing-poc": {
-      "step_to_subagent": {
-        "analyze-routing": "routing-analyzer",
-        "resolve-gaps": "gap-resolver"
-      },
-      "orchestrator_owned": [],
-      "gated_subagents": [
-        "routing-analyzer",
-        "gap-resolver"
-      ],
-      "restartable_steps": [
-        "analyze-routing",
-        "resolve-gaps"
-      ],
-      "step_order": {
-        "analyze-routing": 0,
-        "resolve-gaps": 1
-      },
-      "delegate_modes": {}
-    },
     "spec": {
       "step_to_subagent": {
         "find-context": "context-researcher",
@@ -1068,17 +947,6 @@
   },
   "predicates": {
     "calibration": [],
-    "routing-poc": [
-      "file_missing_routing_state",
-      "file_missing_spec",
-      "has_routing_state",
-      "has_spec",
-      "not_has_routing_state",
-      "not_has_spec",
-      "open_gaps",
-      "routing_state_needs_refresh",
-      "routing_state_ready"
-    ],
     "spec": [
       "alignment_fail_reaudit",
       "alignment_limit_exhausted",

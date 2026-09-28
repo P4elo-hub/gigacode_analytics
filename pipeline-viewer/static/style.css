@@ -1318,6 +1318,7 @@ body.screen-schema .graph-view-toolbar {
 }
 
 .schema-save-status {
+  position: relative;
   margin: 0;
   max-width: min(560px, 92vw);
   font-size: 0.72rem;
@@ -1325,8 +1326,40 @@ body.screen-schema .graph-view-toolbar {
   color: #94a3b8;
   text-align: left;
   background: rgba(15, 23, 42, 0.88);
-  padding: 6px 8px;
+  padding: 6px 28px 6px 8px;
   border-radius: 6px;
+}
+
+.schema-save-status.hidden {
+  display: none;
+}
+
+.schema-save-status-dismiss {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.schema-save-status-dismiss:hover,
+.schema-save-status-dismiss:focus {
+  opacity: 1;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.schema-save-status-body {
+  min-width: 0;
 }
 
 #schema-save-status-line {
