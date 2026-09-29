@@ -16,8 +16,11 @@ from music_production.orchestration.errors import (
     UnsafeArtifactPathError,
 )
 from music_production.orchestration.state_store import (
+    append_event,
     atomic_write_json,
+    read_json,
     read_jsonl,
+    utc_now,
     validate_document,
 )
 
@@ -32,6 +35,7 @@ CONTRACT_TYPES = {
     "generation-request",
     "candidate-review",
     "defect",
+    "edit-attempt",
     "revision-plan",
     "version-comparison",
     "knowledge-case",
@@ -39,7 +43,6 @@ CONTRACT_TYPES = {
 INTERNAL_TYPES = {
     "candidates",
     "technical-qc",
-    "pending-edit",
     "service-status",
 }
 
@@ -77,7 +80,9 @@ class ArtifactStore:
         self.track_id = track_id
         self.root = self.track_dir / "artifacts"
         self.events_path = self.track_dir / "events.jsonl"
+        self.index_path = self.track_dir / "artifact-index.json"
         self.root.mkdir(parents=True, exist_ok=True)
+        self._refresh_index()
 
     @staticmethod
     def allowed_types() -> frozenset[str]:
@@ -138,6 +143,88 @@ class ArtifactStore:
         atomic_write_json(path, value)
         return path
 
+    def _index_document(self) -> dict:
+        committed: dict[str, dict[str, str]] = {}
+        updated_at = utc_now()
+        for event in read_jsonl(self.events_path):
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("type") == "artifact-written":
+                artifact_type = payload.get("artifact_type")
+                artifact_id = payload.get("artifact_id")
+                if not isinstance(artifact_type, str) or not isinstance(artifact_id, str):
+                    continue
+                if artifact_type not in self.allowed_types():
+                    continue
+                path = self.path_for(artifact_type, artifact_id)
+                if path.is_file():
+                    committed[artifact_type] = {"artifact_id": artifact_id}
+                    updated_at = str(event.get("occurred_at") or updated_at)
+            elif payload.get("type") == "artifacts-invalidated":
+                names = payload.get("artifact_types")
+                if isinstance(names, list):
+                    for artifact_type in names:
+                        if isinstance(artifact_type, str):
+                            committed.pop(artifact_type, None)
+                updated_at = str(event.get("occurred_at") or updated_at)
+        return {
+            "schema_version": "1.0",
+            "track_id": self.track_id,
+            "created_at": updated_at,
+            "committed": committed,
+        }
+
+    def _refresh_index(self) -> None:
+        atomic_write_json(self.index_path, self._index_document())
+
+    def commit(
+        self,
+        artifact_type: str,
+        artifact_id: str,
+        *,
+        occurred_at: Optional[str] = None,
+    ) -> None:
+        path = self.path_for(artifact_type, artifact_id)
+        if not path.is_file():
+            raise ValueError(f"cannot commit missing artifact: {artifact_type}/{artifact_id}")
+        append_event(
+            self.events_path,
+            event_id=f"artifact:{artifact_type}:{artifact_id}",
+            track_id=self.track_id,
+            occurred_at=occurred_at,
+            payload={
+                "type": "artifact-written",
+                "artifact_type": artifact_type,
+                "artifact_id": artifact_id,
+            },
+        )
+        self._refresh_index()
+
+    def invalidate(
+        self,
+        artifact_types: list[str],
+        *,
+        event_id: str,
+        reason: str,
+        occurred_at: Optional[str] = None,
+    ) -> None:
+        for artifact_type in artifact_types:
+            if artifact_type not in self.allowed_types():
+                raise UnknownArtifactTypeError(artifact_type)
+        append_event(
+            self.events_path,
+            event_id=event_id,
+            track_id=self.track_id,
+            occurred_at=occurred_at,
+            payload={
+                "type": "artifacts-invalidated",
+                "artifact_types": list(artifact_types),
+                "reason": reason,
+            },
+        )
+        self._refresh_index()
+
     def records(self, artifact_type: str) -> list[dict]:
         if artifact_type not in self.allowed_types():
             raise UnknownArtifactTypeError(artifact_type)
@@ -174,3 +261,28 @@ class ArtifactStore:
 
     def exists(self, artifact_type: str) -> bool:
         return self.latest(artifact_type) is not None
+
+
+def resolve_committed_artifact(track_dir: Path, artifact_type: str) -> Optional[Path]:
+    """Resolve one indexed artifact; never fall back to legacy flat paths."""
+
+    safe_type = _safe_component(artifact_type)
+    index_path = Path(track_dir) / "artifact-index.json"
+    if not index_path.is_file():
+        return None
+    index = read_json(index_path)
+    committed = index.get("committed")
+    if not isinstance(committed, dict):
+        return None
+    entry = committed.get(safe_type)
+    if not isinstance(entry, dict):
+        return None
+    artifact_id = entry.get("artifact_id")
+    if not isinstance(artifact_id, str):
+        return None
+    safe_id = _safe_component(artifact_id)
+    root = Path(track_dir) / "artifacts"
+    path = root / safe_type / f"{safe_id}.json"
+    if root.resolve() not in path.resolve().parents or not path.is_file():
+        return None
+    return path

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,8 +31,13 @@ from music_production.orchestration.state_store import (
     read_jsonl,
 )
 from music_production.runtime.mock import MockAgentRuntime
+from music_production.services.version_store import VersionRecord
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from pipeline_status import build_status  # noqa: E402
+
 FIXTURES = ROOT / "music_production" / "fixtures"
 NOW = "2026-09-28T12:00:00Z"
 
@@ -256,11 +262,12 @@ class Harness:
         assert self.engine.run_one_step().executed_step == "diagnose-defects"
         assert self.engine.run_one_step().executed_step == "plan-revision"
         assert self.engine.run_one_step().executed_step == "execute-edit"
-        return base_id, self.engine.artifacts.latest("pending-edit")
+        return base_id, self.engine.artifacts.latest("edit-attempt")
 
     def accept_edit_and_reach_final_gate(self):
         _base_id, pending = self.reach_edit()
         comparison = fixture("sample-version-comparison.json", self.track_id)
+        comparison["edit_attempt_id"] = pending["edit_attempt_id"]
         comparison["parent_version_id"] = pending["parent_version_id"]
         comparison["child_version_id"] = pending["child_version_id"]
         self._set("compare-versions", comparison)
@@ -295,9 +302,10 @@ class OrchestrationTest(unittest.TestCase):
         self.assertEqual(harness.engine.run_one_step().executed_step, "diagnose-defects")
         self.assertEqual(harness.engine.run_one_step().executed_step, "plan-revision")
         self.assertEqual(harness.engine.run_one_step().executed_step, "execute-edit")
-        pending = harness.engine.artifacts.latest("pending-edit")
+        pending = harness.engine.artifacts.latest("edit-attempt")
 
         comparison = fixture("sample-version-comparison.json", harness.track_id)
+        comparison["edit_attempt_id"] = pending["edit_attempt_id"]
         comparison["parent_version_id"] = pending["parent_version_id"]
         comparison["child_version_id"] = pending["child_version_id"]
         harness._set("compare-versions", comparison)
@@ -450,6 +458,8 @@ class OrchestrationTest(unittest.TestCase):
         waiting = harness.engine.run_one_step()
         self.assertEqual(waiting.next_step, "revision-escalation")
         self.assertEqual(waiting.outcome, Outcome.WAITING_FOR_HUMAN)
+        self.assertEqual(waiting.state, "REVISING")
+        self.assertNotEqual(waiting.state, "PAUSED")
 
         harness.engine.replenish_revision_budget(1, event_id="budget:replenish")
         retry = harness.decision(
@@ -465,6 +475,7 @@ class OrchestrationTest(unittest.TestCase):
         harness = Harness(self.root)
         base_id, pending = harness.reach_edit()
         comparison = fixture("sample-version-comparison.json", harness.track_id)
+        comparison["edit_attempt_id"] = pending["edit_attempt_id"]
         comparison["parent_version_id"] = pending["parent_version_id"]
         comparison["child_version_id"] = pending["child_version_id"]
         comparison["outcome"] = "REJECTED"
@@ -475,6 +486,242 @@ class OrchestrationTest(unittest.TestCase):
         self.assertEqual(outcome.next_step, "plan-revision")
         self.assertEqual(harness.engine.state_store.load()["current_version_id"], base_id)
         self.assertEqual(harness.engine.handlers.versions.current_version_id, base_id)
+
+    def test_accepted_comparison_with_blocking_defect_returns_to_diagnosis(self) -> None:
+        harness = Harness(self.root)
+        _base_id, attempt = harness.reach_edit()
+        comparison = fixture("sample-version-comparison.json", harness.track_id)
+        comparison["edit_attempt_id"] = attempt["edit_attempt_id"]
+        comparison["parent_version_id"] = attempt["parent_version_id"]
+        comparison["child_version_id"] = attempt["child_version_id"]
+        comparison["remaining_defects"] = [
+            {"defect_id": "defect-remaining", "severity": "MAJOR"}
+        ]
+        harness._set("compare-versions", comparison)
+
+        outcome = harness.engine.run_one_step()
+
+        self.assertEqual(outcome.next_step, "diagnose-defects")
+        self.assertEqual(
+            harness.engine.handlers.versions.current_version_id,
+            attempt["child_version_id"],
+        )
+        self.assertFalse(harness.engine.artifacts.exists("technical-qc"))
+
+    def test_accepted_comparison_with_only_minor_defect_goes_to_final_qc(self) -> None:
+        harness = Harness(self.root)
+        _base_id, attempt = harness.reach_edit()
+        comparison = fixture("sample-version-comparison.json", harness.track_id)
+        comparison["edit_attempt_id"] = attempt["edit_attempt_id"]
+        comparison["parent_version_id"] = attempt["parent_version_id"]
+        comparison["child_version_id"] = attempt["child_version_id"]
+        comparison["remaining_defects"] = [
+            {"defect_id": "defect-minor", "severity": "MINOR"}
+        ]
+        harness._set("compare-versions", comparison)
+
+        outcome = harness.engine.run_one_step()
+
+        self.assertEqual(outcome.next_step, "final-qc")
+
+    def test_invalid_plan_source_is_controlled_lineage_block(self) -> None:
+        harness = Harness(self.root)
+        harness.reach_package_gate()
+        harness.approve_package()
+        harness.reach_base_gate()
+        base_id = harness.select_base()
+        defect = fixture("sample-defect.json", harness.track_id)
+        defect["version_id"] = base_id
+        harness._set("diagnose-defects", defect)
+        plan = fixture("sample-revision-plan.json", harness.track_id)
+        plan["source_version_id"] = "foreign-version"
+        harness._set("plan-revision", plan)
+        harness.engine.run_one_step()
+        harness.engine.run_one_step()
+        versions_before = set(harness.engine.handlers.versions.versions)
+
+        blocked = harness.engine.run_one_step()
+
+        self.assertEqual(blocked.outcome, Outcome.BLOCKED)
+        self.assertEqual(blocked.error_code, "INVALID_VERSION_LINEAGE")
+        self.assertEqual(
+            harness.engine.state_store.load()["current_version_id"],
+            base_id,
+        )
+        self.assertEqual(
+            set(harness.engine.handlers.versions.versions),
+            versions_before,
+        )
+        jobs = harness.engine.handlers._jobs()["jobs"]
+        self.assertFalse(any(item.get("kind") == "edit" for item in jobs))
+        self.assertTrue(
+            any(
+                event.get("payload", {}).get("error_code")
+                == "INVALID_VERSION_LINEAGE"
+                for event in read_jsonl(
+                    self.root / harness.track_id / "events.jsonl"
+                )
+            )
+        )
+
+    def test_comparison_lineage_checks_block_without_committing_artifact(self) -> None:
+        cases = (
+            ("parent", "foreign-parent"),
+            ("child", "foreign-child"),
+            ("attempt", "foreign-attempt"),
+            ("track", "other-track"),
+        )
+        for field, value in cases:
+            with self.subTest(field=field):
+                root = self.root / field
+                harness = Harness(root, track_id=f"track-{field}")
+                base_id, attempt = harness.reach_edit()
+                comparison = fixture(
+                    "sample-version-comparison.json",
+                    harness.track_id,
+                )
+                comparison["edit_attempt_id"] = attempt["edit_attempt_id"]
+                comparison["parent_version_id"] = attempt["parent_version_id"]
+                comparison["child_version_id"] = attempt["child_version_id"]
+                if field == "parent":
+                    comparison["parent_version_id"] = value
+                elif field == "child":
+                    comparison["child_version_id"] = value
+                elif field == "attempt":
+                    comparison["edit_attempt_id"] = value
+                else:
+                    comparison["track_id"] = value
+                harness._set("compare-versions", comparison)
+                charged_before = sum(
+                    bool(item.get("charged"))
+                    for item in harness.engine.handlers._jobs()["jobs"]
+                )
+
+                blocked = harness.engine.run_one_step()
+
+                self.assertEqual(blocked.outcome, Outcome.BLOCKED)
+                self.assertEqual(blocked.error_code, "INVALID_VERSION_LINEAGE")
+                self.assertEqual(
+                    harness.engine.state_store.load()["current_version_id"],
+                    base_id,
+                )
+                self.assertFalse(
+                    harness.engine.artifacts.exists("version-comparison")
+                )
+                self.assertEqual(
+                    sum(
+                        bool(item.get("charged"))
+                        for item in harness.engine.handlers._jobs()["jobs"]
+                    ),
+                    charged_before,
+                )
+
+    def test_comparison_child_must_belong_to_attempt_parent(self) -> None:
+        harness = Harness(self.root)
+        base_id, attempt = harness.reach_edit()
+        other_parent = VersionRecord(
+            version_id="other-parent",
+            parent_version_id=None,
+            operation="generate-batch",
+            provider_job_id="job-other-parent",
+            prompt_id="prompt-other",
+            audio_uri="mock://audio/other-parent.wav",
+            checksum="checksum-other-parent",
+            status="candidate",
+        )
+        harness.engine.handlers.versions.add(other_parent)
+        wrong_child = VersionRecord(
+            version_id="wrong-child",
+            parent_version_id=other_parent.version_id,
+            operation="replace-section",
+            provider_job_id="job-wrong-child",
+            prompt_id="revision-plan-001",
+            audio_uri="mock://audio/wrong-child.wav",
+            checksum="checksum-wrong-child",
+            status="pending-comparison",
+        )
+        harness.engine.handlers.versions.add(wrong_child)
+        harness.engine.handlers._invalidate(
+            "edit-attempt",
+            reason="test-wrong-parent",
+        )
+        wrong_attempt = dict(attempt)
+        wrong_attempt["edit_attempt_id"] = "edit-attempt-wrong-parent"
+        wrong_attempt["child_version_id"] = wrong_child.version_id
+        harness.engine.handlers._write_artifact("edit-attempt", wrong_attempt)
+        comparison = fixture("sample-version-comparison.json", harness.track_id)
+        comparison["edit_attempt_id"] = wrong_attempt["edit_attempt_id"]
+        comparison["parent_version_id"] = wrong_attempt["parent_version_id"]
+        comparison["child_version_id"] = wrong_attempt["child_version_id"]
+        harness._set("compare-versions", comparison)
+
+        blocked = harness.engine.run_one_step()
+
+        self.assertEqual(blocked.outcome, Outcome.BLOCKED)
+        self.assertEqual(blocked.error_code, "INVALID_VERSION_LINEAGE")
+        self.assertEqual(
+            harness.engine.handlers.versions.current_version_id,
+            base_id,
+        )
+
+    def test_comparison_resolution_is_idempotent_and_conflict_blocks(self) -> None:
+        harness = Harness(self.root)
+        _base_id, attempt = harness.reach_edit()
+        comparison = fixture("sample-version-comparison.json", harness.track_id)
+        comparison["edit_attempt_id"] = attempt["edit_attempt_id"]
+        comparison["parent_version_id"] = attempt["parent_version_id"]
+        comparison["child_version_id"] = attempt["child_version_id"]
+        harness._set("compare-versions", comparison)
+        harness.engine.run_one_step()
+        events_after_first = read_jsonl(
+            self.root / harness.track_id / "events.jsonl"
+        )
+
+        repeated = harness.engine.handlers._agent_step("compare-versions")
+
+        self.assertEqual(repeated.kind, "PROGRESSED")
+        self.assertEqual(
+            len(
+                read_jsonl(self.root / harness.track_id / "events.jsonl")
+            ),
+            len(events_after_first),
+        )
+
+        conflicting = dict(comparison)
+        conflicting["comparison_id"] = "comparison-conflict"
+        conflicting["outcome"] = "REJECTED"
+        conflicting["target_defect_resolved"] = False
+        conflicting["recommended_current_version_id"] = attempt[
+            "parent_version_id"
+        ]
+        harness._set("compare-versions", conflicting)
+        blocked = harness.engine.handlers._agent_step("compare-versions")
+        self.assertEqual(blocked.kind, "BLOCKED")
+        self.assertEqual(blocked.error_code, "INVALID_VERSION_LINEAGE")
+
+    def test_production_collector_reads_only_committed_artifacts(self) -> None:
+        run_root = self.root / "Music-runs"
+        track_id = "track-layout"
+        state = StateStore(run_root, track_id, clock=lambda: NOW)
+        artifacts = ArtifactStore(state.track_dir, track_id)
+        brief = fixture("sample-brief.json", track_id)
+        artifact_id = artifacts.content_id(brief)
+        artifacts.write("brief", brief, artifact_id=artifact_id)
+
+        before_commit = build_status(
+            self.root,
+            track_id,
+            "music-production",
+        )
+        self.assertEqual(before_commit.next_step, "brief")
+
+        artifacts.commit("brief", artifact_id, occurred_at=NOW)
+        after_commit = build_status(
+            self.root,
+            track_id,
+            "music-production",
+        )
+        self.assertEqual(after_commit.next_step, "lyrics-write")
 
     def test_rollback_preserves_versions_and_events(self) -> None:
         harness = Harness(self.root)

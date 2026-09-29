@@ -6,9 +6,10 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "track_id", "created_at", "comparison_id",
+    "edit_attempt_id",
     "parent_version_id", "child_version_id", "target_defect_id", "outcome",
     "target_defect_resolved", "protected_elements_preserved", "regressions",
-    "recommended_current_version_id"
+    "remaining_defects", "recommended_current_version_id"
   ],
   "properties": {
     "schema_version": { "const": "1.0" },
@@ -19,6 +20,7 @@
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
     },
     "comparison_id": { "type": "string", "minLength": 1 },
+    "edit_attempt_id": { "type": "string", "minLength": 1 },
     "parent_version_id": { "type": "string", "minLength": 1 },
     "child_version_id": { "type": "string", "minLength": 1 },
     "target_defect_id": { "type": "string", "minLength": 1 },
@@ -41,6 +43,21 @@
             "enum": ["INFO", "MINOR", "MAJOR", "CRITICAL"]
           },
           "message": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "remaining_defects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["defect_id", "severity"],
+        "properties": {
+          "defect_id": { "type": "string", "minLength": 1 },
+          "severity": {
+            "type": "string",
+            "enum": ["MINOR", "MAJOR", "CRITICAL"]
+          }
         }
       }
     },

@@ -296,6 +296,45 @@ class PackageAgentContractTest(unittest.TestCase):
         self.assertIn("from: lyrics-review\n    to: lyrics-write", graph)
         self.assertIn("condition: lyrics_revise", graph)
 
+    def test_version_comparator_requires_edit_attempt_contract(self) -> None:
+        agent = (AGENTS / "music-version-comparator.md").read_text(encoding="utf-8")
+        skill = (
+            SKILLS / "music-version-comparison" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        for text in (agent, skill):
+            self.assertIn("edit-attempt", text)
+            self.assertIn("revision-plan", text)
+            self.assertIn("parent version", text)
+            self.assertIn("child version", text)
+            self.assertIn("target defect", text)
+            self.assertIn("измеренные или переданные факты сравнения", text)
+            self.assertIn("edit_attempt_id", text)
+            self.assertIn("parent_version_id", text)
+            self.assertIn("child_version_id", text)
+            self.assertIn("revision_plan_id", text)
+            self.assertIn("defect_id", text)
+            self.assertIn("Не исправляй lineage самостоятельно", text)
+            self.assertIn("не подменяй parent/child IDs", text)
+        self.assertIn("Outcome artifact тогда `BLOCKED`", agent)
+        self.assertIn("outcome artifact = `BLOCKED`", skill)
+
+        sample = load_json(FIXTURES / "sample-version-comparison.json")
+        validator_for("version-comparison.schema.json").validate(sample)
+        self.assertIn("edit_attempt_id", sample)
+
+        missing = dict(sample)
+        del missing["edit_attempt_id"]
+        errors = list(
+            validator_for("version-comparison.schema.json").iter_errors(missing)
+        )
+        self.assertTrue(
+            any(
+                error.validator == "required" and "edit_attempt_id" in error.message
+                for error in errors
+            )
+        )
+        self.assertIn("Не менять `parent_version_id`", agent)
+
     def test_agents_skills_command_and_registry_exist(self) -> None:
         registry = REGISTRY.read_text(encoding="utf-8")
         for agent_id in AGENT_CONTRACTS:

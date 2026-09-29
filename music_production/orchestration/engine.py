@@ -27,11 +27,13 @@ from music_production.orchestration.state_store import (
     utc_now,
 )
 from music_production.orchestration.step_handlers import (
+    INVALID_VERSION_LINEAGE,
     HandlerResult,
     MockTechnicalQC,
     StepHandlers,
     TechnicalQC,
 )
+from music_production.services.version_store import UnknownParentError, UnknownVersionError
 from music_production.runtime.base import AgentRuntime
 from music_production.runtime.mock import MockAgentRuntime
 
@@ -63,6 +65,7 @@ class EngineOutcome:
     next_step: Optional[str]
     reason: str
     steps_executed: int = 0
+    error_code: Optional[str] = None
 
 
 class OrchestrationEngine:
@@ -123,7 +126,7 @@ class OrchestrationEngine:
         comparison = self.artifacts.latest("version-comparison") or {}
         qc = self.artifacts.latest("technical-qc") or {}
         plan = self.artifacts.latest("revision-plan") or {}
-        pending_edit = self.artifacts.latest("pending-edit") or {}
+        edit_attempt = self.artifacts.latest("edit-attempt") or {}
         candidate_review = self.artifacts.latest("candidate-review") or {}
         decision = self.decisions.current()
         knowledge = self._knowledge()
@@ -135,9 +138,10 @@ class OrchestrationEngine:
             "PARTIAL": "reject",
             "BLOCKED": "reject",
         }.get(str(comparison.get("outcome") or ""), "")
-        edit_done = bool(pending_edit) and (
+        edit_done = bool(edit_attempt) and (
             not comparison
-            or comparison.get("child_version_id") != pending_edit.get("child_version_id")
+            or comparison.get("edit_attempt_id")
+            != edit_attempt.get("edit_attempt_id")
         )
         jobs = self._jobs()
         unsuccessful = [
@@ -249,6 +253,7 @@ class OrchestrationEngine:
             next_step=decision.next_step or None,
             reason=reason,
             steps_executed=steps_executed,
+            error_code=(handler_result.error_code if handler_result else None),
         )
 
     def run_one_step(self) -> EngineOutcome:
@@ -264,7 +269,16 @@ class OrchestrationEngine:
             return self._outcome_after(executed_step=None)
         if not decision.next_step:
             return self._outcome_after(executed_step=None)
-        result = self.handlers.execute(decision.next_step)
+        try:
+            result = self.handlers.execute(decision.next_step)
+        except (UnknownParentError, UnknownVersionError) as exc:
+            result = self.handlers._lineage_blocked(
+                step=decision.next_step,
+                detail=str(exc),
+                context={"exception": type(exc).__name__},
+            )
+            if result.error_code != INVALID_VERSION_LINEAGE:
+                raise
         return self._outcome_after(
             executed_step=decision.next_step,
             handler_result=result,

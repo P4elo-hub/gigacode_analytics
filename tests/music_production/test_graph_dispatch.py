@@ -183,17 +183,54 @@ class MusicGraphDispatchTest(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="music-loop-"))
         try:
             folder = tmp / run
+            artifacts = folder / "artifacts"
             folder.mkdir(parents=True)
-            (folder / "brief.json").write_text(json.dumps(brief), encoding="utf-8")
+            committed = {}
+            for artifact_type, document in (
+                ("brief", brief),
+                ("lyrics", {"schema_version": "1.0", "track_id": slug}),
+                ("sound-direction", {"schema_version": "1.0", "track_id": slug}),
+                ("song-package", {"schema_version": "1.0", "track_id": slug}),
+                ("generation-request", {"schema_version": "1.0", "track_id": slug}),
+            ):
+                artifact_id = f"golden-{artifact_type}"
+                path = artifacts / artifact_type / f"{artifact_id}.json"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                committed[artifact_type] = {"artifact_id": artifact_id}
             (folder / "track-state.json").write_text(json.dumps(track), encoding="utf-8")
-            for name in ("lyrics.json", "sound-direction.json", "song-package.json", "generation-request.json"):
-                (folder / name).write_text("{}\n", encoding="utf-8")
             (folder / "routing-signals.json").write_text(json.dumps(signals), encoding="utf-8")
+            (folder / "artifact-index.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "track_id": slug,
+                        "created_at": "2026-09-28T12:00:00Z",
+                        "committed": committed,
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             first = build_dispatch(tmp, slug, PIPELINE)
             self.assertEqual(first["next_step"], "plan-revision", first.get("next_reason"))
 
-            (folder / "revision-plan.json").write_text("{}\n", encoding="utf-8")
+            plan_id = "golden-revision-plan"
+            plan_path = artifacts / "revision-plan" / f"{plan_id}.json"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("{}\n", encoding="utf-8")
+            committed["revision-plan"] = {"artifact_id": plan_id}
+            (folder / "artifact-index.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "track_id": slug,
+                        "created_at": "2026-09-28T12:00:00Z",
+                        "committed": committed,
+                    }
+                ),
+                encoding="utf-8",
+            )
             second = build_dispatch(tmp, slug, PIPELINE)
             self.assertEqual(second["next_step"], "execute-edit", second.get("next_reason"))
             self.assertNotEqual(second["next_step"], "plan-revision")

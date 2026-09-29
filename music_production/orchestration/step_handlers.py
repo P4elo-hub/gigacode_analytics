@@ -22,6 +22,7 @@ from music_production.orchestration.state_store import (
     StateStore,
     atomic_write_json,
     read_json,
+    read_jsonl,
     utc_now,
 )
 from music_production.runtime.base import AgentRuntime, ArtifactReference
@@ -32,7 +33,14 @@ from music_production.services.budget_guard import (
     BudgetUsage,
 )
 from music_production.services.job_runner import JobRunOutcome, JobRunner
-from music_production.services.version_store import VersionRecord, VersionStore
+from music_production.services.version_store import (
+    UnknownParentError,
+    UnknownVersionError,
+    VersionRecord,
+    VersionStore,
+)
+
+INVALID_VERSION_LINEAGE = "INVALID_VERSION_LINEAGE"
 
 STEP_TO_AGENT = {
     "brief": "music-brief-analyst",
@@ -115,6 +123,7 @@ class MockTechnicalQC(TechnicalQC):
 class HandlerResult:
     kind: str = "PROGRESSED"
     detail: str = ""
+    error_code: Optional[str] = None
 
 
 class StepHandlers:
@@ -167,6 +176,7 @@ class StepHandlers:
             "decision_id",
             "case_id",
             "comparison_id",
+            "edit_attempt_id",
             "revision_plan_id",
             "review_id",
             "lyrics_version_id",
@@ -187,13 +197,10 @@ class StepHandlers:
             document,
             artifact_id=artifact_id,
         )
-        self.state_store.event(
-            f"artifact:{artifact_type}:{artifact_id}",
-            {
-                "type": "artifact-written",
-                "artifact_type": artifact_type,
-                "artifact_id": artifact_id,
-            },
+        self.artifacts.commit(
+            artifact_type,
+            artifact_id,
+            occurred_at=self.clock(),
         )
         return copy.deepcopy(dict(document))
 
@@ -201,12 +208,58 @@ class StepHandlers:
         digest = hashlib.sha256(
             f"{reason}:{','.join(artifact_types)}:{self.clock()}".encode("utf-8")
         ).hexdigest()[:16]
+        self.artifacts.invalidate(
+            list(artifact_types),
+            event_id=f"invalidate:{digest}",
+            reason=reason,
+            occurred_at=self.clock(),
+        )
+
+    def _lineage_blocked(
+        self,
+        *,
+        step: str,
+        detail: str,
+        context: Mapping[str, object],
+    ) -> HandlerResult:
+        payload = {
+            "type": "invalid-version-lineage",
+            "error_code": INVALID_VERSION_LINEAGE,
+            "step": step,
+            "detail": detail,
+            "context": copy.deepcopy(dict(context)),
+        }
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:20]
+        self.state_store.event(f"lineage-blocked:{digest}", payload)
+        return HandlerResult("BLOCKED", detail, INVALID_VERSION_LINEAGE)
+
+    def _comparison_resolution(self, edit_attempt_id: str) -> Optional[dict]:
+        for event in reversed(read_jsonl(self.state_store.events_path)):
+            payload = event.get("payload")
+            if (
+                isinstance(payload, dict)
+                and payload.get("type") == "edit-attempt-resolved"
+                and payload.get("edit_attempt_id") == edit_attempt_id
+            ):
+                return payload
+        return None
+
+    def _record_comparison_resolution(
+        self,
+        comparison: Mapping[str, object],
+    ) -> None:
+        edit_attempt_id = str(comparison["edit_attempt_id"])
+        comparison_id = str(comparison["comparison_id"])
         self.state_store.event(
-            f"invalidate:{digest}",
+            f"edit-attempt-resolution:{edit_attempt_id}",
             {
-                "type": "artifacts-invalidated",
-                "artifact_types": list(artifact_types),
-                "reason": reason,
+                "type": "edit-attempt-resolved",
+                "edit_attempt_id": edit_attempt_id,
+                "comparison_id": comparison_id,
+                "comparison_hash": ArtifactStore.content_id(comparison),
+                "outcome": comparison["outcome"],
             },
         )
 
@@ -280,6 +333,15 @@ class StepHandlers:
             else:
                 raise StepExecutionError(f"{step} returned no artifact")
         if artifact.get("track_id") != self.track_id:
+            if step == "compare-versions":
+                return self._lineage_blocked(
+                    step=step,
+                    detail="comparison track_id does not match the run",
+                    context={
+                        "comparison_track_id": artifact.get("track_id"),
+                        "track_id": self.track_id,
+                    },
+                )
             raise StepExecutionError("artifact track_id does not match run")
         defer_comparison = step == "compare-versions"
         if not defer_comparison:
@@ -341,7 +403,7 @@ class StepHandlers:
                 "BLOCKED",
             }:
                 self._invalidate(
-                    "pending-edit",
+                    "edit-attempt",
                     "version-comparison",
                     reason="new-revision-plan",
                 )
@@ -349,8 +411,13 @@ class StepHandlers:
             if current.get("verdict") == "RETRY_REVISION":
                 self.decisions.clear_current(str(current["decision_id"]))
         elif step == "compare-versions":
-            self._apply_comparison(artifact, correlation_id)
+            comparison_result = self._apply_comparison(artifact, correlation_id)
+            if comparison_result.kind == "BLOCKED":
+                return comparison_result
+            if comparison_result.kind == "IDEMPOTENT":
+                return HandlerResult()
             self._write_artifact(artifact_type, artifact)
+            self._record_comparison_resolution(artifact)
         elif step == "capture-knowledge":
             self._capture_decision(artifact, correlation_id)
         return HandlerResult()
@@ -526,9 +593,28 @@ class StepHandlers:
             return HandlerResult("PROGRESSED", "revision budget exhausted")
         parent_id = str(state["current_version_id"])
         if not parent_id or parent_id == "None":
-            raise StepExecutionError("current version is missing")
+            return self._lineage_blocked(
+                step="execute-edit",
+                detail="current version is missing",
+                context={"current_version_id": state["current_version_id"]},
+            )
+        try:
+            self.versions.get(parent_id)
+        except UnknownVersionError:
+            return self._lineage_blocked(
+                step="execute-edit",
+                detail="parent version does not exist",
+                context={"parent_version_id": parent_id},
+            )
         if str(plan["source_version_id"]) != parent_id:
-            raise StepExecutionError("revision plan source is not current version")
+            return self._lineage_blocked(
+                step="execute-edit",
+                detail="revision plan source is not current version",
+                context={
+                    "source_version_id": plan["source_version_id"],
+                    "current_version_id": parent_id,
+                },
+            )
         request_key = f"edit:{plan['revision_plan_id']}"
         request = {
             "schema_version": "1.0",
@@ -562,16 +648,28 @@ class StepHandlers:
             checksum=str(output["checksum"]),
             status="pending-comparison",
         )
-        self.versions.add(child)
+        try:
+            self.versions.add(child)
+        except UnknownParentError:
+            return self._lineage_blocked(
+                step="execute-edit",
+                detail="parent version does not exist",
+                context={"parent_version_id": parent_id, "child_version_id": child_id},
+            )
+        edit_attempt_id = f"edit-attempt-{plan['revision_plan_id']}"
         self._write_artifact(
-            "pending-edit",
+            "edit-attempt",
             {
                 "schema_version": "1.0",
                 "track_id": self.track_id,
                 "created_at": plan["created_at"],
+                "edit_attempt_id": edit_attempt_id,
+                "revision_plan_id": plan["revision_plan_id"],
+                "defect_id": plan["defect_id"],
                 "parent_version_id": parent_id,
                 "child_version_id": child_id,
-                "revision_plan_id": plan["revision_plan_id"],
+                "provider_job_id": str(job["job_id"]),
+                "operation": operation,
             },
         )
         self.state_store.transition(
@@ -584,11 +682,116 @@ class StepHandlers:
         self,
         comparison: Mapping[str, object],
         correlation_id: str,
-    ) -> None:
+    ) -> HandlerResult:
+        if comparison.get("track_id") != self.track_id:
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison track_id does not match the run",
+                context={
+                    "comparison_track_id": comparison.get("track_id"),
+                    "track_id": self.track_id,
+                },
+            )
+        attempt = self.artifacts.latest("edit-attempt")
+        attempt_id = str(comparison["edit_attempt_id"])
+        if attempt is None or attempt.get("edit_attempt_id") != attempt_id:
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison does not reference the current edit attempt",
+                context={
+                    "edit_attempt_id": attempt_id,
+                    "current_edit_attempt_id": (
+                        attempt.get("edit_attempt_id") if attempt else None
+                    ),
+                },
+            )
+        resolution = self._comparison_resolution(attempt_id)
+        comparison_hash = ArtifactStore.content_id(comparison)
+        if resolution is not None:
+            if (
+                resolution.get("comparison_id") == comparison.get("comparison_id")
+                and resolution.get("comparison_hash") == comparison_hash
+            ):
+                return HandlerResult("IDEMPOTENT", "comparison already applied")
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="edit attempt already has a different comparison",
+                context={
+                    "edit_attempt_id": attempt_id,
+                    "existing_comparison_id": resolution.get("comparison_id"),
+                    "comparison_id": comparison.get("comparison_id"),
+                },
+            )
+        plan = self.artifacts.latest("revision-plan")
+        if (
+            plan is None
+            or attempt.get("revision_plan_id") != plan.get("revision_plan_id")
+            or attempt.get("defect_id") != plan.get("defect_id")
+            or comparison.get("target_defect_id") != attempt.get("defect_id")
+        ):
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="edit attempt does not match the active revision plan",
+                context={
+                    "edit_attempt_id": attempt_id,
+                    "attempt_revision_plan_id": attempt.get("revision_plan_id"),
+                    "active_revision_plan_id": (
+                        plan.get("revision_plan_id") if plan else None
+                    ),
+                    "attempt_defect_id": attempt.get("defect_id"),
+                    "comparison_defect_id": comparison.get("target_defect_id"),
+                },
+            )
         outcome = comparison["outcome"]
         parent = str(comparison["parent_version_id"])
         child = str(comparison["child_version_id"])
         state = self.state_store.load()
+        if parent != attempt.get("parent_version_id"):
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison parent does not match edit attempt",
+                context={
+                    "comparison_parent_version_id": parent,
+                    "attempt_parent_version_id": attempt.get("parent_version_id"),
+                },
+            )
+        if child != attempt.get("child_version_id"):
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison child does not match edit attempt",
+                context={
+                    "comparison_child_version_id": child,
+                    "attempt_child_version_id": attempt.get("child_version_id"),
+                },
+            )
+        try:
+            parent_version = self.versions.get(parent)
+            child_version = self.versions.get(child)
+        except UnknownVersionError as exc:
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison references a version that does not exist",
+                context={"version_id": str(exc)},
+            )
+        if parent_version.version_id != parent or child_version.parent_version_id != parent:
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison child is not a child of its parent",
+                context={
+                    "parent_version_id": parent,
+                    "child_version_id": child,
+                    "actual_parent_version_id": child_version.parent_version_id,
+                },
+            )
+        if state["current_version_id"] != parent:
+            return self._lineage_blocked(
+                step="compare-versions",
+                detail="comparison parent is not current",
+                context={
+                    "parent_version_id": parent,
+                    "current_version_id": state["current_version_id"],
+                },
+            )
         regressions = comparison["regressions"]
         accepted = (
             outcome == "ACCEPTED"
@@ -596,30 +799,27 @@ class StepHandlers:
             and not regressions
         )
         if accepted:
-            if (
-                state["current_version_id"] == child
-                and self.versions.current_version_id == child
-            ):
-                return
-            if state["current_version_id"] != parent:
-                raise StepExecutionError("comparison parent is not current")
+            remaining = comparison["remaining_defects"]
+            critical = sum(
+                1 for item in remaining if item.get("severity") == "CRITICAL"
+            )
+            major = sum(1 for item in remaining if item.get("severity") == "MAJOR")
             self.versions.set_current(child)
             self.state_store.transition(
                 "COMPARISON_ACCEPTED",
                 {
                     "version_id": child,
-                    "critical": 0,
-                    "major": 0 if comparison["target_defect_resolved"] else 1,
+                    "critical": critical,
+                    "major": major,
                 },
                 event_id=f"transition:{correlation_id}",
             )
         else:
-            if state["current_version_id"] != parent:
-                raise StepExecutionError("rejected comparison parent is not current")
             self.state_store.transition(
                 "COMPARISON_REJECTED",
                 event_id=f"transition:{correlation_id}",
             )
+        return HandlerResult()
 
     def _knowledge(self) -> dict:
         if self.knowledge_path.exists():
@@ -735,7 +935,7 @@ class StepHandlers:
         elif verdict == "RETRY_REVISION":
             self._invalidate(
                 "revision-plan",
-                "pending-edit",
+                "edit-attempt",
                 "version-comparison",
                 reason=verdict,
             )
@@ -759,7 +959,7 @@ class StepHandlers:
             )
             self._invalidate(
                 "revision-plan",
-                "pending-edit",
+                "edit-attempt",
                 "version-comparison",
                 reason=verdict,
             )

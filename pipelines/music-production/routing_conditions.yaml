@@ -2,6 +2,34 @@
 # Escalation does not spend or restore budget.
 schema_version: 1
 status_fields:
+  has_brief:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed brief exists in artifact-index.json.
+  has_lyrics:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed lyrics exists in artifact-index.json.
+  has_sound:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed sound-direction exists in artifact-index.json.
+  has_package:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed song-package exists in artifact-index.json.
+  has_generation_request:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed generation-request exists in artifact-index.json.
+  has_candidates:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed candidates exists in artifact-index.json.
+  has_revision_plan:
+    type: bool
+    source: collectors.track_signals
+    instruction: Committed revision-plan exists in artifact-index.json.
   state:
     type: string
     source: collectors.track_signals

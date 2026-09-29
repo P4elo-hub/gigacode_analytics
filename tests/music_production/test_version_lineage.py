@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from music_production.orchestration.artifact_store import ArtifactStore
+from music_production.orchestration.state_store import StateStore
 from music_production.services.defect_validation import (
     InvalidDefectRangeError,
     validate_defect_range,
@@ -134,6 +136,49 @@ class DefectRangeTest(unittest.TestCase):
     def test_negative_start_is_invalid(self) -> None:
         with self.assertRaises(InvalidDefectRangeError):
             validate_defect_range(-0.01, 1.0)
+
+
+class EditAttemptContractTest(unittest.TestCase):
+    def test_committed_edit_attempt_is_immutable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            state = StateStore(
+                run_root,
+                "track-edit-attempt",
+                clock=lambda: "2026-09-29T10:00:00Z",
+            )
+            artifacts = ArtifactStore(state.track_dir, "track-edit-attempt")
+            attempt = {
+                "schema_version": "1.0",
+                "track_id": "track-edit-attempt",
+                "created_at": "2026-09-29T10:00:00Z",
+                "edit_attempt_id": "attempt-001",
+                "revision_plan_id": "plan-001",
+                "defect_id": "defect-001",
+                "parent_version_id": "version-parent",
+                "child_version_id": "version-child",
+                "provider_job_id": "job-001",
+                "operation": "replace-section",
+            }
+            artifacts.write(
+                "edit-attempt",
+                attempt,
+                artifact_id="attempt-001",
+            )
+            artifacts.commit(
+                "edit-attempt",
+                "attempt-001",
+                occurred_at="2026-09-29T10:00:00Z",
+            )
+            changed = dict(attempt)
+            changed["child_version_id"] = "version-other"
+
+            with self.assertRaisesRegex(ValueError, "immutable artifact conflict"):
+                artifacts.write(
+                    "edit-attempt",
+                    changed,
+                    artifact_id="attempt-001",
+                )
 
 
 if __name__ == "__main__":

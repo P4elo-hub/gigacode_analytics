@@ -7,7 +7,14 @@ Does not choose the next step and does not increase revision_budget_remaining.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from music_production.orchestration.artifact_store import resolve_committed_artifact
 
 
 def _read_object(path: Path | None) -> dict:
@@ -41,9 +48,28 @@ def _captured_ids(knowledge: dict) -> set[str]:
 
 
 def track_signals(root: Path, task_id: str, status, paths: dict[str, Path] | None = None) -> None:
-    del root, task_id
     paths = paths or {}
-    brief = _read_object(paths.get("brief"))
+    index_path = paths.get("artifact_index")
+    track_dir = (
+        index_path.parent
+        if index_path is not None
+        else root / "Music-runs" / task_id
+    )
+    committed_types = {
+        "brief": "has_brief",
+        "lyrics": "has_lyrics",
+        "sound-direction": "has_sound",
+        "song-package": "has_package",
+        "generation-request": "has_generation_request",
+        "candidates": "has_candidates",
+        "revision-plan": "has_revision_plan",
+    }
+    committed_paths = {}
+    for artifact_type, status_field in committed_types.items():
+        artifact_path = resolve_committed_artifact(track_dir, artifact_type)
+        committed_paths[artifact_type] = artifact_path
+        setattr(status, status_field, artifact_path is not None)
+    brief = _read_object(committed_paths["brief"])
     track = _read_object(paths.get("track_state"))
     signals = _read_object(paths.get("routing_signals"))
     decision = _read_object(paths.get("expert_decision"))
