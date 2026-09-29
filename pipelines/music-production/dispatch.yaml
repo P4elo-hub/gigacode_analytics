@@ -1,0 +1,147 @@
+invariant_after_priority: 0
+invariants:
+fallback:
+  next: null
+  outcome: stopped
+  reason: нет правила для состояния трека
+rules:
+  - priority: 5
+    when: decision_capture_pending
+    next: capture-knowledge
+  - priority: 12
+    when: human_stop
+    next: paused
+  - priority: 14
+    when: package_approve
+    next: prompt-compile
+  - priority: 15
+    when: package_change_lyrics
+    next: lyrics-write
+  - priority: 16
+    when: package_change_production
+    next: sound-design
+  - priority: 18
+    when: base_select
+    next: diagnose-defects
+  - priority: 19
+    when: base_regenerate
+    next: prompt-compile
+  - priority: 20
+    when: base_combine_direction
+    next: sound-design
+  - priority: 21
+    when: base_change_lyrics
+    next: lyrics-write
+  - priority: 22
+    when: base_change_production
+    next: sound-design
+  - priority: 24
+    when: revision_accept
+    next: final-qc
+  - priority: 25
+    when: revision_retry
+    next: plan-revision
+  - priority: 26
+    when: revision_rollback
+    next: diagnose-defects
+  - priority: 27
+    when: revision_rollback_needs_parent
+    next: revision-escalation
+  - priority: 28
+    when: final_request_revision
+    next: diagnose-defects
+  - priority: 30
+    when: comparison_accepted_clear
+    next: final-qc
+  - priority: 31
+    when: final_approve
+    next: null
+    outcome: ready
+  - priority: 33
+    when: already_paused
+    next: paused
+  - priority: 34
+    when: revision_budget_exhausted
+    next: revision-escalation
+  - priority: 36
+    when: defect_fix_limit_exhausted
+    next: revision-escalation
+  - priority: 38
+    when: capability_missing
+    next: revision-escalation
+  - priority: 39
+    when: comparisons_stagnant
+    next: revision-escalation
+  - priority: 40
+    when: need_brief
+    next: brief
+  - priority: 50
+    when: lyrics_revise
+    next: lyrics-write
+  - priority: 60
+    when: need_lyrics
+    next: lyrics-write
+  - priority: 70
+    when: lyrics_review_needed
+    next: lyrics-review
+  - priority: 80
+    when: need_sound
+    next: sound-design
+  - priority: 90
+    when: package_revise_lyrics
+    next: lyrics-write
+  - priority: 92
+    when: package_revise_production
+    next: sound-design
+  - priority: 94
+    when: package_revise_unspecified
+    next: package-review
+  - priority: 100
+    when: package_review_needed
+    next: package-review
+  - priority: 110
+    when: package_approval_needed
+    next: package-approval
+  - priority: 120
+    when: prompt_needed
+    next: prompt-compile
+  - priority: 130
+    when: generation_pending
+    next: generate-batch
+  - priority: 140
+    when: candidate_review_needed
+    next: candidate-review
+  - priority: 150
+    when: base_selection_needed
+    next: select-base
+  - priority: 160
+    when: comparison_rejected
+    next: plan-revision
+  - priority: 170
+    when: comparison_accepted_defects
+    next: diagnose-defects
+  - priority: 175
+    when: qc_failed
+    next: diagnose-defects
+  - priority: 190
+    when: compare_needed
+    next: compare-versions
+  - priority: 195
+    when: revision_plan_ready
+    next: execute-edit
+  - priority: 200
+    when: defect_open
+    next: plan-revision
+  - priority: 210
+    when: base_selected_diagnose
+    next: diagnose-defects
+  - priority: 220
+    when: final_approval_needed
+    next: final-approval
+  - priority: 230
+    when: knowledge_needed
+    next: capture-knowledge
+  - priority: 240
+    when: track_approved
+    next: null
+    outcome: ready

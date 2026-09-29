@@ -1,0 +1,40 @@
+step_to_subagent:
+  brief: music-brief-analyst
+  lyrics-write: music-lyrics-writer
+  lyrics-review: music-lyrics-editor
+  sound-design: music-sound-director
+  package-review: music-package-reviewer
+  prompt-compile: music-suno-prompt-compiler
+  candidate-review: music-candidate-critic
+  diagnose-defects: music-defect-diagnostician
+  plan-revision: music-revision-planner
+  compare-versions: music-version-comparator
+  capture-knowledge: music-knowledge-capturer
+orchestrator_owned:
+  - package-approval
+  - generate-batch
+  - select-base
+  - execute-edit
+  - revision-escalation
+  - final-qc
+  - final-approval
+gated_subagents:
+restartable_steps:
+  - brief
+  - lyrics-write
+  - lyrics-review
+  - sound-design
+  - package-review
+  - package-approval
+  - prompt-compile
+  - generate-batch
+  - candidate-review
+  - select-base
+  - diagnose-defects
+  - plan-revision
+  - execute-edit
+  - compare-versions
+  - revision-escalation
+  - final-qc
+  - final-approval
+  - capture-knowledge

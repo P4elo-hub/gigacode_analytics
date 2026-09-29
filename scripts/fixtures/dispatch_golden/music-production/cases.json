@@ -1,0 +1,1240 @@
+[
+  {
+    "id": "limit-exhausted",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PAUSED\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 0, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "paused",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Трек уже на паузе"
+  },
+  {
+    "id": "no-brief",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {},
+    "expect": {
+      "ready": false,
+      "next_step": "brief",
+      "next_subagent": "music-brief-analyst",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Нет брифа"
+  },
+  {
+    "id": "lyrics-revise",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"REVISE\", \"package_verdict\": \"\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "lyrics-write",
+      "next_subagent": "music-lyrics-writer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Текст требует правки"
+  },
+  {
+    "id": "need-lyrics",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"\", \"package_verdict\": \"\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "lyrics-write",
+      "next_subagent": "music-lyrics-writer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Текст ещё не написан"
+  },
+  {
+    "id": "need-lyrics-review",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"\", \"package_verdict\": \"\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "lyrics-review",
+      "next_subagent": "music-lyrics-editor",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Текст ждёт проверки"
+  },
+  {
+    "id": "need-sound",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "sound-design",
+      "next_subagent": "music-sound-director",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Нет звукового направления"
+  },
+  {
+    "id": "package-revise",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"REVISE\", \"revision_target\": \"LYRICS\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "lyrics-write",
+      "next_subagent": "music-lyrics-writer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Пакет вернул правку текста"
+  },
+  {
+    "id": "package-revise-production",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"REVISE\", \"revision_target\": \"PRODUCTION\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "sound-design",
+      "next_subagent": "music-sound-director",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Пакет вернул правку звука"
+  },
+  {
+    "id": "package-revise-unspecified",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"REVISE\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "package-review",
+      "next_subagent": "music-package-reviewer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Пакет вернул правку без цели LYRICS или PRODUCTION"
+  },
+  {
+    "id": "need-package-review",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "package-review",
+      "next_subagent": "music-package-reviewer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Пакет ещё не проверен"
+  },
+  {
+    "id": "package-ready",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_READY\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "package-approval",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Пакет готов и ждёт решения человека"
+  },
+  {
+    "id": "prompt-needed",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_APPROVED\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "prompt-compile",
+      "next_subagent": "music-suno-prompt-compiler",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Нужен запрос на генерацию"
+  },
+  {
+    "id": "generation-waiting",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"GENERATING\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "generate-batch",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Запрос отправлен и ожидается"
+  },
+  {
+    "id": "candidates-need-review",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"GENERATING\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "candidate-review",
+      "next_subagent": "music-candidate-critic",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Кандидаты ждут разбора"
+  },
+  {
+    "id": "candidates-need-choice",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "select-base",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Кандидаты готовы и нужен выбор базы"
+  },
+  {
+    "id": "comparison-rejected",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"reject\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "plan-revision",
+      "next_subagent": "music-revision-planner",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Сравнение отклонило правку"
+  },
+  {
+    "id": "revision-accepted-defects",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"accept\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "diagnose-defects",
+      "next_subagent": "music-defect-diagnostician",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Правка принята, блокирующие дефекты остались"
+  },
+  {
+    "id": "final-qc-failed",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"accept\", \"qc_result\": \"fail\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"FINAL_QC\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "diagnose-defects",
+      "next_subagent": "music-defect-diagnostician",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Финальный QC не прошёл"
+  },
+  {
+    "id": "revision-accepted",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"accept\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "final-qc",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Правка принята, блокирующих дефектов нет"
+  },
+  {
+    "id": "defect-open",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "plan-revision",
+      "next_subagent": "music-revision-planner",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Открыт блокирующий дефект"
+  },
+  {
+    "id": "edit-ready-to-compare",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/revision-plan.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": true, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "compare-versions",
+      "next_subagent": "music-version-comparator",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Правка выполнена и ждёт сравнения"
+  },
+  {
+    "id": "revision-plan-ready",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/revision-plan.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "execute-edit",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "План правки готов"
+  },
+  {
+    "id": "base-selected",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "diagnose-defects",
+      "next_subagent": "music-defect-diagnostician",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "База выбрана, нужна диагностика"
+  },
+  {
+    "id": "final-approval-waiting",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_FINAL_APPROVAL\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "final-approval",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Финальное решение ожидается"
+  },
+  {
+    "id": "approved",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"APPROVED\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "capture-knowledge",
+      "next_subagent": "music-knowledge-capturer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Трек утверждён, знание ещё не сохранено"
+  },
+  {
+    "id": "knowledge-captured",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/knowledge.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"APPROVED\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": true,
+      "next_step": "",
+      "next_subagent": "",
+      "orchestrator_mode": "ready",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Трек утверждён и знание сохранено"
+  },
+  {
+    "id": "capture-pending-package",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_READY\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"PACKAGE_APPROVAL\", \"verdict\": \"APPROVE_PACKAGE\", \"decided_by\": \"alex\", \"song_package_version_id\": \"pkg-1\"}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "capture-knowledge",
+      "next_subagent": "music-knowledge-capturer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Решение человека ещё не записано в knowledge store"
+  },
+  {
+    "id": "capture-pending-base",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"SELECT_AS_BASE\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "capture-knowledge",
+      "next_subagent": "music-knowledge-capturer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Решение человека ещё не записано в knowledge store"
+  },
+  {
+    "id": "capture-pending-revision",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 0, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"ACCEPT_REVISION\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "capture-knowledge",
+      "next_subagent": "music-knowledge-capturer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Решение человека ещё не записано в knowledge store"
+  },
+  {
+    "id": "capture-pending-final",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_FINAL_APPROVAL\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"FINAL_APPROVAL\", \"verdict\": \"APPROVE_FINAL\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "capture-knowledge",
+      "next_subagent": "music-knowledge-capturer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Решение человека ещё не записано в knowledge store"
+  },
+  {
+    "id": "package-approve-captured",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_READY\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"PACKAGE_APPROVAL\", \"verdict\": \"APPROVE_PACKAGE\", \"decided_by\": \"alex\", \"song_package_version_id\": \"pkg-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "prompt-compile",
+      "next_subagent": "music-suno-prompt-compiler",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Пакет утверждён человеком, решение уже в knowledge store"
+  },
+  {
+    "id": "package-change-lyrics",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_READY\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"PACKAGE_APPROVAL\", \"verdict\": \"CHANGE_LYRICS\", \"decided_by\": \"alex\", \"song_package_version_id\": \"pkg-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "lyrics-write",
+      "next_subagent": "music-lyrics-writer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек вернул пакет к тексту"
+  },
+  {
+    "id": "package-change-production",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_READY\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"PACKAGE_APPROVAL\", \"verdict\": \"CHANGE_PRODUCTION\", \"decided_by\": \"alex\", \"song_package_version_id\": \"pkg-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "sound-design",
+      "next_subagent": "music-sound-director",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек вернул пакет к звуку"
+  },
+  {
+    "id": "package-stop",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"PACKAGE_READY\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"PACKAGE_APPROVAL\", \"verdict\": \"STOP\", \"decided_by\": \"alex\", \"song_package_version_id\": \"pkg-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "paused",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек остановил трек"
+  },
+  {
+    "id": "base-select-captured",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"SELECT_AS_BASE\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "diagnose-defects",
+      "next_subagent": "music-defect-diagnostician",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "База выбрана человеком, решение уже в knowledge store"
+  },
+  {
+    "id": "base-regenerate-batch",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"REGENERATE_BATCH\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "prompt-compile",
+      "next_subagent": "music-suno-prompt-compiler",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек запросил новый batch"
+  },
+  {
+    "id": "base-combine-direction",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"COMBINE_DIRECTION\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "sound-design",
+      "next_subagent": "music-sound-director",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек попросил собрать направление заново"
+  },
+  {
+    "id": "base-change-lyrics",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"CHANGE_LYRICS\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "lyrics-write",
+      "next_subagent": "music-lyrics-writer",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек вернул выбор базы к тексту"
+  },
+  {
+    "id": "base-change-production",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"CHANGE_PRODUCTION\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "sound-design",
+      "next_subagent": "music-sound-director",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек вернул выбор базы к звуку"
+  },
+  {
+    "id": "base-stop",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/candidates.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": true, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_BASE_SELECTION\", \"current_version_id\": null, \"base_version_id\": null, \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"BASE_SELECTION\", \"verdict\": \"STOP\", \"decided_by\": \"alex\", \"candidate_id\": \"cand-1\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "paused",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек остановил трек"
+  },
+  {
+    "id": "revision-escalation-budget",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 0, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "revision-escalation",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Бюджет правок исчерпан: нужно решение человека"
+  },
+  {
+    "id": "revision-escalation-capability",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"stem-cover\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "revision-escalation",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Нужной операции нет в CapabilityRegistry: нужно решение человека"
+  },
+  {
+    "id": "revision-escalation-defect-limit",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 3, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "revision-escalation",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Лимит попыток исправления дефекта исчерпан: нужно решение человека"
+  },
+  {
+    "id": "revision-escalation-stagnant",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 2}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "revision-escalation",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Несколько сравнений подряд без улучшения: нужно решение человека"
+  },
+  {
+    "id": "revision-accept",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 0, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"ACCEPT_REVISION\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "final-qc",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек принял правку"
+  },
+  {
+    "id": "revision-retry",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 2, \"open_critical_defects\": 1, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"RETRY_REVISION\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "plan-revision",
+      "next_subagent": "music-revision-planner",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек вернул правку в работу после восстановления бюджета"
+  },
+  {
+    "id": "revision-retry-closed",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 0, \"open_critical_defects\": 1, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"RETRY_REVISION\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "revision-escalation",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Бюджет правок исчерпан: нужно решение человека"
+  },
+  {
+    "id": "revision-rollback",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"ROLLBACK\", \"decided_by\": \"alex\", \"version_id\": \"ver-parent\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "diagnose-defects",
+      "next_subagent": "music-defect-diagnostician",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек выбрал родительскую версию для отката"
+  },
+  {
+    "id": "revision-rollback-needs-parent",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"ROLLBACK\", \"decided_by\": \"alex\", \"version_id\": \"\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "revision-escalation",
+      "next_subagent": "",
+      "orchestrator_mode": "ask_user",
+      "must_continue": false
+    },
+    "expect_reason_contains": "ROLLBACK ждёт выбор родительской версии"
+  },
+  {
+    "id": "revision-stop",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 0, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"REVISION_ESCALATION\", \"verdict\": \"STOP\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "paused",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек остановил трек"
+  },
+  {
+    "id": "final-approve-captured",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_FINAL_APPROVAL\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"FINAL_APPROVAL\", \"verdict\": \"APPROVE_FINAL\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": true,
+      "next_step": "",
+      "next_subagent": "",
+      "orchestrator_mode": "ready",
+      "must_continue": false
+    },
+    "expect_reason_contains": "Финал утверждён человеком и решение записано"
+  },
+  {
+    "id": "final-request-revision",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_FINAL_APPROVAL\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"FINAL_APPROVAL\", \"verdict\": \"REQUEST_REVISION\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "diagnose-defects",
+      "next_subagent": "music-defect-diagnostician",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Финальное решение вернуло трек к дефектам"
+  },
+  {
+    "id": "final-stop",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"pass\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"AWAITING_FINAL_APPROVAL\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 0, \"open_major_defects\": 0}",
+      "Music-runs/music-golden/expert-decision.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T15:00:00Z\", \"decision_id\": \"dec-1\", \"gate\": \"FINAL_APPROVAL\", \"verdict\": \"STOP\", \"decided_by\": \"alex\", \"version_id\": \"ver-001\"}",
+      "Music-runs/music-golden/knowledge.json": "{\"captured_decision_ids\": [\"dec-1\"]}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "paused",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Человек остановил трек"
+  },
+  {
+    "id": "revision-loop-plan",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "plan-revision",
+      "next_subagent": "music-revision-planner",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Открыт блокирующий дефект"
+  },
+  {
+    "id": "revision-loop-edit",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/revision-plan.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": false, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "execute-edit",
+      "next_subagent": "",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "План правки готов"
+  },
+  {
+    "id": "revision-loop-compare",
+    "slug": "music-golden",
+    "pipeline_id": "music-production",
+    "files": {
+      "Music-runs/music-golden/brief.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T12:00:00Z\", \"assignment\": \"fixture\", \"package_review_required\": true, \"reference_use_permitted\": false, \"budget\": {\"max_batch\": 2, \"max_defect_fix_attempts\": 3, \"max_iterations\": 5, \"max_api_wait_seconds\": 120, \"max_cost\": 0}}",
+      "Music-runs/music-golden/lyrics.json": "{}\n",
+      "Music-runs/music-golden/sound-direction.json": "{}\n",
+      "Music-runs/music-golden/song-package.json": "{}\n",
+      "Music-runs/music-golden/generation-request.json": "{}\n",
+      "Music-runs/music-golden/revision-plan.json": "{}\n",
+      "Music-runs/music-golden/routing-signals.json": "{\"lyrics_verdict\": \"PASS\", \"package_verdict\": \"PASS\", \"revision_target\": \"\", \"comparison_outcome\": \"\", \"qc_result\": \"\", \"candidate_reviewed\": false, \"edit_done\": true, \"defect_fix_attempts\": 0, \"required_operation\": \"\", \"available_operations\": [\"generate-batch\"], \"comparisons_without_improvement\": 0}",
+      "Music-runs/music-golden/track-state.json": "{\"schema_version\": \"1.0\", \"track_id\": \"music-golden\", \"created_at\": \"2026-09-28T14:00:00Z\", \"state\": \"REVISING\", \"current_version_id\": \"ver-001\", \"base_version_id\": \"ver-001\", \"revision_iteration\": 0, \"revision_budget_remaining\": 3, \"open_critical_defects\": 1, \"open_major_defects\": 0}"
+    },
+    "expect": {
+      "ready": false,
+      "next_step": "compare-versions",
+      "next_subagent": "music-version-comparator",
+      "orchestrator_mode": "delegate",
+      "must_continue": true
+    },
+    "expect_reason_contains": "Правка выполнена и ждёт сравнения"
+  }
+]

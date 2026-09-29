@@ -56,6 +56,138 @@
         "subagent": null
       }
     ],
+    "music-production": [
+      {
+        "id": "music-orchestrator",
+        "label": "music-orchestrator",
+        "kind": "orchestrator",
+        "subagent": null
+      },
+      {
+        "id": "brief",
+        "label": "brief",
+        "kind": "step",
+        "subagent": "music-brief-analyst"
+      },
+      {
+        "id": "lyrics-write",
+        "label": "lyrics-write",
+        "kind": "step",
+        "subagent": "music-lyrics-writer"
+      },
+      {
+        "id": "lyrics-review",
+        "label": "lyrics-review",
+        "kind": "step",
+        "subagent": "music-lyrics-editor"
+      },
+      {
+        "id": "sound-design",
+        "label": "sound-design",
+        "kind": "step",
+        "subagent": "music-sound-director"
+      },
+      {
+        "id": "package-review",
+        "label": "package-review",
+        "kind": "step",
+        "subagent": "music-package-reviewer"
+      },
+      {
+        "id": "package-approval",
+        "label": "package-approval",
+        "kind": "step",
+        "subagent": null,
+        "ask": true
+      },
+      {
+        "id": "prompt-compile",
+        "label": "prompt-compile",
+        "kind": "step",
+        "subagent": "music-suno-prompt-compiler"
+      },
+      {
+        "id": "generate-batch",
+        "label": "generate-batch",
+        "kind": "step",
+        "subagent": null
+      },
+      {
+        "id": "candidate-review",
+        "label": "candidate-review",
+        "kind": "step",
+        "subagent": "music-candidate-critic"
+      },
+      {
+        "id": "select-base",
+        "label": "select-base",
+        "kind": "step",
+        "subagent": null,
+        "ask": true
+      },
+      {
+        "id": "diagnose-defects",
+        "label": "diagnose-defects",
+        "kind": "step",
+        "subagent": "music-defect-diagnostician"
+      },
+      {
+        "id": "plan-revision",
+        "label": "plan-revision",
+        "kind": "step",
+        "subagent": "music-revision-planner"
+      },
+      {
+        "id": "execute-edit",
+        "label": "execute-edit",
+        "kind": "step",
+        "subagent": null
+      },
+      {
+        "id": "compare-versions",
+        "label": "compare-versions",
+        "kind": "step",
+        "subagent": "music-version-comparator"
+      },
+      {
+        "id": "revision-escalation",
+        "label": "revision-escalation",
+        "kind": "step",
+        "subagent": null,
+        "ask": true
+      },
+      {
+        "id": "final-qc",
+        "label": "final-qc",
+        "kind": "step",
+        "subagent": null
+      },
+      {
+        "id": "final-approval",
+        "label": "final-approval",
+        "kind": "step",
+        "subagent": null,
+        "ask": true
+      },
+      {
+        "id": "capture-knowledge",
+        "label": "capture-knowledge",
+        "kind": "step",
+        "subagent": "music-knowledge-capturer"
+      },
+      {
+        "id": "paused",
+        "label": "PAUSED",
+        "kind": "terminal",
+        "subagent": null
+      },
+      {
+        "id": "done",
+        "label": "done",
+        "kind": "terminal",
+        "subagent": null
+      }
+    ],
     "spec": [
       {
         "id": "spec-orchestrator",
@@ -345,6 +477,249 @@
     ]
   },
   "dispatch": {
+    "music-production": {
+      "invariant_after_priority": 0,
+      "invariants": [],
+      "fallback": {
+        "next": null,
+        "outcome": "stopped",
+        "reason": "нет правила для состояния трека"
+      },
+      "rules": [
+        {
+          "priority": 5,
+          "when": "decision_capture_pending",
+          "next": "capture-knowledge"
+        },
+        {
+          "priority": 12,
+          "when": "human_stop",
+          "next": "paused"
+        },
+        {
+          "priority": 14,
+          "when": "package_approve",
+          "next": "prompt-compile"
+        },
+        {
+          "priority": 15,
+          "when": "package_change_lyrics",
+          "next": "lyrics-write"
+        },
+        {
+          "priority": 16,
+          "when": "package_change_production",
+          "next": "sound-design"
+        },
+        {
+          "priority": 18,
+          "when": "base_select",
+          "next": "diagnose-defects"
+        },
+        {
+          "priority": 19,
+          "when": "base_regenerate",
+          "next": "prompt-compile"
+        },
+        {
+          "priority": 20,
+          "when": "base_combine_direction",
+          "next": "sound-design"
+        },
+        {
+          "priority": 21,
+          "when": "base_change_lyrics",
+          "next": "lyrics-write"
+        },
+        {
+          "priority": 22,
+          "when": "base_change_production",
+          "next": "sound-design"
+        },
+        {
+          "priority": 24,
+          "when": "revision_accept",
+          "next": "final-qc"
+        },
+        {
+          "priority": 25,
+          "when": "revision_retry",
+          "next": "plan-revision"
+        },
+        {
+          "priority": 26,
+          "when": "revision_rollback",
+          "next": "diagnose-defects"
+        },
+        {
+          "priority": 27,
+          "when": "revision_rollback_needs_parent",
+          "next": "revision-escalation"
+        },
+        {
+          "priority": 28,
+          "when": "final_request_revision",
+          "next": "diagnose-defects"
+        },
+        {
+          "priority": 30,
+          "when": "comparison_accepted_clear",
+          "next": "final-qc"
+        },
+        {
+          "priority": 31,
+          "when": "final_approve",
+          "next": null,
+          "outcome": "ready"
+        },
+        {
+          "priority": 33,
+          "when": "already_paused",
+          "next": "paused"
+        },
+        {
+          "priority": 34,
+          "when": "revision_budget_exhausted",
+          "next": "revision-escalation"
+        },
+        {
+          "priority": 36,
+          "when": "defect_fix_limit_exhausted",
+          "next": "revision-escalation"
+        },
+        {
+          "priority": 38,
+          "when": "capability_missing",
+          "next": "revision-escalation"
+        },
+        {
+          "priority": 39,
+          "when": "comparisons_stagnant",
+          "next": "revision-escalation"
+        },
+        {
+          "priority": 40,
+          "when": "need_brief",
+          "next": "brief"
+        },
+        {
+          "priority": 50,
+          "when": "lyrics_revise",
+          "next": "lyrics-write"
+        },
+        {
+          "priority": 60,
+          "when": "need_lyrics",
+          "next": "lyrics-write"
+        },
+        {
+          "priority": 70,
+          "when": "lyrics_review_needed",
+          "next": "lyrics-review"
+        },
+        {
+          "priority": 80,
+          "when": "need_sound",
+          "next": "sound-design"
+        },
+        {
+          "priority": 90,
+          "when": "package_revise_lyrics",
+          "next": "lyrics-write"
+        },
+        {
+          "priority": 92,
+          "when": "package_revise_production",
+          "next": "sound-design"
+        },
+        {
+          "priority": 94,
+          "when": "package_revise_unspecified",
+          "next": "package-review"
+        },
+        {
+          "priority": 100,
+          "when": "package_review_needed",
+          "next": "package-review"
+        },
+        {
+          "priority": 110,
+          "when": "package_approval_needed",
+          "next": "package-approval"
+        },
+        {
+          "priority": 120,
+          "when": "prompt_needed",
+          "next": "prompt-compile"
+        },
+        {
+          "priority": 130,
+          "when": "generation_pending",
+          "next": "generate-batch"
+        },
+        {
+          "priority": 140,
+          "when": "candidate_review_needed",
+          "next": "candidate-review"
+        },
+        {
+          "priority": 150,
+          "when": "base_selection_needed",
+          "next": "select-base"
+        },
+        {
+          "priority": 160,
+          "when": "comparison_rejected",
+          "next": "plan-revision"
+        },
+        {
+          "priority": 170,
+          "when": "comparison_accepted_defects",
+          "next": "diagnose-defects"
+        },
+        {
+          "priority": 175,
+          "when": "qc_failed",
+          "next": "diagnose-defects"
+        },
+        {
+          "priority": 190,
+          "when": "compare_needed",
+          "next": "compare-versions"
+        },
+        {
+          "priority": 195,
+          "when": "revision_plan_ready",
+          "next": "execute-edit"
+        },
+        {
+          "priority": 200,
+          "when": "defect_open",
+          "next": "plan-revision"
+        },
+        {
+          "priority": 210,
+          "when": "base_selected_diagnose",
+          "next": "diagnose-defects"
+        },
+        {
+          "priority": 220,
+          "when": "final_approval_needed",
+          "next": "final-approval"
+        },
+        {
+          "priority": 230,
+          "when": "knowledge_needed",
+          "next": "capture-knowledge"
+        },
+        {
+          "priority": 240,
+          "when": "track_approved",
+          "next": null,
+          "outcome": "ready"
+        }
+      ]
+    },
     "spec": {
       "invariant_after_priority": 70,
       "invariants": [],
@@ -548,6 +923,73 @@
         "ready_fix": "Оркестратор ведёт шаги по markdown; delegate проверяет рёбра графа.",
         "stopped": "Calibration пайплайн остановлен."
       },
+      "invariants": [],
+      "display": {},
+      "constants": {}
+    },
+    "music-production": {
+      "task_kind": "slug",
+      "artifacts": {
+        "brief": {
+          "path": "Music-runs/{task_id}/brief.json",
+          "exists_as": "has_brief",
+          "missing_reason": "нет брифа"
+        },
+        "lyrics": {
+          "path": "Music-runs/{task_id}/lyrics.json",
+          "exists_as": "has_lyrics"
+        },
+        "sound": {
+          "path": "Music-runs/{task_id}/sound-direction.json",
+          "exists_as": "has_sound"
+        },
+        "package": {
+          "path": "Music-runs/{task_id}/song-package.json",
+          "exists_as": "has_package"
+        },
+        "generation_request": {
+          "path": "Music-runs/{task_id}/generation-request.json",
+          "exists_as": "has_generation_request"
+        },
+        "candidates": {
+          "path": "Music-runs/{task_id}/candidates.json",
+          "exists_as": "has_candidates"
+        },
+        "track_state": {
+          "path": "Music-runs/{task_id}/track-state.json",
+          "exists_as": "has_track_state"
+        },
+        "revision_plan": {
+          "path": "Music-runs/{task_id}/revision-plan.json",
+          "exists_as": "has_revision_plan"
+        },
+        "knowledge": {
+          "path": "Music-runs/{task_id}/knowledge.json",
+          "exists_as": "has_knowledge"
+        },
+        "expert_decision": {
+          "path": "Music-runs/{task_id}/expert-decision.json",
+          "exists_as": "has_expert_decision"
+        },
+        "routing_signals": {
+          "path": "Music-runs/{task_id}/routing-signals.json",
+          "exists_as": "has_routing_signals"
+        }
+      },
+      "collectors": [
+        {
+          "id": "track_signals",
+          "source": "track_state"
+        }
+      ],
+      "orchestrator": {
+        "ask_user_when": "awaiting_human"
+      },
+      "messages": {
+        "ready": "Трек утверждён и решение человека записано.",
+        "stopped": "Трек остановлен: нет правила для состояния."
+      },
+      "stale": [],
       "invariants": [],
       "display": {},
       "constants": {}
@@ -834,6 +1276,72 @@
       },
       "delegate_modes": {}
     },
+    "music-production": {
+      "step_to_subagent": {
+        "brief": "music-brief-analyst",
+        "lyrics-write": "music-lyrics-writer",
+        "lyrics-review": "music-lyrics-editor",
+        "sound-design": "music-sound-director",
+        "package-review": "music-package-reviewer",
+        "prompt-compile": "music-suno-prompt-compiler",
+        "candidate-review": "music-candidate-critic",
+        "diagnose-defects": "music-defect-diagnostician",
+        "plan-revision": "music-revision-planner",
+        "compare-versions": "music-version-comparator",
+        "capture-knowledge": "music-knowledge-capturer"
+      },
+      "orchestrator_owned": [
+        "package-approval",
+        "generate-batch",
+        "select-base",
+        "execute-edit",
+        "revision-escalation",
+        "final-qc",
+        "final-approval"
+      ],
+      "gated_subagents": [],
+      "restartable_steps": [
+        "brief",
+        "lyrics-write",
+        "lyrics-review",
+        "sound-design",
+        "package-review",
+        "package-approval",
+        "prompt-compile",
+        "generate-batch",
+        "candidate-review",
+        "select-base",
+        "diagnose-defects",
+        "plan-revision",
+        "execute-edit",
+        "compare-versions",
+        "revision-escalation",
+        "final-qc",
+        "final-approval",
+        "capture-knowledge"
+      ],
+      "step_order": {
+        "brief": 0,
+        "lyrics-write": 1,
+        "lyrics-review": 2,
+        "sound-design": 3,
+        "package-review": 4,
+        "package-approval": 5,
+        "prompt-compile": 6,
+        "generate-batch": 7,
+        "candidate-review": 8,
+        "select-base": 9,
+        "diagnose-defects": 10,
+        "plan-revision": 11,
+        "execute-edit": 12,
+        "compare-versions": 13,
+        "revision-escalation": 14,
+        "final-qc": 15,
+        "final-approval": 16,
+        "capture-knowledge": 17
+      },
+      "delegate_modes": {}
+    },
     "spec": {
       "step_to_subagent": {
         "find-context": "context-researcher",
@@ -947,6 +1455,87 @@
   },
   "predicates": {
     "calibration": [],
+    "music-production": [
+      "already_paused",
+      "base_change_lyrics",
+      "base_change_production",
+      "base_combine_direction",
+      "base_regenerate",
+      "base_select",
+      "base_selected_diagnose",
+      "base_selection_needed",
+      "candidate_review_needed",
+      "capability_missing",
+      "compare_needed",
+      "comparison_accepted_clear",
+      "comparison_accepted_defects",
+      "comparison_rejected",
+      "comparisons_stagnant",
+      "decision_capture_pending",
+      "defect_fix_limit_exhausted",
+      "defect_open",
+      "file_missing_brief",
+      "file_missing_candidates",
+      "file_missing_expert_decision",
+      "file_missing_generation_request",
+      "file_missing_knowledge",
+      "file_missing_lyrics",
+      "file_missing_package",
+      "file_missing_revision_plan",
+      "file_missing_routing_signals",
+      "file_missing_sound",
+      "file_missing_track_state",
+      "final_approval_needed",
+      "final_approve",
+      "final_request_revision",
+      "generation_pending",
+      "has_brief",
+      "has_candidates",
+      "has_expert_decision",
+      "has_generation_request",
+      "has_knowledge",
+      "has_lyrics",
+      "has_package",
+      "has_revision_plan",
+      "has_routing_signals",
+      "has_sound",
+      "has_track_state",
+      "human_stop",
+      "knowledge_needed",
+      "lyrics_review_needed",
+      "lyrics_revise",
+      "need_brief",
+      "need_lyrics",
+      "need_sound",
+      "not_has_brief",
+      "not_has_candidates",
+      "not_has_expert_decision",
+      "not_has_generation_request",
+      "not_has_knowledge",
+      "not_has_lyrics",
+      "not_has_package",
+      "not_has_revision_plan",
+      "not_has_routing_signals",
+      "not_has_sound",
+      "not_has_track_state",
+      "package_approval_needed",
+      "package_approve",
+      "package_change_lyrics",
+      "package_change_production",
+      "package_review_needed",
+      "package_revise_lyrics",
+      "package_revise_production",
+      "package_revise_unspecified",
+      "prompt_needed",
+      "qc_failed",
+      "revision_accept",
+      "revision_budget_exhausted",
+      "revision_plan_ready",
+      "revision_retry",
+      "revision_rollback",
+      "revision_rollback_needs_parent",
+      "track_approved"
+    ],
     "spec": [
       "alignment_fail_reaudit",
       "alignment_limit_exhausted",

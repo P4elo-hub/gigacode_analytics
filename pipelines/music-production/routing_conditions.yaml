@@ -1,0 +1,880 @@
+# Verdict routes require decision_capture_pending = false.
+# Escalation does not spend or restore budget.
+schema_version: 1
+status_fields:
+  state:
+    type: string
+    source: collectors.track_signals
+    instruction: Состояние из track-state.json.
+  lyrics_verdict:
+    type: string
+    source: collectors.track_signals
+    instruction: "PASS, REVISE или пусто. Вердикт редактора текста."
+  package_verdict:
+    type: string
+    source: collectors.track_signals
+    instruction: "PASS, REVISE или пусто. Вердикт ревью пакета, не human gate."
+  revision_target:
+    type: string
+    source: collectors.track_signals
+    instruction: LYRICS или PRODUCTION для автоматического REVISE пакета.
+  comparison_outcome:
+    type: string
+    source: collectors.track_signals
+    instruction: "accept, reject или пусто."
+  qc_result:
+    type: string
+    source: collectors.track_signals
+    instruction: "pass, fail или пусто."
+  package_review_required:
+    type: bool
+    source: collectors.track_signals
+    instruction: "Флаг брифа. Для пилота true, если бриф есть."
+  revision_budget_remaining:
+    type: int
+    source: collectors.track_signals
+    instruction: Остаток попыток. Граф сам его не увеличивает.
+  open_blocking_defects:
+    type: int
+    source: collectors.track_signals
+    instruction: Сумма open_critical_defects и open_major_defects.
+  base_selected:
+    type: bool
+    source: collectors.track_signals
+    instruction: "True, если base_version_id задан."
+  candidate_reviewed:
+    type: bool
+    source: collectors.track_signals
+    instruction: Разбор кандидатов уже записан.
+  edit_done:
+    type: bool
+    source: collectors.track_signals
+    instruction: Правка выполнена и ждёт сравнения.
+  comparisons_without_improvement:
+    type: int
+    source: collectors.track_signals
+    instruction: Сколько сравнений подряд не улучшили трек.
+  capability_missing:
+    type: bool
+    source: collectors.track_signals
+    instruction: required_operation нет среди available_operations.
+  defect_fix_limit_exhausted:
+    type: bool
+    source: collectors.track_signals
+    instruction: defect_fix_attempts достиг max_defect_fix_attempts брифа.
+  decision_id:
+    type: string
+    source: collectors.track_signals
+    instruction: "decision_id текущего expert-decision.json. Пусто, если решения нет."
+  decision_gate:
+    type: string
+    source: collectors.track_signals
+    instruction: gate текущего решения.
+  decision_verdict:
+    type: string
+    source: collectors.track_signals
+    instruction: verdict текущего решения.
+  decision_version_id:
+    type: string
+    source: collectors.track_signals
+    instruction: version_id решения. Для ROLLBACK это родительская версия.
+  decision_capture_pending:
+    type: bool
+    source: collectors.track_signals
+    instruction: decision_id есть и его нет в knowledge.captured_decision_ids.
+  awaiting_human:
+    type: bool
+    source: collectors.track_signals
+    instruction: Открыт один из четырёх human gates.
+edge_conditions:
+  _package_gate_skipped:
+    expr:
+      all:
+        - field: package_review_required
+          op: falsy
+        - field: state
+          op: eq
+          value: PACKAGE_READY
+    reason: Ревью пакета не требуется и пакет готов
+    label: package gate off
+  _prompt_state_ready:
+    expr:
+      any:
+        - field: state
+          op: eq
+          value: PACKAGE_APPROVED
+        - ref: _package_gate_skipped
+    reason: Пакет утверждён или ревью пакета выключено
+    label: prompt state
+  _stop_package:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: PACKAGE_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: STOP
+        - field: decision_capture_pending
+          op: falsy
+    reason: STOP на package approval
+    label: stop package
+  _stop_base:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: BASE_SELECTION
+        - field: decision_verdict
+          op: eq
+          value: STOP
+        - field: decision_capture_pending
+          op: falsy
+    reason: STOP на base selection
+    label: stop base
+  _stop_revision:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: REVISION_ESCALATION
+        - field: decision_verdict
+          op: eq
+          value: STOP
+        - field: decision_capture_pending
+          op: falsy
+    reason: STOP на revision escalation
+    label: stop revision
+  _stop_final:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: FINAL_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: STOP
+        - field: decision_capture_pending
+          op: falsy
+    reason: STOP на final approval
+    label: stop final
+  decision_capture_pending:
+    expr:
+      field: decision_capture_pending
+      op: truthy
+    reason: Решение человека ещё не записано в knowledge store
+    label: capture decision
+    dispatch:
+      priority: 5
+      next: capture-knowledge
+  human_stop:
+    expr:
+      any:
+        - ref: _stop_package
+        - ref: _stop_base
+        - ref: _stop_revision
+        - ref: _stop_final
+    reason: Человек остановил трек
+    label: STOP
+    dispatch:
+      priority: 12
+      next: paused
+  package_approve:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: PACKAGE_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: APPROVE_PACKAGE
+        - field: decision_capture_pending
+          op: falsy
+    reason: "Пакет утверждён человеком, решение уже в knowledge store"
+    label: APPROVE_PACKAGE
+    dispatch:
+      priority: 14
+      next: prompt-compile
+  package_change_lyrics:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: PACKAGE_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: CHANGE_LYRICS
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек вернул пакет к тексту
+    label: CHANGE_LYRICS package
+    dispatch:
+      priority: 15
+      next: lyrics-write
+  package_change_production:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: PACKAGE_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: CHANGE_PRODUCTION
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек вернул пакет к звуку
+    label: CHANGE_PRODUCTION package
+    dispatch:
+      priority: 16
+      next: sound-design
+  base_select:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: BASE_SELECTION
+        - field: decision_verdict
+          op: eq
+          value: SELECT_AS_BASE
+        - field: decision_capture_pending
+          op: falsy
+    reason: "База выбрана человеком, решение уже в knowledge store"
+    label: SELECT_AS_BASE
+    dispatch:
+      priority: 18
+      next: diagnose-defects
+  base_regenerate:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: BASE_SELECTION
+        - field: decision_verdict
+          op: eq
+          value: REGENERATE_BATCH
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек запросил новый batch
+    label: REGENERATE_BATCH
+    dispatch:
+      priority: 19
+      next: prompt-compile
+  base_combine_direction:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: BASE_SELECTION
+        - field: decision_verdict
+          op: eq
+          value: COMBINE_DIRECTION
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек попросил собрать направление заново
+    label: COMBINE_DIRECTION
+    dispatch:
+      priority: 20
+      next: sound-design
+  base_change_lyrics:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: BASE_SELECTION
+        - field: decision_verdict
+          op: eq
+          value: CHANGE_LYRICS
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек вернул выбор базы к тексту
+    label: CHANGE_LYRICS base
+    dispatch:
+      priority: 21
+      next: lyrics-write
+  base_change_production:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: BASE_SELECTION
+        - field: decision_verdict
+          op: eq
+          value: CHANGE_PRODUCTION
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек вернул выбор базы к звуку
+    label: CHANGE_PRODUCTION base
+    dispatch:
+      priority: 22
+      next: sound-design
+  revision_accept:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: REVISION_ESCALATION
+        - field: decision_verdict
+          op: eq
+          value: ACCEPT_REVISION
+        - field: decision_capture_pending
+          op: falsy
+    reason: Человек принял правку
+    label: ACCEPT_REVISION
+    dispatch:
+      priority: 24
+      next: final-qc
+  revision_retry:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: REVISION_ESCALATION
+        - field: decision_verdict
+          op: eq
+          value: RETRY_REVISION
+        - field: decision_capture_pending
+          op: falsy
+        - field: revision_budget_remaining
+          op: gt
+          value: 0
+    reason: Человек вернул правку в работу после восстановления бюджета
+    label: RETRY_REVISION
+    dispatch:
+      priority: 25
+      next: plan-revision
+  revision_rollback:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: REVISION_ESCALATION
+        - field: decision_verdict
+          op: eq
+          value: ROLLBACK
+        - field: decision_capture_pending
+          op: falsy
+        - field: decision_version_id
+          op: neq
+          value: ""
+    reason: Человек выбрал родительскую версию для отката
+    label: ROLLBACK
+    dispatch:
+      priority: 26
+      next: diagnose-defects
+  revision_rollback_needs_parent:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: REVISION_ESCALATION
+        - field: decision_verdict
+          op: eq
+          value: ROLLBACK
+        - field: decision_capture_pending
+          op: falsy
+        - field: decision_version_id
+          op: eq
+          value: ""
+    reason: ROLLBACK ждёт выбор родительской версии
+    label: ROLLBACK waits
+    dispatch:
+      priority: 27
+      next: revision-escalation
+  final_request_revision:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: FINAL_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: REQUEST_REVISION
+        - field: decision_capture_pending
+          op: falsy
+    reason: Финальное решение вернуло трек к дефектам
+    label: REQUEST_REVISION
+    dispatch:
+      priority: 28
+      next: diagnose-defects
+  comparison_accepted_clear:
+    expr:
+      all:
+        - field: comparison_outcome
+          op: eq
+          value: accept
+        - field: open_blocking_defects
+          op: lte
+          value: 0
+        - field: qc_result
+          op: neq
+          value: pass
+        - field: state
+          op: neq
+          value: AWAITING_FINAL_APPROVAL
+        - field: state
+          op: neq
+          value: APPROVED
+        - field: state
+          op: neq
+          value: FINAL_QC
+        - field: state
+          op: neq
+          value: PAUSED
+    reason: "Правка принята, блокирующих дефектов нет"
+    label: "accept, no blockers"
+    dispatch:
+      priority: 30
+      next: final-qc
+  final_approve:
+    expr:
+      all:
+        - field: decision_gate
+          op: eq
+          value: FINAL_APPROVAL
+        - field: decision_verdict
+          op: eq
+          value: APPROVE_FINAL
+        - field: decision_capture_pending
+          op: falsy
+    reason: Финал утверждён человеком и решение записано
+    label: APPROVE_FINAL
+    dispatch:
+      priority: 31
+      next: null
+      outcome: ready
+  already_paused:
+    expr:
+      field: state
+      op: eq
+      value: PAUSED
+    reason: Трек уже на паузе
+    label: already paused
+    dispatch:
+      priority: 33
+      next: paused
+  revision_budget_exhausted:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: REVISING
+        - field: revision_budget_remaining
+          op: lte
+          value: 0
+    reason: "Бюджет правок исчерпан: нужно решение человека"
+    label: budget
+    dispatch:
+      priority: 34
+      next: revision-escalation
+  defect_fix_limit_exhausted:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: REVISING
+        - field: defect_fix_limit_exhausted
+          op: truthy
+    reason: "Лимит попыток исправления дефекта исчерпан: нужно решение человека"
+    label: defect attempts
+    dispatch:
+      priority: 36
+      next: revision-escalation
+  capability_missing:
+    expr:
+      field: capability_missing
+      op: truthy
+    reason: "Нужной операции нет в CapabilityRegistry: нужно решение человека"
+    label: capability
+    dispatch:
+      priority: 38
+      next: revision-escalation
+  comparisons_stagnant:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: REVISING
+        - field: comparisons_without_improvement
+          op: gte
+          value: 2
+    reason: "Несколько сравнений подряд без улучшения: нужно решение человека"
+    label: no improvement
+    dispatch:
+      priority: 39
+      next: revision-escalation
+  need_brief:
+    expr:
+      field: has_brief
+      op: falsy
+    reason: Нет брифа
+    label: нет брифа
+    dispatch:
+      priority: 40
+      next: brief
+  lyrics_revise:
+    expr:
+      all:
+        - field: has_brief
+          op: truthy
+        - field: lyrics_verdict
+          op: eq
+          value: REVISE
+    reason: Текст требует правки
+    label: REVISE lyrics
+    dispatch:
+      priority: 50
+      next: lyrics-write
+  need_lyrics:
+    expr:
+      all:
+        - field: has_brief
+          op: truthy
+        - field: has_lyrics
+          op: falsy
+        - field: lyrics_verdict
+          op: neq
+          value: REVISE
+    reason: Текст ещё не написан
+    label: написать текст
+    dispatch:
+      priority: 60
+      next: lyrics-write
+  lyrics_review_needed:
+    expr:
+      all:
+        - field: has_lyrics
+          op: truthy
+        - field: lyrics_verdict
+          op: neq
+          value: PASS
+        - field: lyrics_verdict
+          op: neq
+          value: REVISE
+    reason: Текст ждёт проверки
+    label: проверка текста
+    dispatch:
+      priority: 70
+      next: lyrics-review
+  need_sound:
+    expr:
+      all:
+        - field: lyrics_verdict
+          op: eq
+          value: PASS
+        - field: has_sound
+          op: falsy
+    reason: Нет звукового направления
+    label: звуковое направление
+    dispatch:
+      priority: 80
+      next: sound-design
+  package_revise_lyrics:
+    expr:
+      all:
+        - field: package_verdict
+          op: eq
+          value: REVISE
+        - field: revision_target
+          op: eq
+          value: LYRICS
+    reason: Пакет вернул правку текста
+    label: REVISE lyrics
+    dispatch:
+      priority: 90
+      next: lyrics-write
+  package_revise_production:
+    expr:
+      all:
+        - field: package_verdict
+          op: eq
+          value: REVISE
+        - field: revision_target
+          op: eq
+          value: PRODUCTION
+    reason: Пакет вернул правку звука
+    label: REVISE production
+    dispatch:
+      priority: 92
+      next: sound-design
+  package_revise_unspecified:
+    expr:
+      all:
+        - field: package_verdict
+          op: eq
+          value: REVISE
+        - field: revision_target
+          op: eq
+          value: ""
+    reason: Пакет вернул правку без цели LYRICS или PRODUCTION
+    label: REVISE no target
+    dispatch:
+      priority: 94
+      next: package-review
+  package_review_needed:
+    expr:
+      all:
+        - field: has_sound
+          op: truthy
+        - field: lyrics_verdict
+          op: eq
+          value: PASS
+        - field: package_verdict
+          op: neq
+          value: PASS
+        - field: package_verdict
+          op: neq
+          value: REVISE
+    reason: Пакет ещё не проверен
+    label: проверка пакета
+    dispatch:
+      priority: 100
+      next: package-review
+  package_approval_needed:
+    expr:
+      all:
+        - field: package_verdict
+          op: eq
+          value: PASS
+        - field: package_review_required
+          op: truthy
+        - field: state
+          op: eq
+          value: PACKAGE_READY
+        - field: decision_id
+          op: eq
+          value: ""
+    reason: Пакет готов и ждёт решения человека
+    label: human package
+    dispatch:
+      priority: 110
+      next: package-approval
+  prompt_needed:
+    expr:
+      all:
+        - field: package_verdict
+          op: eq
+          value: PASS
+        - field: has_generation_request
+          op: falsy
+        - ref: _prompt_state_ready
+    reason: Нужен запрос на генерацию
+    label: собрать запрос
+    dispatch:
+      priority: 120
+      next: prompt-compile
+  generation_pending:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: GENERATING
+        - field: has_candidates
+          op: falsy
+    reason: Запрос отправлен и ожидается
+    label: ожидается генерация
+    dispatch:
+      priority: 130
+      next: generate-batch
+  candidate_review_needed:
+    expr:
+      all:
+        - field: has_candidates
+          op: truthy
+        - field: candidate_reviewed
+          op: falsy
+        - field: state
+          op: neq
+          value: AWAITING_BASE_SELECTION
+    reason: Кандидаты ждут разбора
+    label: разбор кандидатов
+    dispatch:
+      priority: 140
+      next: candidate-review
+  base_selection_needed:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: AWAITING_BASE_SELECTION
+        - field: decision_id
+          op: eq
+          value: ""
+    reason: Кандидаты готовы и нужен выбор базы
+    label: выбор базы
+    dispatch:
+      priority: 150
+      next: select-base
+  comparison_rejected:
+    expr:
+      all:
+        - field: comparison_outcome
+          op: eq
+          value: reject
+        - field: revision_budget_remaining
+          op: gt
+          value: 0
+    reason: Сравнение отклонило правку
+    label: REJECT
+    dispatch:
+      priority: 160
+      next: plan-revision
+  comparison_accepted_defects:
+    expr:
+      all:
+        - field: comparison_outcome
+          op: eq
+          value: accept
+        - field: open_blocking_defects
+          op: gt
+          value: 0
+    reason: "Правка принята, блокирующие дефекты остались"
+    label: "accept, defects remain"
+    dispatch:
+      priority: 170
+      next: diagnose-defects
+  qc_failed:
+    expr:
+      all:
+        - field: qc_result
+          op: eq
+          value: fail
+        - field: state
+          op: eq
+          value: FINAL_QC
+    reason: Финальный QC не прошёл
+    label: QC fail
+    dispatch:
+      priority: 175
+      next: diagnose-defects
+  compare_needed:
+    expr:
+      all:
+        - field: edit_done
+          op: truthy
+        - field: comparison_outcome
+          op: eq
+          value: ""
+        - field: revision_budget_remaining
+          op: gt
+          value: 0
+    reason: Правка выполнена и ждёт сравнения
+    label: сравнить версии
+    dispatch:
+      priority: 190
+      next: compare-versions
+  revision_plan_ready:
+    expr:
+      all:
+        - field: has_revision_plan
+          op: truthy
+        - field: comparison_outcome
+          op: eq
+          value: ""
+        - field: state
+          op: eq
+          value: REVISING
+        - field: edit_done
+          op: falsy
+        - field: revision_budget_remaining
+          op: gt
+          value: 0
+    reason: План правки готов
+    label: выполнить правку
+    dispatch:
+      priority: 195
+      next: execute-edit
+  defect_open:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: REVISING
+        - field: open_blocking_defects
+          op: gt
+          value: 0
+        - field: has_revision_plan
+          op: falsy
+        - field: comparison_outcome
+          op: eq
+          value: ""
+        - field: edit_done
+          op: falsy
+        - field: revision_budget_remaining
+          op: gt
+          value: 0
+    reason: Открыт блокирующий дефект
+    label: дефект открыт
+    dispatch:
+      priority: 200
+      next: plan-revision
+  base_selected_diagnose:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: REVISING
+        - field: base_selected
+          op: truthy
+        - field: open_blocking_defects
+          op: lte
+          value: 0
+        - field: comparison_outcome
+          op: eq
+          value: ""
+        - field: has_revision_plan
+          op: falsy
+        - field: edit_done
+          op: falsy
+        - field: decision_id
+          op: eq
+          value: ""
+    reason: "База выбрана, нужна диагностика"
+    label: база выбрана
+    dispatch:
+      priority: 210
+      next: diagnose-defects
+  final_approval_needed:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: AWAITING_FINAL_APPROVAL
+        - field: decision_id
+          op: eq
+          value: ""
+    reason: Финальное решение ожидается
+    label: финальное решение
+    dispatch:
+      priority: 220
+      next: final-approval
+  knowledge_needed:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: APPROVED
+        - field: has_knowledge
+          op: falsy
+        - field: decision_capture_pending
+          op: falsy
+    reason: "Трек утверждён, знание ещё не сохранено"
+    label: сохранить знание
+    dispatch:
+      priority: 230
+      next: capture-knowledge
+  track_approved:
+    expr:
+      all:
+        - field: state
+          op: eq
+          value: APPROVED
+        - field: has_knowledge
+          op: truthy
+        - field: decision_capture_pending
+          op: falsy
+    reason: Трек утверждён и знание сохранено
+    label: done
+    dispatch:
+      priority: 240
+      next: null
+      outcome: ready

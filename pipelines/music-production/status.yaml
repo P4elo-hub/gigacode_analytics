@@ -1,0 +1,44 @@
+task_kind: slug
+artifacts:
+  brief:
+    path: "Music-runs/{task_id}/brief.json"
+    exists_as: has_brief
+    missing_reason: нет брифа
+  lyrics:
+    path: "Music-runs/{task_id}/lyrics.json"
+    exists_as: has_lyrics
+  sound:
+    path: "Music-runs/{task_id}/sound-direction.json"
+    exists_as: has_sound
+  package:
+    path: "Music-runs/{task_id}/song-package.json"
+    exists_as: has_package
+  generation_request:
+    path: "Music-runs/{task_id}/generation-request.json"
+    exists_as: has_generation_request
+  candidates:
+    path: "Music-runs/{task_id}/candidates.json"
+    exists_as: has_candidates
+  track_state:
+    path: "Music-runs/{task_id}/track-state.json"
+    exists_as: has_track_state
+  revision_plan:
+    path: "Music-runs/{task_id}/revision-plan.json"
+    exists_as: has_revision_plan
+  knowledge:
+    path: "Music-runs/{task_id}/knowledge.json"
+    exists_as: has_knowledge
+  expert_decision:
+    path: "Music-runs/{task_id}/expert-decision.json"
+    exists_as: has_expert_decision
+  routing_signals:
+    path: "Music-runs/{task_id}/routing-signals.json"
+    exists_as: has_routing_signals
+collectors:
+  - id: track_signals
+    source: track_state
+orchestrator:
+  ask_user_when: awaiting_human
+messages:
+  ready: Трек утверждён и решение человека записано.
+  stopped: "Трек остановлен: нет правила для состояния."

@@ -108,6 +108,713 @@
         }
       ]
     },
+    "music-production": {
+      "label": "Music production",
+      "orchestrator": "music-orchestrator",
+      "nodes": [
+        {
+          "id": "music-orchestrator",
+          "label": "music-orchestrator",
+          "kind": "orchestrator"
+        },
+        {
+          "id": "brief",
+          "label": "brief",
+          "subagent": "music-brief-analyst",
+          "kind": "step"
+        },
+        {
+          "id": "lyrics-write",
+          "label": "lyrics-write",
+          "subagent": "music-lyrics-writer",
+          "kind": "step"
+        },
+        {
+          "id": "lyrics-review",
+          "label": "lyrics-review",
+          "subagent": "music-lyrics-editor",
+          "kind": "step"
+        },
+        {
+          "id": "sound-design",
+          "label": "sound-design",
+          "subagent": "music-sound-director",
+          "kind": "step"
+        },
+        {
+          "id": "package-review",
+          "label": "package-review",
+          "subagent": "music-package-reviewer",
+          "kind": "step"
+        },
+        {
+          "id": "package-approval",
+          "label": "package-approval",
+          "kind": "step",
+          "ask": true
+        },
+        {
+          "id": "prompt-compile",
+          "label": "prompt-compile",
+          "subagent": "music-suno-prompt-compiler",
+          "kind": "step"
+        },
+        {
+          "id": "generate-batch",
+          "label": "generate-batch",
+          "subagent": null,
+          "kind": "step"
+        },
+        {
+          "id": "candidate-review",
+          "label": "candidate-review",
+          "subagent": "music-candidate-critic",
+          "kind": "step"
+        },
+        {
+          "id": "select-base",
+          "label": "select-base",
+          "kind": "step",
+          "ask": true
+        },
+        {
+          "id": "diagnose-defects",
+          "label": "diagnose-defects",
+          "subagent": "music-defect-diagnostician",
+          "kind": "step"
+        },
+        {
+          "id": "plan-revision",
+          "label": "plan-revision",
+          "subagent": "music-revision-planner",
+          "kind": "step"
+        },
+        {
+          "id": "execute-edit",
+          "label": "execute-edit",
+          "subagent": null,
+          "kind": "step"
+        },
+        {
+          "id": "compare-versions",
+          "label": "compare-versions",
+          "subagent": "music-version-comparator",
+          "kind": "step"
+        },
+        {
+          "id": "revision-escalation",
+          "label": "revision-escalation",
+          "kind": "step",
+          "ask": true
+        },
+        {
+          "id": "final-qc",
+          "label": "final-qc",
+          "subagent": null,
+          "kind": "step"
+        },
+        {
+          "id": "final-approval",
+          "label": "final-approval",
+          "kind": "step",
+          "ask": true
+        },
+        {
+          "id": "capture-knowledge",
+          "label": "capture-knowledge",
+          "subagent": "music-knowledge-capturer",
+          "kind": "step"
+        },
+        {
+          "id": "paused",
+          "label": "PAUSED",
+          "kind": "terminal"
+        },
+        {
+          "id": "done",
+          "label": "done",
+          "kind": "terminal"
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-start",
+          "from": "music-orchestrator",
+          "to": "brief",
+          "kind": "main",
+          "condition": "need_brief",
+          "label": "нет брифа"
+        },
+        {
+          "id": "e-brief-lyrics",
+          "from": "brief",
+          "to": "lyrics-write",
+          "kind": "main",
+          "condition": "need_lyrics",
+          "label": "написать текст"
+        },
+        {
+          "id": "e-lyrics-review",
+          "from": "lyrics-write",
+          "to": "lyrics-review",
+          "kind": "main",
+          "condition": "lyrics_review_needed",
+          "label": "проверка текста"
+        },
+        {
+          "id": "e-review-revise",
+          "from": "lyrics-review",
+          "to": "lyrics-write",
+          "kind": "loop",
+          "condition": "lyrics_revise",
+          "label": "REVISE"
+        },
+        {
+          "id": "e-review-sound",
+          "from": "lyrics-review",
+          "to": "sound-design",
+          "kind": "main",
+          "condition": "need_sound",
+          "label": "pass"
+        },
+        {
+          "id": "e-sound-package",
+          "from": "sound-design",
+          "to": "package-review",
+          "kind": "main",
+          "condition": "package_review_needed",
+          "label": "проверка пакета"
+        },
+        {
+          "id": "e-package-revise-lyrics",
+          "from": "package-review",
+          "to": "lyrics-write",
+          "kind": "loop",
+          "condition": "package_revise_lyrics",
+          "label": "LYRICS"
+        },
+        {
+          "id": "e-package-revise-production",
+          "from": "package-review",
+          "to": "sound-design",
+          "kind": "loop",
+          "condition": "package_revise_production",
+          "label": "PRODUCTION"
+        },
+        {
+          "id": "e-package-approval",
+          "from": "package-review",
+          "to": "package-approval",
+          "kind": "main",
+          "condition": "package_approval_needed",
+          "label": "human gate"
+        },
+        {
+          "id": "e-package-prompt",
+          "from": "package-review",
+          "to": "prompt-compile",
+          "kind": "main",
+          "condition": "prompt_needed",
+          "label": "gate off"
+        },
+        {
+          "id": "e-prompt-gen",
+          "from": "prompt-compile",
+          "to": "generate-batch",
+          "kind": "main",
+          "condition": "generation_pending",
+          "label": "запрос отправлен"
+        },
+        {
+          "id": "e-gen-review",
+          "from": "generate-batch",
+          "to": "candidate-review",
+          "kind": "main",
+          "condition": "candidate_review_needed",
+          "label": "кандидаты"
+        },
+        {
+          "id": "e-review-select",
+          "from": "candidate-review",
+          "to": "select-base",
+          "kind": "main",
+          "condition": "base_selection_needed",
+          "label": "выбор базы"
+        },
+        {
+          "id": "e-diagnose-plan",
+          "from": "diagnose-defects",
+          "to": "plan-revision",
+          "kind": "main",
+          "condition": "defect_open",
+          "label": "дефект открыт"
+        },
+        {
+          "id": "e-diagnose-escalate",
+          "from": "diagnose-defects",
+          "to": "revision-escalation",
+          "kind": "branch",
+          "condition": "capability_missing",
+          "label": "нет операции"
+        },
+        {
+          "id": "e-plan-edit",
+          "from": "plan-revision",
+          "to": "execute-edit",
+          "kind": "main",
+          "condition": "revision_plan_ready",
+          "label": "план готов"
+        },
+        {
+          "id": "e-plan-escalate",
+          "from": "plan-revision",
+          "to": "revision-escalation",
+          "kind": "branch",
+          "condition": "revision_budget_exhausted",
+          "label": "бюджет"
+        },
+        {
+          "id": "e-edit-compare",
+          "from": "execute-edit",
+          "to": "compare-versions",
+          "kind": "main",
+          "condition": "compare_needed",
+          "label": "сравнить"
+        },
+        {
+          "id": "e-edit-escalate",
+          "from": "execute-edit",
+          "to": "revision-escalation",
+          "kind": "branch",
+          "condition": "defect_fix_limit_exhausted",
+          "label": "лимит дефекта"
+        },
+        {
+          "id": "e-compare-reject",
+          "from": "compare-versions",
+          "to": "plan-revision",
+          "kind": "loop",
+          "condition": "comparison_rejected",
+          "label": "REJECT"
+        },
+        {
+          "id": "e-compare-defects",
+          "from": "compare-versions",
+          "to": "diagnose-defects",
+          "kind": "loop",
+          "condition": "comparison_accepted_defects",
+          "label": "accept, defects remain"
+        },
+        {
+          "id": "e-compare-qc",
+          "from": "compare-versions",
+          "to": "final-qc",
+          "kind": "main",
+          "condition": "comparison_accepted_clear",
+          "label": "accept, no blockers"
+        },
+        {
+          "id": "e-compare-escalate",
+          "from": "compare-versions",
+          "to": "revision-escalation",
+          "kind": "branch",
+          "condition": "comparisons_stagnant",
+          "label": "нет улучшения"
+        },
+        {
+          "id": "e-qc-fail",
+          "from": "final-qc",
+          "to": "diagnose-defects",
+          "kind": "loop",
+          "condition": "qc_failed",
+          "label": "QC fail"
+        },
+        {
+          "id": "e-qc-final",
+          "from": "final-qc",
+          "to": "final-approval",
+          "kind": "main",
+          "condition": "final_approval_needed",
+          "label": "финальное решение"
+        },
+        {
+          "id": "e-paused",
+          "from": "music-orchestrator",
+          "to": "paused",
+          "kind": "branch",
+          "condition": "already_paused",
+          "label": "уже на паузе"
+        },
+        {
+          "id": "e-knowledge-done",
+          "from": "capture-knowledge",
+          "to": "done",
+          "kind": "main",
+          "condition": "track_approved",
+          "label": "done"
+        },
+        {
+          "id": "e-final-done",
+          "from": "capture-knowledge",
+          "to": "done",
+          "kind": "main",
+          "condition": "final_approve",
+          "label": "APPROVE_FINAL"
+        },
+        {
+          "id": "e-package-approval-package_approval_needed",
+          "from": "package-approval",
+          "to": "package-approval",
+          "kind": "loop",
+          "condition": "package_approval_needed",
+          "label": "ждёт package"
+        },
+        {
+          "id": "e-package-approval-decision_capture_pending",
+          "from": "package-approval",
+          "to": "capture-knowledge",
+          "kind": "main",
+          "condition": "decision_capture_pending",
+          "label": "записать решение"
+        },
+        {
+          "id": "e-package-approval-package_approve",
+          "from": "package-approval",
+          "to": "prompt-compile",
+          "kind": "main",
+          "condition": "package_approve",
+          "label": "APPROVE_PACKAGE"
+        },
+        {
+          "id": "e-package-approval-package_change_lyrics",
+          "from": "package-approval",
+          "to": "lyrics-write",
+          "kind": "loop",
+          "condition": "package_change_lyrics",
+          "label": "CHANGE_LYRICS"
+        },
+        {
+          "id": "e-package-approval-package_change_production",
+          "from": "package-approval",
+          "to": "sound-design",
+          "kind": "loop",
+          "condition": "package_change_production",
+          "label": "CHANGE_PRODUCTION"
+        },
+        {
+          "id": "e-package-approval-human_stop",
+          "from": "package-approval",
+          "to": "paused",
+          "kind": "branch",
+          "condition": "human_stop",
+          "label": "STOP"
+        },
+        {
+          "id": "e-select-base-base_selection_needed",
+          "from": "select-base",
+          "to": "select-base",
+          "kind": "loop",
+          "condition": "base_selection_needed",
+          "label": "ждёт базу"
+        },
+        {
+          "id": "e-select-base-decision_capture_pending",
+          "from": "select-base",
+          "to": "capture-knowledge",
+          "kind": "main",
+          "condition": "decision_capture_pending",
+          "label": "записать решение"
+        },
+        {
+          "id": "e-select-base-base_select",
+          "from": "select-base",
+          "to": "diagnose-defects",
+          "kind": "main",
+          "condition": "base_select",
+          "label": "SELECT_AS_BASE"
+        },
+        {
+          "id": "e-select-base-base_regenerate",
+          "from": "select-base",
+          "to": "prompt-compile",
+          "kind": "loop",
+          "condition": "base_regenerate",
+          "label": "REGENERATE_BATCH"
+        },
+        {
+          "id": "e-select-base-base_combine_direction",
+          "from": "select-base",
+          "to": "sound-design",
+          "kind": "loop",
+          "condition": "base_combine_direction",
+          "label": "COMBINE_DIRECTION"
+        },
+        {
+          "id": "e-select-base-base_change_lyrics",
+          "from": "select-base",
+          "to": "lyrics-write",
+          "kind": "loop",
+          "condition": "base_change_lyrics",
+          "label": "CHANGE_LYRICS"
+        },
+        {
+          "id": "e-select-base-base_change_production",
+          "from": "select-base",
+          "to": "sound-design",
+          "kind": "loop",
+          "condition": "base_change_production",
+          "label": "CHANGE_PRODUCTION"
+        },
+        {
+          "id": "e-select-base-base_selected_diagnose",
+          "from": "select-base",
+          "to": "diagnose-defects",
+          "kind": "main",
+          "condition": "base_selected_diagnose",
+          "label": "база уже выбрана"
+        },
+        {
+          "id": "e-select-base-human_stop",
+          "from": "select-base",
+          "to": "paused",
+          "kind": "branch",
+          "condition": "human_stop",
+          "label": "STOP"
+        },
+        {
+          "id": "e-revision-escalation-revision_budget_exhausted",
+          "from": "revision-escalation",
+          "to": "revision-escalation",
+          "kind": "loop",
+          "condition": "revision_budget_exhausted",
+          "label": "бюджет"
+        },
+        {
+          "id": "e-revision-escalation-defect_fix_limit_exhausted",
+          "from": "revision-escalation",
+          "to": "revision-escalation",
+          "kind": "loop",
+          "condition": "defect_fix_limit_exhausted",
+          "label": "лимит дефекта"
+        },
+        {
+          "id": "e-revision-escalation-capability_missing",
+          "from": "revision-escalation",
+          "to": "revision-escalation",
+          "kind": "loop",
+          "condition": "capability_missing",
+          "label": "нет операции"
+        },
+        {
+          "id": "e-revision-escalation-comparisons_stagnant",
+          "from": "revision-escalation",
+          "to": "revision-escalation",
+          "kind": "loop",
+          "condition": "comparisons_stagnant",
+          "label": "нет улучшения"
+        },
+        {
+          "id": "e-revision-escalation-revision_rollback_needs_parent",
+          "from": "revision-escalation",
+          "to": "revision-escalation",
+          "kind": "loop",
+          "condition": "revision_rollback_needs_parent",
+          "label": "ждёт родителя"
+        },
+        {
+          "id": "e-revision-escalation-decision_capture_pending",
+          "from": "revision-escalation",
+          "to": "capture-knowledge",
+          "kind": "main",
+          "condition": "decision_capture_pending",
+          "label": "записать решение"
+        },
+        {
+          "id": "e-revision-escalation-revision_accept",
+          "from": "revision-escalation",
+          "to": "final-qc",
+          "kind": "main",
+          "condition": "revision_accept",
+          "label": "ACCEPT_REVISION"
+        },
+        {
+          "id": "e-revision-escalation-revision_retry",
+          "from": "revision-escalation",
+          "to": "plan-revision",
+          "kind": "loop",
+          "condition": "revision_retry",
+          "label": "RETRY_REVISION"
+        },
+        {
+          "id": "e-revision-escalation-revision_rollback",
+          "from": "revision-escalation",
+          "to": "diagnose-defects",
+          "kind": "loop",
+          "condition": "revision_rollback",
+          "label": "ROLLBACK"
+        },
+        {
+          "id": "e-revision-escalation-human_stop",
+          "from": "revision-escalation",
+          "to": "paused",
+          "kind": "branch",
+          "condition": "human_stop",
+          "label": "STOP"
+        },
+        {
+          "id": "e-final-approval-final_approval_needed",
+          "from": "final-approval",
+          "to": "final-approval",
+          "kind": "loop",
+          "condition": "final_approval_needed",
+          "label": "ждёт финал"
+        },
+        {
+          "id": "e-final-approval-decision_capture_pending",
+          "from": "final-approval",
+          "to": "capture-knowledge",
+          "kind": "main",
+          "condition": "decision_capture_pending",
+          "label": "записать решение"
+        },
+        {
+          "id": "e-final-approval-final_request_revision",
+          "from": "final-approval",
+          "to": "diagnose-defects",
+          "kind": "loop",
+          "condition": "final_request_revision",
+          "label": "REQUEST_REVISION"
+        },
+        {
+          "id": "e-final-approval-knowledge_needed",
+          "from": "final-approval",
+          "to": "capture-knowledge",
+          "kind": "main",
+          "condition": "knowledge_needed",
+          "label": "знание трека"
+        },
+        {
+          "id": "e-final-approval-human_stop",
+          "from": "final-approval",
+          "to": "paused",
+          "kind": "branch",
+          "condition": "human_stop",
+          "label": "STOP"
+        },
+        {
+          "id": "e-capture-decision_capture_pending",
+          "from": "capture-knowledge",
+          "to": "capture-knowledge",
+          "kind": "loop",
+          "condition": "decision_capture_pending",
+          "label": "ещё не записано"
+        },
+        {
+          "id": "e-capture-package_approve",
+          "from": "capture-knowledge",
+          "to": "prompt-compile",
+          "kind": "main",
+          "condition": "package_approve",
+          "label": "APPROVE_PACKAGE"
+        },
+        {
+          "id": "e-capture-package_change_lyrics",
+          "from": "capture-knowledge",
+          "to": "lyrics-write",
+          "kind": "main",
+          "condition": "package_change_lyrics",
+          "label": "CHANGE_LYRICS"
+        },
+        {
+          "id": "e-capture-package_change_production",
+          "from": "capture-knowledge",
+          "to": "sound-design",
+          "kind": "main",
+          "condition": "package_change_production",
+          "label": "CHANGE_PRODUCTION"
+        },
+        {
+          "id": "e-capture-base_select",
+          "from": "capture-knowledge",
+          "to": "diagnose-defects",
+          "kind": "main",
+          "condition": "base_select",
+          "label": "SELECT_AS_BASE"
+        },
+        {
+          "id": "e-capture-base_regenerate",
+          "from": "capture-knowledge",
+          "to": "prompt-compile",
+          "kind": "main",
+          "condition": "base_regenerate",
+          "label": "REGENERATE_BATCH"
+        },
+        {
+          "id": "e-capture-base_combine_direction",
+          "from": "capture-knowledge",
+          "to": "sound-design",
+          "kind": "main",
+          "condition": "base_combine_direction",
+          "label": "COMBINE_DIRECTION"
+        },
+        {
+          "id": "e-capture-base_change_lyrics",
+          "from": "capture-knowledge",
+          "to": "lyrics-write",
+          "kind": "main",
+          "condition": "base_change_lyrics",
+          "label": "CHANGE_LYRICS"
+        },
+        {
+          "id": "e-capture-base_change_production",
+          "from": "capture-knowledge",
+          "to": "sound-design",
+          "kind": "main",
+          "condition": "base_change_production",
+          "label": "CHANGE_PRODUCTION"
+        },
+        {
+          "id": "e-capture-revision_accept",
+          "from": "capture-knowledge",
+          "to": "final-qc",
+          "kind": "main",
+          "condition": "revision_accept",
+          "label": "ACCEPT_REVISION"
+        },
+        {
+          "id": "e-capture-revision_retry",
+          "from": "capture-knowledge",
+          "to": "plan-revision",
+          "kind": "main",
+          "condition": "revision_retry",
+          "label": "RETRY_REVISION"
+        },
+        {
+          "id": "e-capture-revision_rollback",
+          "from": "capture-knowledge",
+          "to": "diagnose-defects",
+          "kind": "main",
+          "condition": "revision_rollback",
+          "label": "ROLLBACK"
+        },
+        {
+          "id": "e-capture-final_request_revision",
+          "from": "capture-knowledge",
+          "to": "diagnose-defects",
+          "kind": "main",
+          "condition": "final_request_revision",
+          "label": "REQUEST_REVISION"
+        },
+        {
+          "id": "e-capture-human_stop",
+          "from": "capture-knowledge",
+          "to": "paused",
+          "kind": "branch",
+          "condition": "human_stop",
+          "label": "STOP"
+        }
+      ]
+    },
     "spec": {
       "label": "Spec pipeline (SIHIST)",
       "orchestrator": "spec-orchestrator",
