@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Музыкальный трек</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Музыкальный трек</h1>
+    <p class="lede">Локальный экран одного трека. Аналитический pipeline viewer не используется.</p>
+  </header>
+  <p id="empty-state" hidden>Треков пока нет.</p>
+  <form id="picker">
+    <label for="track-select">Трек</label>
+    <select id="track-select"></select>
+  </form>
+  <p id="error" role="alert"></p>
+  <main id="screen" hidden></main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

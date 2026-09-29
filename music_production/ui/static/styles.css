@@ -1,0 +1,98 @@
+:root {
+  color-scheme: light;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  background: #f4f1ea;
+  color: #1c1915;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 1.5rem;
+}
+
+h1, h2 {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.lede, .hint, .mock-note {
+  color: #4d463c;
+}
+
+#picker, .panel, .ab-card, .decision-form {
+  background: #fffdf8;
+  border: 1px solid #d9d0c3;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.grid, .ab {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 720px) {
+  .ab {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+label, button, select, input, textarea {
+  font: inherit;
+}
+
+button, select, input, textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: #243024;
+  color: #f4f1ea;
+  border: 0;
+  border-radius: 6px;
+}
+
+button:disabled, audio:disabled {
+  opacity: 0.55;
+}
+
+textarea, input, select {
+  padding: 0.45rem;
+  border: 1px solid #b7ad9e;
+  border-radius: 6px;
+  background: white;
+}
+
+#actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+#actions button {
+  width: auto;
+}
+
+#error:empty {
+  display: none;
+}
+
+#error {
+  color: #7a1f1f;
+  background: #f8e8e4;
+  padding: 0.75rem;
+  border-radius: 6px;
+}
+
+.lineage, .history {
+  padding-left: 1.2rem;
+}
+
+.mock-note {
+  font-weight: 600;
+}

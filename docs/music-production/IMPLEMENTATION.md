@@ -223,6 +223,29 @@ AudioAnalyzer проверяет формат/читаемость, длител
 Экран должен показывать выбранный трек, A/B двух версий с синхронным стартом, таймкод дефекта, причину правки, промт/параметры, решения ACCEPT/REJECT/REVISE и поле комментария. Кнопки должны сохранять решение через `DecisionStore` и обновлять состояние; не писать JSON напрямую из браузера. Не добавляй кампании, артистов, поиск идей, аналитику стримов. Проверка: ручной сценарий с mock-аудио, безопасная обработка несуществующего track_id и попытки traversal, восстановление экрана после перезагрузки. Не менять режим аналитического viewer. Покажи diff, скрин и остановись.
 ```
 
+### Локальный UI
+
+Экран Алекса — отдельный процесс, не режим Pipeline Viewer:
+
+```bash
+PYTHONPATH=.:scripts python3 -m music_production.ui \
+  --runs-root Music-runs \
+  --host 127.0.0.1 \
+  --port 8766
+```
+
+Слушается только `127.0.0.1`. Браузер читает `GET /api/tracks` и `GET /api/tracks/{track_id}` и пишет решение только через `POST /api/tracks/{track_id}/decisions` с `X-CSRF-Token`. Сервер вызывает `OrchestrationEngine.record_decision()`, затем ровно один `run_one_step()`, и только если этот шаг — `capture-knowledge`. `run_until_blocked` не вызывается.
+
+POST одного трека сериализуется отдельным `threading.RLock`. Ключ замка — безопасный `track_id`, не путь на диске. Реестр замков закрыт общим lock. Под замком сервер заново читает состояние: существующий `decision_id`, pending decision, `expected_view_token`, гейт и ссылку, затем запись и не больше одного `capture-knowledge`. Тот же ещё не captured payload повторяет только capture. Другие поля того же `decision_id` дают `409 DECISION_CONFLICT` и не перезаписывают `expert-decision.json`. Другой `decision_id` при незавершённом capture даёт `409 DECISION_PENDING`. Устаревший экран даёт `409 STALE_VIEW`.
+
+`Host` принимается только как `127.0.0.1:<port>` или `localhost:<port>` этого процесса. `X-Forwarded-Host` игнорируется. Чужой `Origin` отклоняется даже с верным CSRF; отсутствие `Origin` допустимо для локального клиента с верным CSRF. HTML отдаётся с `Content-Security-Policy`, где script, style и media ограничены `'self'`, а `frame-ancestors` равен `'none'`. `mock://` в политику не входит.
+
+Кнопки показывают русские подписи, а в журнал попадают verdict существующих гейтов (`APPROVE_PACKAGE`, `SELECT_AS_BASE`, `ACCEPT_REVISION`, `APPROVE_FINAL`, `STOP` и остальные из схемы). `ACCEPT` / `REJECT` / `REVISE` не сохраняются. `decided_by` вводит человек.
+
+`GET /api/tracks/{track_id}/audio/{version_id}` принимает только идентификаторы. `mock://` отвечает `AUDIO_NOT_AVAILABLE`: байтов аудио нет, тишина и фиктивный WAV не подставляются. Файл отдаётся только если URI относительный и после resolve остаётся внутри каталога этого трека.
+
+`MockTechnicalQC` на экране подписан: «mock, музыка не анализировалась».
+
 ### Промт 9 — интеграция Suno (только после предоставления договора/API)
 
 ```text
