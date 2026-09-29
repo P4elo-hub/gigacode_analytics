@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/candidate-review.schema.json",
+  "title": "Candidate review",
+  "description": "Agent shortlist only. Human base selection is stored separately.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "track_id", "created_at", "review_id",
+    "generation_request_id", "candidates", "shortlist_candidate_ids"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "review_id": { "type": "string", "minLength": 1 },
+    "generation_request_id": { "type": "string", "minLength": 1 },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id", "assessment", "detected_defects", "recommendation"
+        ],
+        "properties": {
+          "candidate_id": { "type": "string", "minLength": 1 },
+          "assessment": { "type": "string", "minLength": 1 },
+          "detected_defects": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "recommendation": {
+            "type": "string",
+            "enum": ["SHORTLIST", "HOLD", "REJECT"]
+          }
+        }
+      }
+    },
+    "shortlist_candidate_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -19,6 +19,17 @@ orchestrator_owned:
   - final-qc
   - final-approval
 gated_subagents:
+  - music-brief-analyst
+  - music-lyrics-writer
+  - music-lyrics-editor
+  - music-sound-director
+  - music-package-reviewer
+  - music-suno-prompt-compiler
+  - music-candidate-critic
+  - music-defect-diagnostician
+  - music-revision-planner
+  - music-version-comparator
+  - music-knowledge-capturer
 restartable_steps:
   - brief
   - lyrics-write

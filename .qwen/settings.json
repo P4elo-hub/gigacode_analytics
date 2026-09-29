@@ -165,7 +165,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^(context-researcher|routing-analyzer|spec-writer|spec-reviewer|gap-resolver|spec-challenger|challenge-resolver|code-auditor|alignment-resolver|review-capturer|regression-analyst|calibration-proposer|calibration-applier|benchmark-runner)$",
+        "matcher": "^(context-researcher|routing-analyzer|spec-writer|spec-reviewer|gap-resolver|spec-challenger|challenge-resolver|code-auditor|alignment-resolver|review-capturer|regression-analyst|calibration-proposer|calibration-applier|benchmark-runner|music-brief-analyst|music-lyrics-writer|music-lyrics-editor|music-sound-director|music-package-reviewer|music-suno-prompt-compiler|music-candidate-critic|music-defect-diagnostician|music-revision-planner|music-version-comparator|music-knowledge-capturer)$",
         "hooks": [
           {
             "type": "command",

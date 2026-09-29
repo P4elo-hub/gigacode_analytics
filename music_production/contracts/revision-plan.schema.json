@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/revision-plan.schema.json",
+  "title": "Revision plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "track_id", "created_at", "revision_plan_id",
+    "defect_id", "source_version_id", "operation", "objective", "preserve",
+    "capability_required", "status", "blocked_reason"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "revision_plan_id": { "type": "string", "minLength": 1 },
+    "defect_id": { "type": "string", "minLength": 1 },
+    "source_version_id": { "type": "string", "minLength": 1 },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "generate-batch", "regenerate-batch", "replace-section", "extend",
+        "remaster", "extract-stems", "stem-cover"
+      ]
+    },
+    "objective": { "type": "string", "minLength": 1 },
+    "preserve": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "capability_required": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["READY", "BLOCKED"] },
+    "blocked_reason": { "type": ["string", "null"] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "BLOCKED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "blocked_reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  ]
+}

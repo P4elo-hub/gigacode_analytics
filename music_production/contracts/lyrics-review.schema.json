@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/lyrics-review.schema.json",
+  "title": "Lyrics review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "track_id", "created_at", "review_id",
+    "lyrics_version_id", "verdict", "issues"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "review_id": { "type": "string", "minLength": 1 },
+    "lyrics_version_id": { "type": "string", "minLength": 1 },
+    "verdict": { "type": "string", "enum": ["PASS", "REVISE", "BLOCKED"] },
+    "issues": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/issue" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "verdict": { "const": "REVISE" } },
+        "required": ["verdict"]
+      },
+      "then": { "properties": { "issues": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "severity": {
+          "type": "string",
+          "enum": ["INFO", "MINOR", "MAJOR", "CRITICAL"]
+        },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -24,4 +24,5 @@ Human gates (`ask: true`): `package-approval`, `select-base`, `revision-escalati
 
 Сервисные шаги без субагента: `generate-batch`, `execute-edit`, `final-qc`.
 
-`gated_subagents` пуст. SubagentStop matcher этим промтом не меняется.
+`gated_subagents` — одиннадцать music-субагентов шагов. Оркестратор в этот список не входит.
+SubagentStop matcher держит их точные имена рядом с прежними агентами.

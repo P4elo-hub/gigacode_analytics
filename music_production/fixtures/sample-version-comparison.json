@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T15:40:00Z",
+  "comparison_id": "comparison-001",
+  "parent_version_id": "ver-001",
+  "child_version_id": "ver-002",
+  "target_defect_id": "defect-001",
+  "outcome": "ACCEPTED",
+  "target_defect_resolved": true,
+  "protected_elements_preserved": true,
+  "regressions": [],
+  "recommended_current_version_id": "ver-002"
+}

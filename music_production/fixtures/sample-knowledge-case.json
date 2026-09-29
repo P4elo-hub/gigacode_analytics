@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T16:10:00Z",
+  "case_id": "knowledge-case-001",
+  "rule_status": "candidate_rule",
+  "decision_id": "decision-001",
+  "gate": "BASE_SELECTION",
+  "version_before_id": "ver-001",
+  "defect_id": "defect-001",
+  "proposed_action": "replace-section",
+  "prompt_id": "prompt-001",
+  "result_version_id": "ver-001",
+  "verdict": "SELECT_AS_BASE",
+  "decided_by": "Alex",
+  "comment": "База для дальнейших правок.",
+  "captured_at": "2026-09-28T16:10:00Z"
+}

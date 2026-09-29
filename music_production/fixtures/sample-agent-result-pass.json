@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T12:20:00Z",
+  "agent_id": "music-lyrics-writer",
+  "step": "lyrics-write",
+  "outcome": "PASS",
+  "artifact_type": "lyrics",
+  "artifact": {
+    "schema_version": "1.0",
+    "track_id": "track-pilot-001",
+    "created_at": "2026-09-28T12:20:00Z",
+    "lyrics_version_id": "lyrics-001",
+    "language": "ru",
+    "sections": [
+      {
+        "section_id": "verse-1",
+        "section_type": "VERSE",
+        "text": "Ночной поезд везёт меня домой."
+      }
+    ]
+  },
+  "issues": [],
+  "blocked_reason": null
+}

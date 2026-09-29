@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T12:30:00Z",
+  "agent_id": "music-lyrics-editor",
+  "step": "lyrics-review",
+  "outcome": "REVISE",
+  "artifact_type": "lyrics-review",
+  "artifact": {
+    "schema_version": "1.0",
+    "track_id": "track-pilot-001",
+    "created_at": "2026-09-28T12:30:00Z",
+    "review_id": "lyrics-review-001",
+    "lyrics_version_id": "lyrics-001",
+    "verdict": "REVISE",
+    "issues": [
+      {
+        "code": "LYRICS_BREATH",
+        "severity": "MAJOR",
+        "message": "Фраза припева не укладывается в одно дыхание."
+      }
+    ]
+  },
+  "issues": [
+    {
+      "code": "LYRICS_BREATH",
+      "severity": "MAJOR",
+      "message": "Фраза припева не укладывается в одно дыхание."
+    }
+  ],
+  "blocked_reason": null
+}

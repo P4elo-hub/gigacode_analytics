@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T15:10:00Z",
+  "revision_plan_id": "revision-plan-001",
+  "defect_id": "defect-001",
+  "source_version_id": "ver-001",
+  "operation": "replace-section",
+  "objective": "Допеть фразу до конца такта.",
+  "preserve": ["мелодия припева", "текст куплетов"],
+  "capability_required": "replace-section",
+  "status": "READY",
+  "blocked_reason": null
+}

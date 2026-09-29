@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "track_id": "track-pilot-001",
+  "created_at": "2026-09-28T13:10:00Z",
+  "decision_id": "decision-package-001",
+  "gate": "PACKAGE_APPROVAL",
+  "verdict": "APPROVE_PACKAGE",
+  "decided_by": "Alex",
+  "song_package_version_id": "package-001",
+  "comment": "Пакет согласован."
+}

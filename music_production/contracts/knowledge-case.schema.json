@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gigacode.local/music-production/knowledge-case.schema.json",
+  "title": "Candidate knowledge case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "track_id", "created_at", "case_id", "decision_id",
+    "gate", "version_before_id", "defect_id", "proposed_action", "prompt_id",
+    "result_version_id", "verdict", "decided_by", "comment", "captured_at",
+    "rule_status"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "track_id": { "type": "string", "minLength": 1 },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "case_id": { "type": "string", "minLength": 1 },
+    "decision_id": { "type": "string", "minLength": 1 },
+    "gate": {
+      "type": "string",
+      "enum": [
+        "PACKAGE_APPROVAL", "BASE_SELECTION",
+        "REVISION_ESCALATION", "FINAL_APPROVAL"
+      ]
+    },
+    "version_before_id": { "type": ["string", "null"], "minLength": 1 },
+    "defect_id": { "type": ["string", "null"], "minLength": 1 },
+    "proposed_action": { "type": ["string", "null"], "minLength": 1 },
+    "prompt_id": { "type": ["string", "null"], "minLength": 1 },
+    "result_version_id": { "type": ["string", "null"], "minLength": 1 },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "APPROVE_PACKAGE", "CHANGE_LYRICS", "CHANGE_PRODUCTION",
+        "SELECT_AS_BASE", "REGENERATE_BATCH", "COMBINE_DIRECTION",
+        "ACCEPT_REVISION", "RETRY_REVISION", "ROLLBACK",
+        "APPROVE_FINAL", "REQUEST_REVISION", "STOP"
+      ]
+    },
+    "decided_by": { "type": "string", "minLength": 1 },
+    "comment": { "type": ["string", "null"] },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "rule_status": { "const": "candidate_rule" }
+  }
+}
