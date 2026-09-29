@@ -114,6 +114,18 @@ def blocked_envelope(step: str, track_id: str) -> dict:
 
 
 def knowledge_case(decision: dict) -> dict:
+    subject_type = {
+        "PACKAGE_APPROVAL": "SONG_PACKAGE",
+        "BASE_SELECTION": "CANDIDATE",
+        "REVISION_ESCALATION": "REVISION",
+        "FINAL_APPROVAL": "VERSION",
+    }[decision["gate"]]
+    subject_id = (
+        decision.get("song_package_version_id")
+        or decision.get("candidate_id")
+        or decision.get("version_id")
+        or "pending-subject"
+    )
     return {
         "schema_version": "1.0",
         "track_id": decision["track_id"],
@@ -121,6 +133,8 @@ def knowledge_case(decision: dict) -> dict:
         "case_id": f"case-{decision['decision_id']}",
         "decision_id": decision["decision_id"],
         "gate": decision["gate"],
+        "subject_type": subject_type,
+        "subject_id": subject_id,
         "version_before_id": decision.get("version_id"),
         "defect_id": None,
         "proposed_action": None,
@@ -130,6 +144,8 @@ def knowledge_case(decision: dict) -> dict:
         "decided_by": decision["decided_by"],
         "comment": decision.get("comment"),
         "captured_at": NOW,
+        "evidence_refs": [],
+        "technical_facts": [],
         "rule_status": "candidate_rule",
     }
 
@@ -462,6 +478,9 @@ class OrchestrationTest(unittest.TestCase):
         self.assertNotEqual(waiting.state, "PAUSED")
 
         harness.engine.replenish_revision_budget(1, event_id="budget:replenish")
+        plan = fixture("sample-revision-plan.json", harness.track_id)
+        plan["source_version_id"] = base_id
+        harness.engine.handlers._write_artifact("revision-plan", plan)
         retry = harness.decision(
             "decision-retry",
             "REVISION_ESCALATION",

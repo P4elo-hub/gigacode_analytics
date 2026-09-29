@@ -6,6 +6,8 @@
   "rule_status": "candidate_rule",
   "decision_id": "decision-001",
   "gate": "BASE_SELECTION",
+  "subject_type": "CANDIDATE",
+  "subject_id": "candidate-001",
   "version_before_id": "ver-001",
   "defect_id": "defect-001",
   "proposed_action": "replace-section",
@@ -14,5 +16,24 @@
   "verdict": "SELECT_AS_BASE",
   "decided_by": "Alex",
   "comment": "База для дальнейших правок.",
-  "captured_at": "2026-09-28T16:10:00Z"
+  "captured_at": "2026-09-28T16:10:00Z",
+  "evidence_refs": [
+    {
+      "artifact_type": "generation-request",
+      "artifact_id": "prompt-001"
+    },
+    {
+      "artifact_type": "candidate-review",
+      "artifact_id": "candidate-review-001"
+    }
+  ],
+  "technical_facts": [
+    {
+      "code": "shortlist",
+      "source_artifact_type": "candidate-review",
+      "source_artifact_id": "candidate-review-001",
+      "value": true,
+      "unit": null
+    }
+  ]
 }

@@ -1,4 +1,8 @@
-"""Immutable human decisions and the current pending-decision snapshot."""
+"""Canonical human-decision store.
+
+DecisionStore is the only store for human decisions. Do not add a second
+ExpertDecisionStore. Knowledge cases are a separate journal.
+"""
 
 from __future__ import annotations
 

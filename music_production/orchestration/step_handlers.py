@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -17,13 +18,17 @@ from music_production.adapters.capabilities import CapabilityRegistry
 from music_production.adapters.mock_suno import MockSunoAdapter
 from music_production.orchestration.artifact_store import ArtifactStore
 from music_production.orchestration.decisions import DecisionStore
-from music_production.orchestration.errors import StepExecutionError
+from music_production.orchestration.errors import (
+    DecisionConflictError,
+    StepExecutionError,
+)
 from music_production.orchestration.state_store import (
     StateStore,
     atomic_write_json,
     read_json,
     read_jsonl,
     utc_now,
+    validate_document,
 )
 from music_production.runtime.base import AgentRuntime, ArtifactReference
 from music_production.runtime.validation import AGENT_ARTIFACT_TYPES, validate_agent_result
@@ -41,6 +46,24 @@ from music_production.services.version_store import (
 )
 
 INVALID_VERSION_LINEAGE = "INVALID_VERSION_LINEAGE"
+
+KNOWLEDGE_CONTEXT = {
+    "PACKAGE_APPROVAL": ("brief", "package-review", "song-package"),
+    "BASE_SELECTION": ("generation-request", "candidate-review", "candidates"),
+    "REVISION_ESCALATION": (
+        "defect",
+        "revision-plan",
+        "edit-attempt",
+        "version-comparison",
+        "generation-request",
+    ),
+    "FINAL_APPROVAL": (
+        "technical-qc",
+        "version-comparison",
+        "generation-request",
+        "defect",
+    ),
+}
 
 STEP_TO_AGENT = {
     "brief": "music-brief-analyst",
@@ -152,6 +175,8 @@ class StepHandlers:
         track_dir = state_store.track_dir
         self.jobs_path = track_dir / "jobs.json"
         self.knowledge_path = track_dir / "knowledge.json"
+        self.expert_cases_path = track_dir / "expert-cases.jsonl"
+        self.before_knowledge_snapshot: Optional[Callable[[], None]] = None
         self.versions = VersionStore(
             track_dir / "versions.json",
             track_id=track_id,
@@ -270,16 +295,30 @@ class StepHandlers:
         correlation_id = (
             f"{self.track_id}:{step}:{state['state']}:{state['revision_iteration']}"
         )
+        decision = self.decisions.current() if step == "capture-knowledge" else {}
+        if step == "capture-knowledge" and decision:
+            names = list(KNOWLEDGE_CONTEXT.get(str(decision.get("gate")), ()))
+            if self.artifacts.exists("generation-request") and (
+                "generation-request" not in names
+            ):
+                names.append("generation-request")
+            inputs = [
+                ArtifactReference(value=name)
+                for name in names
+                if self.artifacts.exists(name)
+            ]
+        else:
+            inputs = [
+                ArtifactReference(value=name)
+                for name in sorted(self.artifacts.allowed_types())
+                if self.artifacts.exists(name)
+            ]
         result = validate_agent_result(
             self.runtime.run(
                 agent_id=agent_id,
                 step=step,
                 track_id=self.track_id,
-                input_artifacts=[
-                    ArtifactReference(value=name)
-                    for name in sorted(self.artifacts.allowed_types())
-                    if self.artifacts.exists(name)
-                ],
+                input_artifacts=inputs,
                 timeout=30,
                 correlation_id=correlation_id,
             )
@@ -344,6 +383,8 @@ class StepHandlers:
                 )
             raise StepExecutionError("artifact track_id does not match run")
         defer_comparison = step == "compare-versions"
+        if step == "capture-knowledge":
+            return self._capture_decision(artifact, correlation_id)
         if not defer_comparison:
             self._write_artifact(artifact_type, artifact)
         if step == "package-review" and isinstance(artifact.get("song_package"), dict):
@@ -418,8 +459,6 @@ class StepHandlers:
                 return HandlerResult()
             self._write_artifact(artifact_type, artifact)
             self._record_comparison_resolution(artifact)
-        elif step == "capture-knowledge":
-            self._capture_decision(artifact, correlation_id)
         return HandlerResult()
 
     def _jobs(self) -> dict:
@@ -832,29 +871,281 @@ class StepHandlers:
             "cases": [],
         }
 
+    def _evidence(self, artifact_type: str) -> Optional[dict]:
+        artifact_id = self.artifacts.committed_id(artifact_type)
+        if artifact_id is None:
+            return None
+        return {"artifact_type": artifact_type, "artifact_id": artifact_id}
+
+    def _fact(
+        self,
+        code: str,
+        artifact_type: str,
+        value: object,
+        unit: Optional[str] = None,
+    ) -> Optional[dict]:
+        ref = self._evidence(artifact_type)
+        if ref is None:
+            return None
+        return {
+            "code": code,
+            "source_artifact_type": artifact_type,
+            "source_artifact_id": ref["artifact_id"],
+            "value": value,
+            "unit": unit,
+        }
+
+    def _subject(self, decision: Mapping[str, object]) -> Optional[tuple]:
+        gate = str(decision.get("gate") or "")
+        if gate == "PACKAGE_APPROVAL":
+            package = self.artifacts.latest("song-package") or {}
+            version_id = package.get("version_id")
+            if not isinstance(version_id, str) or not version_id:
+                return None
+            return "SONG_PACKAGE", version_id
+        if gate == "BASE_SELECTION":
+            candidate_id = decision.get("candidate_id")
+            candidates = self.artifacts.latest("candidates") or {}
+            found = next(
+                (
+                    item
+                    for item in candidates.get("candidates", [])
+                    if isinstance(item, dict)
+                    and item.get("candidate_id") == candidate_id
+                ),
+                None,
+            )
+            if not isinstance(candidate_id, str) or found is None:
+                return None
+            return "CANDIDATE", candidate_id
+        if gate == "REVISION_ESCALATION":
+            plan = self.artifacts.latest("revision-plan") or {}
+            plan_id = plan.get("revision_plan_id")
+            if not isinstance(plan_id, str) or not plan_id:
+                return None
+            return "REVISION", plan_id
+        if gate == "FINAL_APPROVAL":
+            current = self.state_store.load().get("current_version_id")
+            if not isinstance(current, str) or not current:
+                return None
+            if decision.get("version_id") != current:
+                return None
+            return "VERSION", current
+        return None
+
+    def _assemble_knowledge_case(self, decision: Mapping[str, object]) -> Optional[dict]:
+        """Copy committed facts into a candidate case. Do not invent a rule."""
+
+        subject = self._subject(decision)
+        if subject is None:
+            return None
+        subject_type, subject_id = subject
+        gate = str(decision["gate"])
+        request = self.artifacts.latest("generation-request") or {}
+        defect = self.artifacts.latest("defect") or {}
+        plan = self.artifacts.latest("revision-plan") or {}
+        edit = self.artifacts.latest("edit-attempt") or {}
+        comparison = self.artifacts.latest("version-comparison") or {}
+        qc = self.artifacts.latest("technical-qc") or {}
+        brief = self.artifacts.latest("brief") or {}
+        candidates = self.artifacts.latest("candidates") or {}
+        selected = next(
+            (
+                item
+                for item in candidates.get("candidates", [])
+                if isinstance(item, dict)
+                and item.get("candidate_id") == decision.get("candidate_id")
+            ),
+            None,
+        )
+        prompt_id = request.get("prompt_id") if request else None
+        defect_id = defect.get("id") if defect else None
+        if not isinstance(defect_id, str):
+            defect_id = plan.get("defect_id") or comparison.get("target_defect_id")
+        if not isinstance(defect_id, str):
+            defect_id = None
+        proposed = plan.get("operation") if plan else None
+        version_before = comparison.get("parent_version_id") or edit.get(
+            "parent_version_id"
+        )
+        if not isinstance(version_before, str):
+            version_before = None
+        result_version = None
+        if gate == "BASE_SELECTION" and isinstance(selected, dict):
+            if isinstance(selected.get("version_id"), str):
+                result_version = selected["version_id"]
+        elif gate == "REVISION_ESCALATION":
+            child = comparison.get("child_version_id") or edit.get("child_version_id")
+            if isinstance(child, str):
+                result_version = child
+        elif gate == "FINAL_APPROVAL":
+            result_version = subject_id
+        evidence_names = list(KNOWLEDGE_CONTEXT.get(gate, ()))
+        if request and "generation-request" not in evidence_names:
+            evidence_names.append("generation-request")
+        evidence = [
+            ref
+            for name in evidence_names
+            if (ref := self._evidence(name)) is not None
+        ]
+        facts: list[dict] = []
+        if comparison:
+            for code, value in (
+                ("comparison_outcome", comparison.get("outcome")),
+                ("target_defect_resolved", comparison.get("target_defect_resolved")),
+                (
+                    "protected_elements_preserved",
+                    comparison.get("protected_elements_preserved"),
+                ),
+            ):
+                fact = self._fact(code, "version-comparison", value)
+                if fact is not None and value is not None:
+                    facts.append(fact)
+        if plan and plan.get("capability_required"):
+            capability = str(plan["capability_required"])
+            fact = self._fact("capability_required", "revision-plan", capability)
+            if fact is not None:
+                facts.append(fact)
+            available = self._fact(
+                "capability_available",
+                "revision-plan",
+                self.capabilities.supports(capability),
+            )
+            if available is not None:
+                facts.append(available)
+        budget = brief.get("budget") if isinstance(brief.get("budget"), dict) else {}
+        if gate in {"REVISION_ESCALATION", "FINAL_APPROVAL"} and brief:
+            remaining = self._fact(
+                "revision_budget_remaining",
+                "brief",
+                int(self.state_store.load()["revision_budget_remaining"]),
+                "attempt",
+            )
+            if remaining is not None:
+                facts.append(remaining)
+            if "max_defect_fix_attempts" in budget:
+                limit = self._fact(
+                    "max_defect_fix_attempts",
+                    "brief",
+                    int(budget["max_defect_fix_attempts"]),
+                    "attempt",
+                )
+                if limit is not None:
+                    facts.append(limit)
+        if qc:
+            result_fact = self._fact("qc_result", "technical-qc", qc.get("result"))
+            if result_fact is not None and qc.get("result") is not None:
+                facts.append(result_fact)
+            raw_facts = qc.get("facts")
+            if isinstance(raw_facts, dict):
+                for key, value in sorted(raw_facts.items()):
+                    if not isinstance(key, str):
+                        continue
+                    fact = self._fact(f"qc_{key}", "technical-qc", value)
+                    if fact is not None:
+                        facts.append(fact)
+        stamp = self.clock()
+        comment = decision.get("comment") if "comment" in decision else None
+        return {
+            "schema_version": "1.0",
+            "track_id": self.track_id,
+            "created_at": stamp,
+            "case_id": f"case-{decision['decision_id']}",
+            "decision_id": str(decision["decision_id"]),
+            "gate": gate,
+            "subject_type": subject_type,
+            "subject_id": subject_id,
+            "version_before_id": version_before,
+            "defect_id": defect_id,
+            "proposed_action": proposed if isinstance(proposed, str) else None,
+            "prompt_id": prompt_id if isinstance(prompt_id, str) else None,
+            "result_version_id": result_version,
+            "verdict": decision["verdict"],
+            "decided_by": decision["decided_by"],
+            "comment": comment if isinstance(comment, str) else None,
+            "captured_at": stamp,
+            "evidence_refs": evidence,
+            "technical_facts": facts,
+            "rule_status": "candidate_rule",
+        }
+
+    def _case_facts(self, case: Mapping[str, object]) -> dict:
+        return {
+            key: value
+            for key, value in case.items()
+            if key not in {"created_at", "captured_at"}
+        }
+
+    def _remember_expert_case(self, case: Mapping[str, object]) -> dict:
+        validated = validate_document("knowledge-case", case)
+        existing = next(
+            (
+                item
+                for item in read_jsonl(self.expert_cases_path)
+                if item.get("decision_id") == validated["decision_id"]
+            ),
+            None,
+        )
+        if existing is not None:
+            if self._case_facts(existing) != self._case_facts(validated):
+                raise DecisionConflictError(
+                    f"knowledge case conflict: {validated['decision_id']}"
+                )
+            return existing
+        self.expert_cases_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.expert_cases_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(validated, ensure_ascii=False, sort_keys=True) + "\n"
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        return validated
+
+    def _store_knowledge_snapshot(self, case: Mapping[str, object]) -> None:
+        knowledge = self._knowledge()
+        decision_id = str(case["decision_id"])
+        if decision_id in knowledge["captured_decision_ids"]:
+            return
+        knowledge["cases"].append(copy.deepcopy(dict(case)))
+        knowledge["captured_decision_ids"].append(decision_id)
+        atomic_write_json(
+            self.knowledge_path,
+            _validate_snapshot(knowledge, "cases"),
+        )
+
     def _capture_decision(
         self,
         knowledge_case: Mapping[str, object],
         correlation_id: str,
-    ) -> None:
+    ) -> HandlerResult:
         decision = self.decisions.current()
         if not decision:
-            # Final track knowledge can be captured without another human decision.
-            return
+            return HandlerResult()
         if knowledge_case.get("decision_id") != decision["decision_id"]:
-            raise StepExecutionError("knowledge case decision_id mismatch")
-        clear = self._apply_decision(decision, correlation_id)
-        knowledge = self._knowledge()
-        decision_id = str(decision["decision_id"])
-        if decision_id not in knowledge["captured_decision_ids"]:
-            knowledge["cases"].append(copy.deepcopy(dict(knowledge_case)))
-            knowledge["captured_decision_ids"].append(decision_id)
-            atomic_write_json(
-                self.knowledge_path,
-                _validate_snapshot(knowledge, "cases"),
+            return HandlerResult("BLOCKED", "knowledge case decision_id mismatch")
+        for field in ("gate", "verdict", "decided_by"):
+            if knowledge_case.get(field) != decision.get(field):
+                return HandlerResult(
+                    "BLOCKED",
+                    f"knowledge case changed {field}",
+                )
+        if knowledge_case.get("comment") != decision.get("comment"):
+            return HandlerResult("BLOCKED", "knowledge case changed comment")
+        assembled = self._assemble_knowledge_case(decision)
+        if assembled is None:
+            return HandlerResult(
+                "BLOCKED",
+                "required knowledge subject is not committed",
             )
+        stored = self._remember_expert_case(assembled)
+        if self.before_knowledge_snapshot is not None:
+            self.before_knowledge_snapshot()
+        self._store_knowledge_snapshot(stored)
+        self._write_artifact("knowledge-case", stored)
+        clear = self._apply_decision(decision, correlation_id)
         if clear:
-            self.decisions.clear_current(decision_id)
+            self.decisions.clear_current(str(decision["decision_id"]))
+        return HandlerResult()
 
     def _apply_decision(
         self,

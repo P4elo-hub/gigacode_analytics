@@ -58,13 +58,13 @@ flowchart TD
 
 Агенты в `.gigacode/agents/`: `music-orchestrator`, `music-brief-analyst`, `music-lyrics-writer`, `music-lyrics-editor`, `music-sound-director`, `music-package-reviewer`, `music-suno-prompt-compiler`, `music-candidate-critic`, `music-defect-diagnostician`, `music-revision-planner`, `music-version-comparator`, `music-knowledge-capturer`.
 
-Сервисы: `AgentRuntime`, `GigaCodeRuntimeAdapter`, `LLMProvider` (будущий API-адаптер), `SunoAdapter`/`MockSunoAdapter`, `AudioAnalyzer`, `VersionStore`, `JobRunner`, `BudgetGuard`, `ExpertDecisionStore`, `CapabilityRegistry`. API-операции, аудиоизмерения, файловые записи, retry и лимиты реализуются кодом, не свободным рассуждением агента. Субагент получает строго определенные входные артефакты и пишет один артефакт результата. Каждый skill перечисляет допустимые пути, формат ответа, правила `PASS`/`REVISE`/`BLOCKED` и запрещает выдумывать результат прослушивания, если агент не получил аудио или подтвержденный анализ.
+Сервисы: `AgentRuntime`, `GigaCodeRuntimeAdapter`, `LLMProvider` (будущий API-адаптер), `SunoAdapter`/`MockSunoAdapter`, `AudioAnalyzer`, `VersionStore`, `JobRunner`, `BudgetGuard`, `DecisionStore`, `CapabilityRegistry`. `DecisionStore` — единственное хранилище human decisions; отдельный `ExpertDecisionStore` не создавать. API-операции, аудиоизмерения, файловые записи, retry и лимиты реализуются кодом, не свободным рассуждением агента. Субагент получает строго определенные входные артефакты и пишет один артефакт результата. Каждый skill перечисляет допустимые пути, формат ответа, правила `PASS`/`REVISE`/`BLOCKED` и запрещает выдумывать результат прослушивания, если агент не получил аудио или подтвержденный анализ.
 
 ## 4. Состояние трека и инварианты
 
 Один `track_id` — один каталог `Music-runs/<track_id>/` (в `.gitignore`). Состояния: `NEW`, `BRIEF_READY`, `PACKAGE_READY`, `PACKAGE_APPROVED`, `GENERATING`, `AWAITING_BASE_SELECTION`, `REVISING`, `FINAL_QC`, `AWAITING_FINAL_APPROVAL`, `APPROVED`, `PAUSED`, `FAILED`. Состояние отражает последнюю завершенную операцию, а не надежду на результат. Переходы определяются наличием валидных артефактов и полями состояния; не использовать только `mtime`.
 
-Минимальные артефакты: `brief.json`, `lyrics.json`, `sound-direction.json`, `song-package.json`, `generation-request.json`, `track-state.json`, `versions.json`, `defects.json`, `decisions.jsonl`, `jobs.jsonl`, `expert-cases.jsonl`, `audio/` или идентификаторы объектов хранилища. Каждый результат должен иметь `schema_version`, `track_id`, `created_at` и ссылки на входные версии. История версий immutable: `version_id`, `parent_version_id`, `operation`, `provider_job_id` (если есть), `prompt_id`, `audio_uri`, `checksum`, `status`. `current_version_id` может переключаться только после принятого сравнения или явного решения Алекса. Отклоненная версия остается в истории.
+Минимальные артефакты: `brief.json`, `lyrics.json`, `sound-direction.json`, `song-package.json`, `generation-request.json`, `track-state.json`, `versions.json`, `defects.json`, `decisions.jsonl`, `jobs.jsonl`, `knowledge.json`, `expert-cases.jsonl`, `audio/` или идентификаторы объектов хранилища. `knowledge.json` — текущий snapshot и индекс захваченных `decision_id`. `expert-cases.jsonl` — неизменяемый журнал knowledge cases, по одной строке на решение. `decisions.jsonl` остаётся журналом human decisions и не дублируется вторым decision store. Каждый результат должен иметь `schema_version`, `track_id`, `created_at` и ссылки на входные версии. История версий immutable: `version_id`, `parent_version_id`, `operation`, `provider_job_id` (если есть), `prompt_id`, `audio_uri`, `checksum`, `status`. `current_version_id` может переключаться только после принятого сравнения или явного решения Алекса. Отклоненная версия остается в истории.
 
 `defect`: id, `version_id`, начало и конец фрагмента, категория, важность, диагноз, что сохранить, желаемое изменение и status. `revision-plan`: ровно один основной дефект или совместимая группа, выбранная операция, входная версия, инструкция, защищенные свойства, лимит попыток. `version-comparison`: целевой дефект, улучшение/ухудшение, новые дефекты, выбранный исход и обоснование. Решение Алекса всегда содержит его собственный verdict и ссылку на кандидата или версию; агент не может редактировать его задним числом.
 
@@ -201,12 +201,26 @@ AudioAnalyzer проверяет формат/читаемость, длител
 Проверки: отсутствие ответа оставляет PAUSED/awaiting; APPROVE после чистого QC завершает граф; REVISE возвращает к дефекту; двойная доставка одного решения не дублирует кейс; экспертные заметки не теряются. Выведи один mock end-to-end trace с путем по графу, но не выдавай его за реальную оценку музыки. Покажи diff и остановись.
 ```
 
+### Принятое состояние Промта 7
+
+Промт 7 закрыт текущим контуром. Эти правила главнее устаревших имён в тексте промта выше:
+
+- `DecisionStore` — каноническое и единственное хранилище human decisions. `decisions.jsonl` не заменяется.
+- Отдельный `ExpertDecisionStore` запрещён.
+- Поддерживаются все четыре human gate: `PACKAGE_APPROVAL`, `BASE_SELECTION`, `REVISION_ESCALATION`, `FINAL_APPROVAL`.
+- Отсутствие ответа означает `WAITING_FOR_HUMAN`, а не `PAUSED`.
+- `PAUSED` наступает только после verdict `STOP`.
+- `knowledge.json` — текущий snapshot и индекс `captured_decision_ids`.
+- `expert-cases.jsonl` — неизменяемый журнал knowledge cases.
+- Один кейс не меняет active agents или skills.
+- Promotion `candidate_rule` в `active_rule` в Промт 7 не входит. `rule_status` остаётся `candidate_rule`.
+
 ### Промт 8 — рабочий экран Алекса (после сквозного mock)
 
 ```text
 Задача только: создать минимальный локальный экран музыкального трека после успешного mock end-to-end. Сначала изучи pipeline-viewer/server.py и существующий UI, а также API/artifact contracts музыкального pack. Покажи план точных файлов до правок. Если музыкальные аудиофайлы нельзя обслуживать без небезопасной раздачи путей, предложи отдельный localhost endpoint с проверкой track_id/version_id и allowlist, без произвольного path-параметра. Не подключай внешний сервис.
 
-Экран должен показывать выбранный трек, A/B двух версий с синхронным стартом, таймкод дефекта, причину правки, промт/параметры, решения ACCEPT/REJECT/REVISE и поле комментария. Кнопки должны сохранять решение через ExpertDecisionStore и обновлять состояние; не писать JSON напрямую из браузера. Не добавляй кампании, артистов, поиск идей, аналитику стримов. Проверка: ручной сценарий с mock-аудио, безопасная обработка несуществующего track_id и попытки traversal, восстановление экрана после перезагрузки. Не менять режим аналитического viewer. Покажи diff, скрин и остановись.
+Экран должен показывать выбранный трек, A/B двух версий с синхронным стартом, таймкод дефекта, причину правки, промт/параметры, решения ACCEPT/REJECT/REVISE и поле комментария. Кнопки должны сохранять решение через `DecisionStore` и обновлять состояние; не писать JSON напрямую из браузера. Не добавляй кампании, артистов, поиск идей, аналитику стримов. Проверка: ручной сценарий с mock-аудио, безопасная обработка несуществующего track_id и попытки traversal, восстановление экрана после перезагрузки. Не менять режим аналитического viewer. Покажи diff, скрин и остановись.
 ```
 
 ### Промт 9 — интеграция Suno (только после предоставления договора/API)

@@ -262,6 +262,30 @@ class ArtifactStore:
     def exists(self, artifact_type: str) -> bool:
         return self.latest(artifact_type) is not None
 
+    def committed_id(self, artifact_type: str) -> Optional[str]:
+        """Identifier of the latest committed artifact, or None if invalidated."""
+
+        if artifact_type not in self.allowed_types():
+            raise UnknownArtifactTypeError(artifact_type)
+        for event in reversed(read_jsonl(self.events_path)):
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            if (
+                payload.get("type") == "artifact-written"
+                and payload.get("artifact_type") == artifact_type
+            ):
+                artifact_id = payload.get("artifact_id")
+                if isinstance(artifact_id, str) and self.path_for(
+                    artifact_type, artifact_id
+                ).is_file():
+                    return artifact_id
+            if payload.get("type") == "artifacts-invalidated":
+                names = payload.get("artifact_types")
+                if isinstance(names, list) and artifact_type in names:
+                    return None
+        return None
+
 
 def resolve_committed_artifact(track_dir: Path, artifact_type: str) -> Optional[Path]:
     """Resolve one indexed artifact; never fall back to legacy flat paths."""

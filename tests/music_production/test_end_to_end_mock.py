@@ -83,6 +83,9 @@ class Prompt6EndToEndMockTest(unittest.TestCase):
         self.assertEqual(waiting.state, "REVISING")
         self.assertNotEqual(waiting.state, "PAUSED")
 
+        plan = fixture("sample-revision-plan.json", harness.track_id)
+        plan["source_version_id"] = base_id
+        harness.engine.handlers._write_artifact("revision-plan", plan)
         stop = harness.decision(
             "decision-stop-after-exhaustion",
             "REVISION_ESCALATION",

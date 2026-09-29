@@ -5,6 +5,8 @@
   "case_id": "knowledge-case-invalid",
   "decision_id": "decision-001",
   "gate": "BASE_SELECTION",
+  "subject_type": "CANDIDATE",
+  "subject_id": "candidate-001",
   "version_before_id": null,
   "defect_id": null,
   "proposed_action": null,
@@ -14,5 +16,7 @@
   "decided_by": "Alex",
   "comment": null,
   "captured_at": "2026-09-28T16:10:00Z",
+  "evidence_refs": [],
+  "technical_facts": [],
   "rule_status": "active_rule"
 }
