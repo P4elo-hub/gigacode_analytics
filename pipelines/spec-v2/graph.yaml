@@ -166,10 +166,10 @@ edges:
     from: analyze-routing
     to: spec-reviewer
     kind: branch
-    condition: has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp
-    condition_label: "SPEC есть, и после последней правки ещё не было успешного check-feature ( исключение - правка была совершена самим check-feature - тогда не нужно повторно идти в этот же шаг)"
+    condition: has_idti_v_check_feature_spec_reviewer_tolko_esli_spec_b
+    condition_label: "Идти в check-feature/spec-reviewer только если SPEC был изменен после последнего успешного check-feature внешним шагом.  Не идти в check-feature/spec-reviewer, если последняя правка SPEC была сделана самим check-feature/spec-reviewer в рамках его успешного запуска."
     condition_labels:
-      has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp: "SPEC есть, и после последней правки ещё не было успешного check-feature ( исключение - правка была совершена самим check-feature - тогда не нужно повторно идти в этот же шаг)"
+      has_idti_v_check_feature_spec_reviewer_tolko_esli_spec_b: "Идти в check-feature/spec-reviewer только если SPEC был изменен после последнего успешного check-feature внешним шагом.  Не идти в check-feature/spec-reviewer, если последняя правка SPEC была сделана самим check-feature/spec-reviewer в рамках его успешного запуска."
   - id: e-ar-done
     from: analyze-routing
     to: done

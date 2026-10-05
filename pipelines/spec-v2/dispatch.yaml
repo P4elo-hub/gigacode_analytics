@@ -13,7 +13,7 @@ rules:
   - when: has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh
     priority: 170
     next: spec-writer
-  - when: has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp
+  - when: has_idti_v_check_feature_spec_reviewer_tolko_esli_spec_b
     priority: 180
     next: spec-reviewer
   - when: has_v_decisions_est_needs_answer_s_relates_na_gap_open_g

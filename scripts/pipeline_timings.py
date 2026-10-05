@@ -63,8 +63,17 @@ def _resolve_pack_step(schema: dict, *, step: str | None = None, subagent: str |
 def _archived_passes(root: Path, slug: str, schema: dict) -> list[dict]:
     """Timings from agent-logs/subagent-passes.jsonl (archived Qwen meta)."""
     rows = load_archived_passes(root, slug)
+    manifest = load_manifest(root, slug)
+    allowed_sessions = {
+        str(session)
+        for session in (manifest.get("timing_sessions") or [])
+        if session
+    }
     passes: list[dict] = []
     for row in rows:
+        session_id = row.get("session_id")
+        if allowed_sessions and str(session_id or "") not in allowed_sessions:
+            continue
         step = _resolve_pack_step(
             schema,
             step=row.get("step"),

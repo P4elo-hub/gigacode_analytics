@@ -22,6 +22,7 @@ from pack_authoring_api import (  # noqa: E402
     collectors_is_generic_overlay,
     invent_condition_id,
     overlay_collectors_text,
+    stub_graph_whens,
     validate_assembled,
 )
 from pipeline_edge_conditions import (  # noqa: E402
@@ -262,6 +263,45 @@ class CodegenSmokeUniversalityTest(unittest.TestCase):
                     edge_ids.append(item if isinstance(item, str) else (item or {}).get("id"))
             self.assertNotIn(beta_id, edge_ids)
             self.assertTrue(any("999" in n or "таблица" in n or "удал" in n for n in notes2), notes2)
+
+    def test_changed_arrow_text_rewrites_routing_condition(self) -> None:
+        cond = "has_alpha"
+        old = "нужен шаг альфа"
+        new = "нужен шаг альфа (исключение — не повторять шаг)"
+        payload = {
+            "graph": {
+                "nodes": [],
+                "edges": [
+                    {
+                        "id": "e-alpha",
+                        "from": "analyze-routing",
+                        "to": "step-alpha",
+                        "condition": cond,
+                        "condition_label": new,
+                    }
+                ],
+            },
+            "routing_conditions": {
+                "status_fields": {cond: {"type": "bool", "instruction": old}},
+                "edge_conditions": {
+                    cond: {
+                        "expr": {"field": cond, "op": "truthy"},
+                        "dispatch": {"priority": 180, "next": "step-alpha"},
+                        "label": old,
+                        "reason": old,
+                    }
+                },
+            },
+            "dispatch": {"rules": [{"priority": 180, "when": cond, "next": "step-alpha"}]},
+        }
+        stub_graph_whens(payload)
+        spec = payload["routing_conditions"]["edge_conditions"][cond]
+        self.assertEqual(spec["label"], new)
+        self.assertEqual(spec["reason"], new)
+        self.assertEqual(spec["expr"], {"field": cond, "op": "truthy"})
+        self.assertEqual(spec["dispatch"], {"priority": 180, "next": "step-alpha"})
+        self.assertEqual(payload["routing_conditions"]["status_fields"][cond]["instruction"], new)
+        self.assertEqual(payload["dispatch"]["rules"][0]["priority"], 180)
 
 
 if __name__ == "__main__":

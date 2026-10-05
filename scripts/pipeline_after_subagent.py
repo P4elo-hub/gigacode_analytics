@@ -20,6 +20,7 @@ from pipeline_active_task import (
     SKIP_SUBAGENTS,
     clear_active_task,
     load_active_task_latest,
+    save_active_task,
     write_cycle_still_open,
 )
 from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, workspace_root_for_run
@@ -84,6 +85,12 @@ def infer_run_outcome(hook_input: dict) -> str:
 def infer_result(last_message: str) -> str:
     """Compatibility: message text is not quality. Timeout-in-prose is still finished."""
     return infer_run_outcome({"last_assistant_message": last_message})
+
+
+def requested_ask_parent(hook_input: dict) -> bool:
+    """True when a resolver explicitly paused for parent/user answers."""
+    message = str(hook_input.get("last_assistant_message") or "")
+    return "ASK_PARENT" in message
 
 
 def resolve_step(schema: dict, *, step: str | None, subagent: str) -> str | None:
@@ -322,11 +329,29 @@ def after_subagent(
     report = validate_slug(root, slug, pipeline=pipeline_id)
     save_validation(root, slug, report)
 
-    keep_active = write_cycle_still_open(root, slug, active)
+    ask_continuation = result == "ok" and requested_ask_parent(hook_input)
+    if ask_continuation:
+        save_active_task(
+            root,
+            slug=slug,
+            step=step,
+            subagent=subagent,
+            cli=cli,
+            pipeline=pipeline_id,
+            persistent=True,
+            continuation="ask_user",
+        )
+    keep_active = ask_continuation or write_cycle_still_open(root, slug, active)
     if not keep_active:
         clear_active_task(root, slug)
 
     context = format_hook_context(report, step=step, subagent=subagent, result=result)
+    if ask_continuation:
+        context += (
+            "\nASK_PARENT continuation recorded: ask the user, write DECISIONS "
+            "as pending-apply/deferred, then run pipeline_delegate.py; it will "
+            "resume this same step before analyze-routing."
+        )
     if routing_sync_note:
         context += routing_sync_note
     if sync_note:

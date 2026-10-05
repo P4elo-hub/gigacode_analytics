@@ -125,6 +125,7 @@ def save_active_task(
     pipeline: str | None = None,
     session: str = "",
     persistent: bool = False,
+    continuation: str = "",
 ) -> dict:
     root = root.resolve()
     if not pipeline:
@@ -151,6 +152,7 @@ def save_active_task(
         "session": session or None,
         "started_at": started_at,
         "persistent": persistent or None,
+        "continuation": continuation or None,
     }
     payload = {k: v for k, v in payload.items() if v is not None}
     path = active_task_path(root)

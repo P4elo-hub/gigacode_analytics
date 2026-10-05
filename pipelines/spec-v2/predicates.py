@@ -28,7 +28,7 @@ _REASONS = {
         "решения по GAP уже есть — нужно применить в SPEC"
     ),
     "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp": (
-        "SPEC есть, и после последней правки ещё не было успешного check-feature"
+        "SPEC есть, и после последней правки ещё не было успешного check-feature ( исключение - правка была совершена самим check-feature - тогда не нужно повторно идти в этот же шаг)"
     ),
     "has_v_alignment_est_critical_major_raskhozhdeniya_otchet": (
         "в ALIGNMENT есть Critical/Major расхождения, отчёт свежий, "

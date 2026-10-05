@@ -283,7 +283,7 @@
           "next": "spec-writer"
         },
         {
-          "when": "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
+          "when": "has_idti_v_check_feature_spec_reviewer_tolko_esli_spec_b",
           "priority": 180,
           "next": "spec-reviewer"
         },
@@ -504,6 +504,7 @@
       "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
       "has_est_fail_challenges_i_challenges_open_0",
       "has_faila_slug_challenges_md_eshche_net_gaps_zakryty_che",
+      "has_idti_v_check_feature_spec_reviewer_tolko_esli_spec_b",
       "has_kontekst_uzhe_est_a_feature_writing_slug_slug_md_esh",
       "has_main",
       "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili",
@@ -512,7 +513,6 @@
       "has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec",
       "has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec",
       "has_routing_state",
-      "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
       "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
       "has_v_decisions_est_needs_answer_s_relates_na_ch",
       "has_v_decisions_est_needs_answer_s_relates_na_gap_open_g",

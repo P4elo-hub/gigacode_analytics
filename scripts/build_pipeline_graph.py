@@ -22,7 +22,11 @@ from pipeline_divergence import (
     filter_divergence_for_restart,
     finalize_divergence,
 )
-from pipeline_active_task import feature_active_task_path, load_active_task_for_slug
+from pipeline_active_task import (
+    feature_active_task_path,
+    load_active_task_for_slug,
+    write_cycle_still_open,
+)
 from pipeline_common import pipeline_step_order, subagent_for_step
 from pipeline_dispatch import build_dispatch
 from pipeline_runtime import DEFAULT_PIPELINE_ID, dispatch_supported
@@ -528,6 +532,49 @@ def infer_active_subagent(events: list[dict]) -> dict | None:
     }
 
 
+def infer_active_task(
+    active_task: dict | None,
+    schema: dict,
+    *,
+    pipeline_id: str,
+    idle_seconds: int = SESSION_IDLE_SECONDS,
+    now: datetime | None = None,
+    allow_stale_persistent: bool = False,
+) -> dict | None:
+    """Fallback live state from delegate marker when telemetry sync lags."""
+    if not active_task or active_task.get("dry_run"):
+        return None
+    if active_task.get("continuation") == "ask_user":
+        return None
+    raw_pipeline = active_task.get("pipeline") or active_task.get("pipeline_id")
+    if raw_pipeline and str(raw_pipeline) != pipeline_id:
+        return None
+
+    step = str(active_task.get("step") or "")
+    if step not in schema_step_ids(schema):
+        return None
+
+    started_at = parse_iso_ts(active_task.get("started_at") or active_task.get("ts"))
+    if not started_at:
+        return None
+    reference = now or datetime.now(timezone.utc)
+    age = (reference - started_at).total_seconds()
+    if age < 0 or (age >= idle_seconds and not allow_stale_persistent):
+        return None
+
+    return {
+        "subagent": active_task.get("subagent"),
+        "description": (
+            "persistent active-task marker"
+            if allow_stale_persistent and age >= idle_seconds
+            else "active-task marker (telemetry sync pending)"
+        ),
+        "ts": active_task.get("started_at") or active_task.get("ts"),
+        "step": step,
+        "source": "active-task",
+    }
+
+
 def subagent_to_step(schema: dict, subagent: str | None) -> str | None:
     if not subagent:
         return None
@@ -736,6 +783,38 @@ def build_timeline(history: list[dict]) -> list[dict]:
     return timeline
 
 
+def mark_running_timeline(timeline: list[dict], current: dict | None) -> None:
+    """Show the currently running subagent on the factual graph before run-log closes it."""
+    if not current or current.get("status") != "running":
+        return
+    step = current.get("step") or ""
+    if not step:
+        return
+    since = current.get("since") or ""
+    for row in reversed(timeline):
+        if row.get("step") == step and since and row.get("ts") == since:
+            row["display_state"] = STATE_ACTIVE
+            row["active"] = True
+            return
+
+    pass_no = 1 + sum(1 for row in timeline if row.get("step") == step)
+    timeline.append(
+        {
+            "ts": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "started_at": since or None,
+            "step": step,
+            "subagent": current.get("subagent"),
+            "result": STATE_ACTIVE,
+            "display_state": STATE_ACTIVE,
+            "source": current.get("source") or "current",
+            "note": current.get("note"),
+            "active": True,
+            "seq": len(timeline) + 1,
+            "pass": pass_no,
+        }
+    )
+
+
 def mark_superseded_passes(timeline: list[dict]) -> None:
     """Earlier fail/retry on the same step superseded by a later ok pass (hook false fail)."""
     by_step: dict[str, list[dict]] = {}
@@ -890,6 +969,7 @@ def tag_timeline_divergences(timeline: list[dict], items: list[dict]) -> None:
 
 
 MERGE_SPAWN_WINDOW_SEC = 600
+DUPLICATE_STAMP_WINDOW_SEC = 2.0
 
 
 def _match_spawn_run_log(
@@ -987,6 +1067,55 @@ def merge_history(run_log: list[dict], spawn_rows: list[dict]) -> list[dict]:
     return merged
 
 
+def _is_bare_run_log_stamp(row: dict) -> bool:
+    """Hook stamp without synced agent metadata; richer row nearby represents the same pass."""
+    if (row.get("source") or "run-log") not in {"run-log", "merged"}:
+        return False
+    metadata_keys = ("call_id", "started_at", "ended_at", "duration_sec")
+    return not any(row.get(key) for key in metadata_keys)
+
+
+def _is_richer_pass_row(row: dict) -> bool:
+    if (row.get("source") or "") not in {"merged", "session-sync"}:
+        return False
+    metadata_keys = ("call_id", "started_at", "ended_at", "duration_sec", "note")
+    return any(row.get(key) for key in metadata_keys)
+
+
+def _rows_are_duplicate_stamps(left: dict, right: dict) -> bool:
+    if left.get("step") != right.get("step"):
+        return False
+    if (left.get("result") or "ok") != (right.get("result") or "ok"):
+        return False
+    left_ts = parse_iso_ts(left.get("ts"))
+    right_ts = parse_iso_ts(right.get("ts"))
+    if not left_ts or not right_ts:
+        return False
+    delta = abs((left_ts - right_ts).total_seconds())
+    return delta <= DUPLICATE_STAMP_WINDOW_SEC
+
+
+def dedupe_run_log_stamps(history: list[dict]) -> list[dict]:
+    """Drop duplicate bare run-log stamps next to synced subagent rows.
+
+    SubagentStop can write a minimal run-log row, and the session sync can append
+    the same pass with call_id/duration. Counting both inflates viewer ×N.
+    """
+    drop_indexes: set[int] = set()
+    for index, row in enumerate(history):
+        if not _is_bare_run_log_stamp(row):
+            continue
+        for other_index, other in enumerate(history):
+            if index == other_index or not _is_richer_pass_row(other):
+                continue
+            if _rows_are_duplicate_stamps(row, other):
+                drop_indexes.add(index)
+                break
+    if not drop_indexes:
+        return history
+    return [row for index, row in enumerate(history) if index not in drop_indexes]
+
+
 def _find_edge(schema: dict, src: str, dst: str) -> dict | None:
     for edge in schema.get("edges", []):
         if edge.get("from") == src and edge.get("to") == dst:
@@ -1049,6 +1178,7 @@ def build_graph(
             build_calibration_artifact_history(root, slug, cal_run_id) if cal_run_id else []
         )
         history = merge_calibration_history(run_log_cal, spawn_rows, artifact_rows)
+    history = dedupe_run_log_stamps(history)
     log_history = history_closed_in_run_log(history)
     node_states, traversed = apply_history(schema, log_history)
     nodes = layout_nodes([dict(n) for n in schema["nodes"]], pipe_name)
@@ -1160,13 +1290,27 @@ def build_graph(
     active = infer_active_subagent(events) if live else None
     active_step: str | None = None
     if active:
-        active_step = subagent_to_step(schema, active.get("subagent"))
+        active_step = active.get("step") or subagent_to_step(schema, active.get("subagent"))
         if pipe_name == "calibration" and not active_step:
             active = None
         elif active_step and spawn_superseded_by_run_log(
             history, active_step, active.get("ts")
         ):
             active = None
+    if not active:
+        persistent_open = False
+        if task_for_slug and task_for_slug.get("persistent"):
+            try:
+                persistent_open = write_cycle_still_open(root, slug, task_for_slug)
+            except Exception:
+                persistent_open = False
+        active = infer_active_task(
+            task_for_slug,
+            schema,
+            pipeline_id=pipe_name,
+            allow_stale_persistent=persistent_open,
+        )
+        active_step = active.get("step") if active else None
 
     running_step: str | None = None
     if active and active_step and active_step in node_states:
@@ -1241,6 +1385,8 @@ def build_graph(
                 "ts": last_log.get("ts"),
                 "note": note,
             }
+
+    mark_running_timeline(timeline, current)
 
     for node in nodes:
         node["state"] = node_states.get(node["id"], STATE_PENDING)

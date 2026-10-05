@@ -10,7 +10,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from pipeline_after_subagent import infer_result, infer_run_outcome  # noqa: E402
+from pipeline_after_subagent import infer_result, infer_run_outcome, requested_ask_parent  # noqa: E402
 
 
 class InferResultTest(unittest.TestCase):
@@ -28,6 +28,18 @@ class InferResultTest(unittest.TestCase):
 
     def test_empty_message_is_finished(self) -> None:
         self.assertEqual(infer_result(""), "ok")
+
+    def test_ask_parent_is_continuation_signal(self) -> None:
+        self.assertTrue(
+            requested_ask_parent(
+                {
+                    "last_assistant_message": (
+                        "ASK_PARENT\nD-13, D-14 со статусом needs-answer"
+                    )
+                }
+            )
+        )
+        self.assertFalse(requested_ask_parent({"last_assistant_message": "applied"}))
 
 
 if __name__ == "__main__":

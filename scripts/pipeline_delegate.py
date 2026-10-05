@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from artifact_paths import resolve_slug
-from pipeline_active_task import save_active_task
+from pipeline_active_task import load_active_task_for_slug, save_active_task
 from inner_cycle import (
     ACTION_DONE,
     close_cycle_cell,
@@ -23,7 +23,7 @@ from inner_cycle import (
     is_cycle_mode,
     next_cycle_at,
 )
-from pipeline_common import subagent_for_step, write_cycle_config
+from pipeline_common import step_to_command, subagent_for_step, write_cycle_config
 from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
 from pipeline_pack import (
@@ -57,6 +57,7 @@ def _active_task_payload(
     cli: str,
     pipeline: str,
     persistent: bool = False,
+    continuation: str = "",
     dry_run: bool = False,
 ) -> dict:
     if dry_run:
@@ -70,6 +71,8 @@ def _active_task_payload(
         }
         if persistent:
             payload["persistent"] = True
+        if continuation:
+            payload["continuation"] = continuation
         return payload
     return save_active_task(
         root,
@@ -79,7 +82,35 @@ def _active_task_payload(
         cli=cli,
         pipeline=pipeline,
         persistent=persistent,
+        continuation=continuation,
     )
+
+
+def _ask_continuation_task(root: Path, slug: str, pipeline_id: str) -> dict | None:
+    """Return a pending ask continuation, if the user has already answered it.
+
+    `ask_user` is an in-step pause: after the parent writes pending-apply, the
+    same resolver should resume before normal routing/analyze-routing.
+    """
+    active = load_active_task_for_slug(root, slug)
+    if not active or active.get("continuation") != "ask_user":
+        return None
+    if (active.get("pipeline") or active.get("pipeline_id")) != pipeline_id:
+        return None
+    step = str(active.get("step") or "")
+    subagent = str(active.get("subagent") or "")
+    if not step or not subagent:
+        return None
+    return {
+        "step": step,
+        "subagent": subagent,
+        "task": {
+            "subagent_type": subagent,
+            "run_in_background": False,
+            "step": step,
+        },
+        "active_task": active,
+    }
 
 
 def build_delegate(
@@ -151,6 +182,28 @@ def build_delegate(
             }
         return payload
 
+    continuation = _ask_continuation_task(root, slug, pipe_id)
+    if continuation and mode != "ask_user":
+        payload["dispatch"] = {
+            **dispatch,
+            "next_step": continuation["step"],
+            "next_command": step_to_command(continuation["step"], slug),
+            "next_subagent": continuation["subagent"],
+            "next_reason": "ask_user continuation: resume source step before routing",
+            "orchestrator_mode": "delegate",
+            "task": continuation["task"],
+        }
+        payload["action"] = "task"
+        payload["task"] = continuation["task"]
+        payload["active_task"] = continuation["active_task"]
+        payload["instruction"] = (
+            "Продолжение ask_user: пользователь уже ответил, поэтому НЕ вызывай "
+            "`analyze-routing` / `pipeline_delegate.py` повторно. Сразу `task` → "
+            f"`{continuation['subagent']}` (step `{continuation['step']}`, apply). "
+            "После возврата apply — снова `pipeline_delegate.py`."
+        )
+        return payload
+
     if mode == "stopped" or not next_step:
         payload["action"] = "stopped"
         payload["instruction"] = dispatch.get("next_reason") or "Пайплайн остановлен."
@@ -170,6 +223,7 @@ def build_delegate(
                 cli=cli,
                 pipeline=pipe_id,
                 persistent=True,
+                continuation="ask_user",
                 dry_run=dry_run,
             )
             payload["task"] = {

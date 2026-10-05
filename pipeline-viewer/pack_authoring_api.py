@@ -1135,13 +1135,18 @@ def _apply_codegen_stubs(payload: dict, missing_edges: list[dict]) -> list[str]:
                 }
                 notes.append(f"edge_conditions.{cond_id} P{pri} → {outcome or nxt}")
             else:
-                # Do not overwrite existing expr
+                # expr и dispatch не трогаем. Текст стрелки — источник подписи.
                 spec = conditions[cond_id]
-                if isinstance(spec, dict):
-                    if not spec.get("label"):
-                        spec["label"] = instruction
-                    if not spec.get("reason"):
-                        spec["reason"] = instruction
+                text = str(instruction or "").strip()
+                if isinstance(spec, dict) and text and text != cond_id:
+                    if spec.get("label") != text:
+                        spec["label"] = text
+                        notes.append(f"edge_conditions.{cond_id}: подпись со стрелки")
+                    if spec.get("reason") != text:
+                        spec["reason"] = text
+                    field = fields.get(cond_id)
+                    if isinstance(field, dict) and str(field.get("instruction") or "") != text:
+                        field["instruction"] = text
 
             if cond_id not in have_when:
                 spec = conditions.get(cond_id) if isinstance(conditions.get(cond_id), dict) else {}
