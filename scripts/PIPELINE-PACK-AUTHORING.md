@@ -81,6 +81,7 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 | `minimal` | none (like `pack_smoke/minimal`) | `only-step` orchestrator-owned | PASS (YAML) |
 | `orchestrator-only` | none + fallback copy | `first-step` orchestrator-owned | PASS (YAML) |
 | `full-dispatch` | one rule `not_has_main` → `first-step` | same, plus `status.artifacts.main` | PASS (YAML; core `when:` from artifact) |
+| `routing-state` | routing-state refresh + `not_has_main` | `analyze-routing` + `first-step` | PASS (YAML; generic routing-state overlay) |
 
 `--init-pack` сам проверяет YAML (это не CLI `--check`). Generated JSON
 появляется только после `--apply`. До `--apply` CLI `--check` покажет
@@ -184,6 +185,10 @@ PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec-v
 `--init-pack <id> --template routing-state` adds `analyze-routing`, `routing_conditions.yaml`
 stub, overlay collector, and P5 `routing_state_needs_refresh`. `--from-json` with
 `status.collector_mode: routing_state` gets the same stub if `routing_conditions` is missing.
+The template is intentionally pack-neutral: `routing_state` starts at
+`{task_id}/routing-state.json`, and `stale_vs` uses existing pack artifacts (`main`
+for the stock template, empty if none exist). After init, change `status.artifacts.*.path`
+and `routing_conditions.stale_vs` to the pack's real workspace layout and refresh trigger.
 Gate-step hook stamp is opt-in: `status.routing_state_sync.sync_after_steps` (spec:
 `check-feature`). Mutating steps are not listed — JSON stays stale → analyzer.
 

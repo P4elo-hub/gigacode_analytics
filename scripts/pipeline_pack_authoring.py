@@ -12,6 +12,7 @@ from pipeline_pack import packs_dir
 SCHEMA_PATH = Path(__file__).resolve().parent / "pipeline_pack_schema.json"
 PACK_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 TEMPLATES = ("minimal", "orchestrator-only", "full-dispatch", "routing-state")
+ROUTING_STATE_ARTIFACT_PATH = "{task_id}/routing-state.json"
 
 
 def load_pack_schema() -> dict:
@@ -261,7 +262,19 @@ COLLECTORS = {"routing_state": overlay_collector}
 _ROUTING_STATE_COLLECTORS = ROUTING_STATE_COLLECTORS
 
 
-def _routing_conditions_stub(pipeline_id: str, first_step: str = "first-step") -> dict:
+def _routing_state_stale_vs(status: dict) -> list[str]:
+    artifacts = status.get("artifacts") if isinstance(status.get("artifacts"), dict) else {}
+    artifact_ids = [str(key) for key in artifacts if str(key) != "routing_state"]
+    if "main" in artifact_ids:
+        return ["main"]
+    return artifact_ids[:1]
+
+
+def _routing_conditions_stub(
+    pipeline_id: str,
+    first_step: str = "first-step",
+    stale_vs: list[str] | None = None,
+) -> dict:
     return {
         "schema_version": 1,
         "status_fields": {},
@@ -291,7 +304,7 @@ def _routing_conditions_stub(pipeline_id: str, first_step: str = "first-step") -
                 "reason": "Нет артефакта main",
             },
         },
-        "stale_vs": ["spec"],
+        "stale_vs": list(stale_vs or []),
         "validate_ids": ["routing-state-missing", "routing-state-stale"],
         "when_to_run_analyzer": ["routing-state missing"],
         "overlay": {"live_default": "routing_state"},
@@ -335,7 +348,7 @@ def ensure_routing_state_authoring(payload: dict) -> dict:
     artifacts = dict(status.get("artifacts") or {})
     if "routing_state" not in artifacts:
         artifacts["routing_state"] = {
-            "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+            "path": ROUTING_STATE_ARTIFACT_PATH,
             "exists_as": "has_routing_state",
             "missing_reason": "нет routing-state.json — нужен analyze-routing",
         }
@@ -349,7 +362,11 @@ def ensure_routing_state_authoring(payload: dict) -> dict:
             }:
                 first = str(node.get("id") or first)
                 break
-        data["routing_conditions"] = _routing_conditions_stub(str(data.get("id") or ""), first)
+        data["routing_conditions"] = _routing_conditions_stub(
+            str(data.get("id") or ""),
+            first,
+            _routing_state_stale_vs(status),
+        )
     return data
 
 
@@ -358,7 +375,7 @@ def _template_routing_state(pipeline_id: str) -> dict:
     payload["status"]["collector_mode"] = "routing_state"
     payload["status"]["collectors"] = [{"id": "routing_state", "source": "routing_state"}]
     payload["status"]["artifacts"]["routing_state"] = {
-        "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+        "path": ROUTING_STATE_ARTIFACT_PATH,
         "exists_as": "has_routing_state",
         "missing_reason": "нет routing-state.json — нужен analyze-routing",
     }
@@ -385,7 +402,10 @@ def _template_routing_state(pipeline_id: str) -> dict:
     payload["registry"]["step_to_subagent"] = {"analyze-routing": "routing-analyzer"}
     payload["registry"]["gated_subagents"] = ["routing-analyzer"]
     payload["registry"]["restartable_steps"] = ["analyze-routing", "first-step"]
-    payload["routing_conditions"] = _routing_conditions_stub(pipeline_id)
+    payload["routing_conditions"] = _routing_conditions_stub(
+        pipeline_id,
+        stale_vs=_routing_state_stale_vs(payload["status"]),
+    )
     payload["dispatch"]["rules"] = [
         {"priority": 5, "when": "routing_state_needs_refresh", "next": "analyze-routing"},
         {"priority": 10, "when": "not_has_main", "next": "first-step"},

@@ -34,6 +34,7 @@ from pipeline_pack import (
 )
 from pipeline_pack_authoring import (
     PACK_ID_RE,
+    ROUTING_STATE_ARTIFACT_PATH,
     ROUTING_STATE_COLLECTORS,
     init_pack,
     init_pack_golden_hints,
@@ -116,7 +117,7 @@ def merge_routing_state_status(payload: dict) -> list[str]:
     artifacts = dict(_as_dict(status.get("artifacts")))
     if "routing_state" not in artifacts:
         artifacts["routing_state"] = {
-            "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
+            "path": ROUTING_STATE_ARTIFACT_PATH,
             "exists_as": "has_routing_state",
             "missing_reason": "нет routing-state.json — нужен analyze-routing",
         }

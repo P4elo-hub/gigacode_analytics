@@ -138,6 +138,14 @@ class CodegenSmokeUniversalityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="codegen-smoke-") as tmp:
             root = Path(tmp)
             init_pack(PACK_ID, "routing-state", root)
+            status = load_yaml(root / "pipelines" / PACK_ID / "status.yaml")
+            self.assertEqual(
+                ((status.get("artifacts") or {}).get("routing_state") or {}).get("path"),
+                "{task_id}/routing-state.json",
+            )
+            rc_stub = load_yaml(root / "pipelines" / PACK_ID / "routing_conditions.yaml")
+            self.assertEqual(rc_stub.get("stale_vs"), ["main"])
+            self.assertNotIn("spec", rc_stub.get("stale_vs") or [])
             _stub_agents(root, "routing-analyzer")
             orch = f"{PACK_ID}-orchestrator"
             body = {"id": PACK_ID, "graph": _smoke_graph(orch)}
