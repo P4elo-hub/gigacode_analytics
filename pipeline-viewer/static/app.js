@@ -1066,7 +1066,7 @@ function renderSessionOutcomeBanner(data) {
       "session-outcome",
       "session-outcome",
       "status-ok",
-      `✓ Spec готов — ${outcome.verdict || "PASS"}`,
+      `✓ Пайплайн готов — ${outcome.verdict || "PASS"}`,
       true
     );
     return;
@@ -1183,7 +1183,7 @@ function renderValidationBanner(validation) {
       "validation-banner",
       "validation-banner",
       "status-ok",
-      "✓ Workflow OK — spec готов (PASS / PASS WITH GAPS)",
+      "✓ Workflow validate: OK · пайплайн готов",
       true
     );
     return;
@@ -1274,7 +1274,7 @@ function renderDispatchPanel(data) {
   if (summary?.must_continue) {
     lines.push("⚠ Пайплайн не завершён — оркестратор должен продолжить сам.");
   } else if (dispatch?.ready) {
-    lines.push("✓ Spec готов (PASS / PASS WITH GAPS).");
+    lines.push("✓ Пайплайн готов.");
   }
   if (summary?.expected_step) {
     lines.push(
