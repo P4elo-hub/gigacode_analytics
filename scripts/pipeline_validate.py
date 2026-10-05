@@ -289,8 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--pipeline",
         default=None,
-        help=f"Pipeline id (default: active-task or {DEFAULT_PIPELINE_ID}). "
-        f"Known: {', '.join(known_pipeline_ids())}",
+        help=f"Pipeline id (or active-task.pipeline). Known: {', '.join(known_pipeline_ids())}",
     )
     args = parser.parse_args(argv)
     root = workspace_root(args.root)

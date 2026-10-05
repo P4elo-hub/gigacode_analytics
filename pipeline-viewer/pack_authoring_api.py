@@ -45,7 +45,7 @@ from pipeline_predicates import catalog_names, core_predicate_names
 INIT_TEMPLATES = ("routing-state", "full-dispatch", "orchestrator-only")
 CLI_AGENT_DIRS = (".qwen", ".gigacode", ".opencode")
 # Never overwrite hand-tuned runtime Python for these packs from authoring Apply.
-PROTECTED_RUNTIME_PACKS = frozenset({"spec"})
+PROTECTED_RUNTIME_PACKS = frozenset()
 NODE_KEYS = ("id", "label", "kind", "subagent", "ask", "cycle")
 EDGE_KEYS = (
     "id",

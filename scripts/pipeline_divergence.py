@@ -670,8 +670,8 @@ def main() -> None:
     parser.add_argument("--root", default=".", type=Path)
     parser.add_argument(
         "--pipeline",
-        default=DEFAULT_PIPELINE_ID,
-        help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
+        required=True,
+        help=f"Pipeline id. Known: {', '.join(known_pipeline_ids())}",
     )
     args = parser.parse_args()
 

@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--brief", default="")
     parser.add_argument("--sections", default=None)
     parser.add_argument("--profile", default=None)
-    parser.add_argument("--pipeline", default=DEFAULT_PIPELINE_ID)
+    parser.add_argument("--pipeline", required=True)
     parser.add_argument("--save-plan", action="store_true", help="Write .write-feature-cycle.json")
     parser.add_argument("--assemble", action="store_true", help="If next is assemble, write SPEC")
     args = parser.parse_args(argv)

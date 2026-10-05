@@ -23,7 +23,7 @@ from pipeline_active_task import (
     write_cycle_still_open,
 )
 from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, workspace_root_for_run
-from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
+from pipeline_runtime import load_pipeline_schema, resolve_pipeline_id
 from pipeline_validate import SEVERITY_BLOCK, SEVERITY_WARN, ValidationReport, validate_slug
 
 # Run-log keeps ok|fail: ok = step finished, fail = run aborted.
@@ -217,7 +217,10 @@ def after_subagent(
     if subagent != agent_type and not step:
         subagent = agent_type
 
-    pipeline_id = resolve_pipeline_id(pipeline_arg, active, default=DEFAULT_PIPELINE_ID)
+    try:
+        pipeline_id = resolve_pipeline_id(pipeline_arg, active)
+    except ValueError as exc:
+        return noop_output(str(exc))
     schema = load_pipeline_schema(pipeline_id)
     step = resolve_step(schema, step=step or None, subagent=subagent) or step or subagent
 
@@ -347,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         apply_pack_dir_from_args(args)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}), ensure_ascii=False)
         return 1
 

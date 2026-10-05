@@ -14,7 +14,7 @@ from typing import Any
 PACK_FILES = ("graph.yaml", "dispatch.yaml", "status.yaml", "registry.yaml")
 OPTIONAL_YAML = ("routing_conditions.yaml",)
 OPTIONAL_PY = ("collectors.py", "predicates.py", "validate.py", "routing_state_sync.py")
-DEFAULT_PIPELINE_ID = "spec"
+DEFAULT_PIPELINE_ID = "spec-v2"
 PACK_DIR_ENV = "PIPELINE_PACK_DIR"
 PACK_ID_ENV = "PIPELINE_PACK_ID"
 PACK_SCHEMA_RELPATH = "scripts/pipeline_pack_schema.json"
@@ -61,7 +61,7 @@ def set_pack_dir(path: Path | str | None, pipeline_id: str | None = None) -> Non
         _pack_id_state = None
     else:
         _pack_dir_state = Path(path).expanduser().resolve()
-        _pack_id_state = pipeline_id or DEFAULT_PIPELINE_ID
+        _pack_id_state = pipeline_id
     _clear_pack_loader_caches()
 
 
@@ -86,8 +86,6 @@ def resolve_pack_pipeline_id() -> str | None:
     raw = os.environ.get(PACK_ID_ENV, "").strip()
     if raw:
         return raw
-    if resolve_pack_dir() is not None:
-        return DEFAULT_PIPELINE_ID
     return None
 
 
@@ -126,9 +124,9 @@ def apply_pack_dir_from_args(args) -> Path | None:
         raise FileNotFoundError(f"pack-dir is not a directory: {path}")
     if not (path / "graph.yaml").is_file():
         raise FileNotFoundError(f"pack-dir missing graph.yaml: {path}")
-    pipeline_id = getattr(args, "pipeline", None) or os.environ.get(PACK_ID_ENV) or DEFAULT_PIPELINE_ID
+    pipeline_id = getattr(args, "pipeline", None) or os.environ.get(PACK_ID_ENV)
     if pipeline_id in {"", "auto", None}:
-        pipeline_id = DEFAULT_PIPELINE_ID
+        raise ValueError("--pack-dir requires explicit --pipeline <id> or PIPELINE_PACK_ID")
     set_pack_dir(path, str(pipeline_id))
     os.environ[PACK_DIR_ENV] = str(path)
     os.environ[PACK_ID_ENV] = str(pipeline_id)

@@ -446,8 +446,11 @@ _REFERENCE_SPEC_EDGES = {
 
 def check_parity_against_legacy(data: dict) -> list[str]:
     messages: list[str] = []
+    legacy_id = "spec"
+    if legacy_id not in (data.get("pipelines") or {}):
+        return messages
     registry = build_registry(data)
-    spec = registry["pipelines"].get(DEFAULT_PIPELINE_ID) or {}
+    spec = registry["pipelines"].get(legacy_id) or {}
     if spec.get("step_to_subagent") != _REFERENCE_STEP_TO_SUBAGENT:
         messages.append("parity: spec step_to_subagent ≠ legacy STEP_TO_SUBAGENT")
     if set(spec.get("orchestrator_owned") or []) != _REFERENCE_ORCHESTRATOR_OWNED:
@@ -458,7 +461,7 @@ def check_parity_against_legacy(data: dict) -> list[str]:
         messages.append("parity: spec restartable_steps ≠ legacy")
 
     schema = build_schema(data)
-    spec_edges = {(e["from"], e["to"]) for e in schema["pipelines"]["spec"]["edges"]}
+    spec_edges = {(e["from"], e["to"]) for e in schema["pipelines"][legacy_id]["edges"]}
     if spec_edges != _REFERENCE_SPEC_EDGES:
         messages.append("parity: spec pipeline edges changed")
     return messages
@@ -595,7 +598,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"packs: {', '.join(ids)}")
     if not messages:
         print("[OK]   schema + registry up to date")
-        print("[OK]   parity: spec pack unchanged")
+        print("[OK]   parity: legacy spec pack absent or unchanged")
     for msg in messages:
         if msg.startswith("parity:") or "differs (" in msg or msg.startswith("validation:"):
             print(f"[FAIL] {msg}")

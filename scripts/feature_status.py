@@ -193,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("slug", nargs="?")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--root", default=".")
-    parser.add_argument("--pipeline", default=DEFAULT_PIPELINE_ID)
+    parser.add_argument("--pipeline", default=None, help="Pipeline id (required when slug is provided)")
     args = parser.parse_args(argv)
     root = workspace_root(Path(args.root))
     if not args.slug:
@@ -203,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
     slug = resolve_slug(args.slug, root)
     if slug is None:
         parser.error("не удалось определить slug")
+    if not args.pipeline:
+        parser.error("--pipeline <id> is required")
     status = build_status(root, slug, args.pipeline)
     print(json.dumps(asdict(status), ensure_ascii=False, indent=2) if args.json else render_markdown(status), end="")
     return 0

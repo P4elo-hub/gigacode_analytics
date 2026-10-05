@@ -375,10 +375,11 @@ def main() -> None:
     parser.add_argument("--workspace", type=Path, default=None)
     parser.add_argument("--run-id", default="auto")
     parser.add_argument("--cli", default="qwen")
+    parser.add_argument("--pipeline", required=True)
     args = parser.parse_args()
 
     root = (args.workspace or workspace_root()).resolve()
-    schema = load_schema()["pipelines"]["spec"]
+    schema = load_schema()["pipelines"][args.pipeline]
     rid = resolve_viewer_run_id(root, args.slug, args.run_id)
     manifest = load_manifest(root, args.slug)
     cli = manifest.get("cli") or args.cli

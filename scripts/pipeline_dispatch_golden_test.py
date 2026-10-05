@@ -27,7 +27,7 @@ from pipeline_pack import discover_pipeline_ids, repo_root  # noqa: E402
 
 FIXTURES_DIR = SCRIPTS / "fixtures" / "dispatch_golden"
 SLUG = "dispatch-golden"
-DEFAULT_PIPELINE = "spec"
+DEFAULT_PIPELINE = "spec-v2"
 
 DISPATCH_KEYS = (
     "ready",
@@ -265,10 +265,13 @@ def run_case(case: dict) -> tuple[bool, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline-dispatch-golden-test")
     parser.add_argument("--case", metavar="ID", help="Run single case id")
+    parser.add_argument("--pipeline", metavar="ID", help="Run cases for one pipeline id")
     parser.add_argument("--list", action="store_true", help="List case ids")
     args = parser.parse_args(argv)
 
     cases = _load_cases()
+    if args.pipeline:
+        cases = [c for c in cases if c.get("pipeline_id") == args.pipeline]
     if args.list:
         for case in cases:
             print(case.get("id", "?"))
@@ -293,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
             ok, detail = False, str(exc)
         report.add(case_id, ok, detail)
 
-    if not args.case:
+    if not args.case and not args.pipeline:
         try:
             pipeline_ids = discover_pipeline_ids(repo_root())
             problems = live_golden_coverage_problems()

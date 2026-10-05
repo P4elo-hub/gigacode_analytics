@@ -17,7 +17,7 @@ from pipeline_dispatch import build_dispatch
 from pipeline_divergence import is_allowed_transition, last_ok_pipeline_step
 from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, workspace_root_for_run
 from pipeline_position import resolve_position
-from pipeline_runtime import DEFAULT_PIPELINE_ID, load_pipeline_schema, resolve_pipeline_id
+from pipeline_runtime import load_pipeline_schema, resolve_pipeline_id
 
 DELEGATE_CMD = "python3 scripts/pipeline_delegate.py <slug> --cli qwen"
 
@@ -94,7 +94,10 @@ def validate_task(
 
     active = load_active_task_latest(root)
     slug = (active or {}).get("slug") or slug_hint
-    pipeline_id = resolve_pipeline_id(pipeline_arg, active, default=DEFAULT_PIPELINE_ID)
+    try:
+        pipeline_id = resolve_pipeline_id(pipeline_arg, active)
+    except ValueError as exc:
+        return deny_output(str(exc))
     gated = pipeline_gated_subagents(pipeline_id)
 
     if proposed not in gated:
@@ -189,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         apply_pack_dir_from_args(args)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}), ensure_ascii=False)
         return 1
 

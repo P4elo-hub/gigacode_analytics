@@ -33,7 +33,6 @@ from pipeline_pack import (
 )
 from pipeline_position import resolve_position
 from pipeline_runtime import (
-    DEFAULT_PIPELINE_ID,
     known_pipeline_ids,
     load_pipeline_schema,
     normalize_pipeline_id,
@@ -49,15 +48,50 @@ def _edge_error(schema: dict, from_step: str, next_step: str) -> str:
     )
 
 
+def _active_task_payload(
+    root: Path,
+    *,
+    slug: str,
+    step: str,
+    subagent: str,
+    cli: str,
+    pipeline: str,
+    persistent: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    if dry_run:
+        payload = {
+            "slug": slug,
+            "step": step,
+            "subagent": subagent,
+            "cli": cli,
+            "pipeline": pipeline,
+            "dry_run": True,
+        }
+        if persistent:
+            payload["persistent"] = True
+        return payload
+    return save_active_task(
+        root,
+        slug=slug,
+        step=step,
+        subagent=subagent,
+        cli=cli,
+        pipeline=pipeline,
+        persistent=persistent,
+    )
+
+
 def build_delegate(
     root: Path,
     slug: str,
     *,
     cli: str = "qwen",
-    pipeline_id: str = DEFAULT_PIPELINE_ID,
+    pipeline_id: str,
     from_step: str | None = None,
     to_step: str | None = None,
     _cycle_closed: bool = False,
+    dry_run: bool = False,
 ) -> dict:
     pipe_id = normalize_pipeline_id(pipeline_id)
     if not _cycle_closed:
@@ -71,6 +105,7 @@ def build_delegate(
                 from_step=from_step,
                 to_step=to_step,
                 _cycle_closed=True,
+                dry_run=dry_run,
             )
     dispatch = build_dispatch(root, slug, pipeline_id=pipe_id)
     schema = load_pipeline_schema(pipe_id)
@@ -127,7 +162,7 @@ def build_delegate(
         # Handshake stays on this step: ask → apply. Do not re-enter the router
         # between the answer and apply — overlay JSON would still say needs-answer.
         if next_step and next_subagent:
-            active = save_active_task(
+            active = _active_task_payload(
                 root,
                 slug=slug,
                 step=next_step,
@@ -135,6 +170,7 @@ def build_delegate(
                 cli=cli,
                 pipeline=pipe_id,
                 persistent=True,
+                dry_run=dry_run,
             )
             payload["task"] = {
                 "subagent_type": next_subagent,
@@ -184,8 +220,9 @@ def build_delegate(
                 from_step=from_step,
                 to_step=to_step,
                 _cycle_closed=True,
+                dry_run=dry_run,
             )
-        active = save_active_task(
+        active = _active_task_payload(
             root,
             slug=slug,
             step=cycle_step,
@@ -193,6 +230,7 @@ def build_delegate(
             cli=cli,
             pipeline=pipe_id,
             persistent=bool(cycle.get("persistent", True)),
+            dry_run=dry_run,
         )
         payload["action"] = "write_feature_cycle"
         payload["active_task"] = active
@@ -252,13 +290,14 @@ def build_delegate(
         )
         return payload
 
-    active = save_active_task(
+    active = _active_task_payload(
         root,
         slug=slug,
         step=next_step,
         subagent=next_subagent,
         cli=cli,
         pipeline=pipe_id,
+        dry_run=dry_run,
     )
 
     payload["action"] = "task"
@@ -283,17 +322,19 @@ def build_delegate(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline-delegate", description=__doc__)
-    parser.add_argument("slug")
+    parser.add_argument("slug", nargs="?")
+    parser.add_argument("--slug", dest="slug_flag", default="", help="Feature slug (alias for positional slug)")
     parser.add_argument("--root", type=Path, default=None)
     parser.add_argument("--cli", choices=("qwen", "gigacode", "opencode"), default="qwen")
     parser.add_argument(
         "--pipeline",
-        default=DEFAULT_PIPELINE_ID,
-        help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
+        required=True,
+        help=f"Pipeline id. Known: {', '.join(known_pipeline_ids())}",
     )
     add_pack_dir_argument(parser)
     parser.add_argument("--from-step", default=None, help="Explicit graph origin for edge check")
     parser.add_argument("--to-step", default=None, help="Explicit graph target for edge check")
+    parser.add_argument("--dry-run", action="store_true", help="Build delegate JSON without writing active-task markers")
     parser.add_argument(
         "--assert-subagent",
         metavar="SUBAGENT",
@@ -308,9 +349,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     root = workspace_root_for_run(args.root)
-    slug = resolve_slug(args.slug, root)
+    slug_arg = args.slug_flag or args.slug
+    if not slug_arg:
+        parser.error("slug is required")
+    slug = resolve_slug(slug_arg, root)
     if slug is None:
-        print(json.dumps({"ok": False, "error": f"unknown slug: {args.slug}"}), ensure_ascii=False)
+        print(json.dumps({"ok": False, "error": f"unknown slug: {slug_arg}"}), ensure_ascii=False)
         return 1
 
     try:
@@ -326,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         pipeline_id=pipeline_id,
         from_step=args.from_step,
         to_step=args.to_step,
+        dry_run=args.dry_run,
     )
 
     if args.assert_subagent:

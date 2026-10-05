@@ -33,7 +33,7 @@ def missing_when(pipeline_id: str, root: Path | None = None) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pipeline", default="spec")
+    parser.add_argument("--pipeline", required=True)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--write", action="store_true", help="Append stub edge_conditions for missing when:")
     parser.add_argument("--root", type=Path, default=None)

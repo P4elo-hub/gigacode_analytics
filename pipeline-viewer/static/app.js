@@ -6,7 +6,7 @@ const DRAFT_STORAGE_KEY = "pipeline-viewer-schema-draft";
 const SCHEMA_API_VERSION = 7;
 const SAVE_STORAGE_KEY = "pipeline-viewer-schema-applied";
 const INIT_TEMPLATES = ["routing-state", "full-dispatch", "orchestrator-only"];
-const PROTECTED_PACKS = new Set(["spec", "calibration"]);
+const PROTECTED_PACKS = new Set(["calibration"]);
 const SCHEMA_CLIS = ["qwen", "gigacode", "opencode"];
 const PALETTE_DRAG_TYPE = "application/x-pipeline-agent";
 
@@ -170,11 +170,11 @@ function loadDismissedNotices() {
 
 const state = {
   slug: "",
-  pipeline: "spec",
+  pipeline: "",
   graphView: "target",
   staleCollapsed: true,
   screenMode: "run",
-  packId: "spec",
+  packId: "",
   source: null,
   graph: null,
   pack: null,
@@ -230,7 +230,7 @@ let restartableByPipeline = {};
 function restartableStepsFor(pipeline) {
   const list = restartableByPipeline[pipeline];
   if (Array.isArray(list) && list.length) return new Set(list);
-  return pipeline === "spec" ? RESTARTABLE_STEPS : new Set();
+  return new Set();
 }
 
 function noticeBody(id) {
@@ -1966,38 +1966,26 @@ function updateGraphViewHint(data) {
     } else {
       el.textContent = `${n} шагов — реальный порядок вызовов subagent`;
     }
-  } else if (state.pipeline === "spec") {
-    el.textContent =
-      "Квадрат — шаг агента · овал — analyze-routing после этого шага";
   } else {
-    el.textContent = "Шаги spec; hook/validate — в «Инфраструктура» справа";
+    el.textContent = "Квадрат — шаг pipeline; hook/validate — в «Инфраструктура» справа";
   }
 }
 
 function updateInfraPanel() {
   const panel = document.getElementById("infra-panel");
   if (!panel) return;
-  panel.classList.toggle("hidden", state.pipeline !== "spec");
+  panel.classList.remove("hidden");
 }
 
 function buildTargetElements(data) {
   const elements = [];
-  const spec = data.pipeline === "spec";
-  // Spec: analyze-routing is drawn as satellites under domain steps (legacy UX).
-  // Other packs: analyze-routing is a normal graph node — keep its edges.
-  const bursts = spec ? routingBurstsByHost(data.timeline || []) : {};
-  const liveHost = spec ? routingLiveHost(data) : null;
-  const satelliteHosts = new Set(spec ? Object.keys(bursts) : []);
-  if (liveHost) satelliteHosts.add(liveHost);
 
   // Prefer positions from Schema draft (same pack id) so Прогон matches what you drew.
-  const draftPositions =
-    !spec && data.pipeline ? getPackDraft(data.pipeline).positions || {} : {};
+  const draftPositions = data.pipeline ? getPackDraft(data.pipeline).positions || {} : {};
 
   const nodeById = {};
   for (const node of data.nodes || []) {
     nodeById[node.id] = node;
-    if (spec && node.id === ROUTING_STEP) continue;
     const pos = draftPositions[node.id] || node.position || { x: 0, y: 0 };
     elements.push({
       group: "nodes",
@@ -2014,49 +2002,10 @@ function buildTargetElements(data) {
     });
   }
 
-  for (const host of satelliteHosts) {
-    const parent = nodeById[host];
-    if (!parent?.position && !draftPositions[host]) continue;
-    const parentPos = draftPositions[host] || parent.position;
-    const burst = bursts[host];
-    const visual = satelliteVisual(host, data, burst, liveHost);
-    elements.push({
-      group: "nodes",
-      data: {
-        id: routingSatelliteId(host),
-        stepId: ROUTING_STEP,
-        hostStep: host,
-        label: visual.label,
-        color: visual.color,
-        state: visual.state,
-        kind: "routing-sat",
-        seq: burst?.last?.seq || null,
-      },
-      position: {
-        x: parentPos.x,
-        y: parentPos.y + ROUTING_SATELLITE_DY,
-      },
-    });
-    elements.push({
-      group: "edges",
-      data: {
-        id: `e-sat-${host}`,
-        source: host,
-        target: routingSatelliteId(host),
-        label: "",
-        color: "#818cf8",
-        kind: "routing-sat",
-        traversed: burst ? "true" : "false",
-      },
-    });
-  }
 
   for (const edge of data.edges || []) {
-    if (spec && (edge.from === ROUTING_STEP || edge.to === ROUTING_STEP)) continue;
     const kind = edge.kind || "main";
-    const source = satelliteHosts.has(edge.from)
-      ? routingSatelliteId(edge.from)
-      : edge.from;
+    const source = edge.from;
     elements.push({
       group: "edges",
       data: {
@@ -2288,21 +2237,15 @@ function applyActualGraphHighlights(graph, data) {
 function applyDivergenceHighlights(graph, data) {
   graph.nodes().removeClass("expected diverged");
   const summary = data.divergence?.summary;
-  if (!summary || data.pipeline !== "spec") return;
+  if (!summary) return;
 
   const expectedStep = summary.expected_step;
   const cur = data.current;
   const alreadyRunning =
     cur?.status === "running" && cur?.step === expectedStep;
   if (expectedStep && summary.must_continue && !alreadyRunning) {
-    if (expectedStep === ROUTING_STEP) {
-      const host = routingLiveHost(data);
-      const sat = host ? graph.getElementById(routingSatelliteId(host)) : graph.collection();
-      if (sat.length) sat.addClass("expected");
-    } else {
-      const expectedNode = graph.getElementById(expectedStep);
-      if (expectedNode.length) expectedNode.addClass("expected");
-    }
+    const expectedNode = graph.getElementById(expectedStep);
+    if (expectedNode.length) expectedNode.addClass("expected");
   }
 
   const items = data.divergence?.items || [];
@@ -6126,9 +6069,7 @@ async function confirmDeletePack() {
     forgetPackLocalState(id);
     clearError();
     const remaining = Array.isArray(data.remaining) ? data.remaining : [];
-    const nextId = remaining.includes("spec")
-      ? "spec"
-      : remaining[0] || "";
+    const nextId = remaining[0] || "";
     state.packId = nextId;
     state.packBase = null;
     state.pack = null;
@@ -6451,12 +6392,7 @@ function fillPackTabs() {
   const nav = document.getElementById("pack-tabs");
   if (!nav) return;
   nav.innerHTML = "";
-  const pipelines = state.catalogPipelines.length
-    ? state.catalogPipelines
-    : [
-        { id: "spec", label: "Spec pipeline" },
-        { id: "calibration", label: "Calibration" },
-      ];
+  const pipelines = state.catalogPipelines.length ? state.catalogPipelines : [];
   state.catalogPipelines = pipelines;
   for (const item of pipelines) {
     const btn = document.createElement("button");
@@ -6479,7 +6415,7 @@ function fillPackTabs() {
   }
   const known = new Set(pipelines.map((item) => item.id));
   if (!known.has(state.packId)) {
-    state.packId = pipelines[0]?.id || "spec";
+    state.packId = pipelines[0]?.id || "";
   }
   setActivePackTab();
 }
@@ -6492,10 +6428,7 @@ function fillPipelineTabs() {
     ? state.runPipelines
     : state.catalogPipelines.length
       ? state.catalogPipelines
-      : [
-          { id: "spec", label: "Spec pipeline" },
-          { id: "calibration", label: "Calibration" },
-        ];
+      : [];
   state.runPipelines = pipelines;
   for (const item of pipelines) {
     const btn = document.createElement("button");
@@ -6522,7 +6455,7 @@ function fillPipelineTabs() {
   }
   const known = new Set(pipelines.map((item) => item.id));
   if (!known.has(state.pipeline)) {
-    state.pipeline = pipelines.find((item) => item.id === "spec")?.id || pipelines[0]?.id || "spec";
+    state.pipeline = pipelines[0]?.id || "";
   }
   setActiveTab(state.pipeline);
 }
@@ -6663,7 +6596,7 @@ function renderGraph(data) {
     renderSessionOutcomeBanner(data);
     renderDivergenceBanner(data.divergence?.summary);
     renderValidationBanner(data.validation);
-    renderValidationPanel(data.pipeline === "spec" ? data.validation : null);
+    renderValidationPanel(data.validation);
     updateInfraPanel();
     renderTimeline(data);
     document.getElementById("stats").textContent = JSON.stringify(
@@ -6734,7 +6667,7 @@ function renderGraph(data) {
   renderSessionOutcomeBanner(data);
   renderDivergenceBanner(data.divergence?.summary);
   renderValidationBanner(data.validation);
-  renderValidationPanel(data.pipeline === "spec" ? data.validation : null);
+  renderValidationPanel(data.validation);
   updateInfraPanel();
   renderTimeline(data);
 
@@ -6804,11 +6737,11 @@ function connectStream() {
 }
 
 function slugsForCurrentPipeline(allSlugs) {
-  const pipe = state.pipeline || "spec";
+  const pipe = state.pipeline || "";
+  if (!pipe) return [];
   return (allSlugs || []).filter((item) => {
     const pipes = Array.isArray(item.pipelines) ? item.pipelines : null;
-    if (pipes && pipes.length) return pipes.includes(pipe);
-    return pipe === "spec";
+    return Boolean(pipes && pipes.includes(pipe));
   });
 }
 
@@ -6863,12 +6796,6 @@ function fillSlugSelect(payload, config, saved) {
   if (!preferred && config?.default_slug && slugSet.has(config.default_slug)) {
     preferred = config.default_slug;
   }
-  // Spec: keep previous convenience — pick first telemetry slug if nothing selected.
-  // Other packs: leave empty → Целевой topology (same as Schema).
-  if (!preferred && state.pipeline === "spec") {
-    preferred = (withLogs[0] || filtered[0])?.slug || "";
-  }
-
   select.value = preferred;
   return preferred;
 }
@@ -6925,11 +6852,11 @@ async function init() {
     const payload = await slugsRes.json();
     const catalog = catalogRes.ok ? await catalogRes.json() : { pipelines: [] };
 
-    state.pipeline = saved.pipeline || config.default_pipeline || "spec";
+    state.pipeline = saved.pipeline || config.default_pipeline || "";
     state.graphView = ["actual", "timing"].includes(saved.graphView) ? saved.graphView : "target";
     state.staleCollapsed = saved.staleCollapsed !== false;
     state.screenMode = saved.screenMode === "schema" ? "schema" : "run";
-    state.packId = typeof saved.packId === "string" && saved.packId ? saved.packId : "spec";
+    state.packId = typeof saved.packId === "string" && saved.packId ? saved.packId : "";
     state.runPipelines = Array.isArray(config.pipelines) ? config.pipelines : [];
     state.catalogPipelines = Array.isArray(catalog.pipelines) ? catalog.pipelines : [];
     state.catalogAgents = Array.isArray(catalog.agents) ? catalog.agents : [];
@@ -6992,9 +6919,6 @@ async function init() {
     if (config.restartable_steps?.length) {
       RESTARTABLE_STEPS.clear();
       for (const step of config.restartable_steps) RESTARTABLE_STEPS.add(step);
-      if (!Array.isArray(restartableByPipeline.spec) || !restartableByPipeline.spec.length) {
-        restartableByPipeline = { ...restartableByPipeline, spec: [...config.restartable_steps] };
-      }
     }
 
     initNoticeDismissHandlers();

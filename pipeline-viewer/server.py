@@ -22,7 +22,7 @@ from artifact_paths import list_feature_slugs, workspace_root  # noqa: E402
 from build_pipeline_graph import build_graph, build_pack_target_graph  # noqa: E402
 from sync_pipeline_session import sync_session  # noqa: E402
 from pipeline_common import known_pipeline_ids, pipeline_restartable_steps  # noqa: E402
-from pipeline_pack import DEFAULT_PIPELINE_ID, discover_pipeline_ids, export_pack_json  # noqa: E402
+from pipeline_pack import discover_pipeline_ids, export_pack_json  # noqa: E402
 from pipeline_active_task import feature_active_task_path  # noqa: E402
 from pipeline_runtime import load_pipeline_schema  # noqa: E402
 from pipeline_restart import (  # noqa: E402
@@ -86,7 +86,7 @@ def write_feature_cycle_preview() -> dict:
     except ImportError:
         return {"profile": "", "calls": []}
     target = infer_sections("", None, DEFAULT_PROFILE)
-    cfg = write_cycle_config("spec") or {}
+    cfg = write_cycle_config("spec-v2") or {}
     subagent = str(cfg.get("subagent") or "spec-writer")
     calls = []
     for block in list_active_blocks(target):
@@ -126,16 +126,19 @@ def catalog_for_viewer(workspace: Path) -> dict:
 
 
 def _normalize_pipeline(raw: str | None) -> str:
-    pipeline = raw or DEFAULT_PIPELINE_ID
-    if pipeline not in known_pipeline_ids():
-        return DEFAULT_PIPELINE_ID
+    pipeline = str(raw or "").strip()
+    if not pipeline:
+        raise ValueError("pipeline required")
+    known = known_pipeline_ids()
+    if pipeline not in known:
+        raise ValueError(f"unknown pipeline: {pipeline}")
     return pipeline
 
 
 @dataclass
 class Defaults:
     slug: str = ""
-    pipeline: str = "spec"
+    pipeline: str = ""
     run_id: str = "auto"
 
 
@@ -171,7 +174,7 @@ def pipelines_for_slug(
     """Which Прогон tabs should list this slug.
 
     Explicit ``pipeline`` on active-task / run-log wins. Else unique step names
-    from run-log. Feature-writing without evidence → ``spec`` only (legacy).
+    from run-log. Feature-writing without evidence stays unassigned.
     """
     known = set(known_pipeline_ids())
     found: set[str] = set()
@@ -230,7 +233,7 @@ def pipelines_for_slug(
     has_logs = (workspace / "agent-logs" / slug).is_dir()
     in_features = slug in set(list_feature_slugs(workspace))
     if has_logs or in_features:
-        return [DEFAULT_PIPELINE_ID] if DEFAULT_PIPELINE_ID in known else []
+        return []
     return []
 
 
@@ -360,7 +363,7 @@ def make_handler(workspace: Path, defaults: Defaults):
         def _build(self, slug: str, pipeline: str, run_id: str) -> dict:
             if not slug:
                 return build_pack_target_graph(pipeline)
-            if pipeline == "spec" and slug:
+            if slug:
                 try:
                     sync_session(workspace, slug, cli="qwen")
                 except Exception:
@@ -401,7 +404,7 @@ def make_handler(workspace: Path, defaults: Defaults):
                         "default_slug": default_slug,
                         "default_pipeline": defaults.pipeline,
                         "pipelines": run_pipeline_tabs(workspace),
-                        "restartable_steps": list(pipeline_restartable_steps(DEFAULT_PIPELINE_ID)),
+                        "restartable_steps": [],
                         "restartable_steps_by_pipeline": {
                             pid: list(pipeline_restartable_steps(pid)) for pid in known_pipeline_ids()
                         },
@@ -488,7 +491,11 @@ def make_handler(workspace: Path, defaults: Defaults):
                 from_step = (qs.get("from_step") or [""])[0]
                 from_seq_raw = (qs.get("from_seq") or [""])[0]
                 from_seq = int(from_seq_raw) if from_seq_raw.isdigit() else None
-                pipeline = _normalize_pipeline((qs.get("pipeline") or [DEFAULT_PIPELINE_ID])[0])
+                try:
+                    pipeline = _normalize_pipeline((qs.get("pipeline") or [""])[0])
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
                 if not slug or not from_step:
                     self._send_json({"error": "slug and from_step required"}, status=400)
                     return
@@ -552,7 +559,11 @@ def make_handler(workspace: Path, defaults: Defaults):
             slug = payload.get("slug", "")
             from_step = payload.get("from_step", "")
             from_seq = payload.get("from_seq")
-            pipeline = _normalize_pipeline(payload.get("pipeline"))
+            try:
+                pipeline = _normalize_pipeline(payload.get("pipeline"))
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
             confirm = payload.get("confirm") is True
             if not confirm:
                 self._send_json({"error": "confirm: true required"}, status=400)
@@ -732,9 +743,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", default="auto", help="agent-logs run id")
     parser.add_argument(
         "--pipeline",
-        choices=("spec", "calibration"),
-        default="spec",
-        help="Default pipeline tab",
+        choices=known_pipeline_ids(),
+        default="",
+        help="Default pipeline tab (optional; otherwise the browser selects an available explicit tab)",
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--host", default="127.0.0.1")

@@ -29,7 +29,7 @@ def pack_schema_for_slug(root: Path, slug: str) -> dict:
     pid = str(task.get("pipeline") or task.get("pipeline_id") or DEFAULT_PIPELINE_ID)
     pipes = load_schema().get("pipelines") or {}
     if pid not in pipes:
-        pid = DEFAULT_PIPELINE_ID if DEFAULT_PIPELINE_ID in pipes else next(iter(pipes), "spec")
+        pid = DEFAULT_PIPELINE_ID if DEFAULT_PIPELINE_ID in pipes else next(iter(pipes), DEFAULT_PIPELINE_ID)
     return pipes[pid]
 
 

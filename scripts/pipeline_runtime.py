@@ -15,7 +15,7 @@ from pipeline_common import load_pipeline_registry
 
 SCRIPTS = Path(__file__).resolve().parent
 SCHEMA_PATH = SCRIPTS / "pipeline_schema.json"
-DEFAULT_PIPELINE_ID = "spec"
+DEFAULT_PIPELINE_ID = "spec-v2"
 
 
 @lru_cache(maxsize=1)
@@ -46,16 +46,18 @@ def resolve_pipeline_id(
     pipeline_arg: str | None = None,
     active_task: dict | None = None,
     *,
-    default: str = DEFAULT_PIPELINE_ID,
+    default: str | None = None,
 ) -> str:
-    """CLI flag wins, then active-task.pipeline, then default (spec)."""
+    """CLI flag wins, then active-task.pipeline; no silent runtime default."""
     if pipeline_arg and pipeline_arg not in {"", "auto"}:
         return normalize_pipeline_id(pipeline_arg)
     if active_task:
-        marked = active_task.get("pipeline")
+        marked = active_task.get("pipeline") or active_task.get("pipeline_id")
         if marked:
             return normalize_pipeline_id(str(marked))
-    return normalize_pipeline_id(default)
+    if default not in {None, "", "auto"}:
+        return normalize_pipeline_id(str(default))
+    raise ValueError("pipeline id required: pass --pipeline <id> or set active-task.pipeline")
 
 
 def load_pipeline_schema(pipeline_id: str) -> dict:
@@ -107,7 +109,9 @@ def dispatch_supported(pipeline_id: str) -> bool:
 
 def runtime_contract(pipeline_id: str | None = None) -> dict:
     """Canonical orchestrator loop for a pack (docs / ``pipeline_compile.py --catalog``)."""
-    pipe_id = normalize_pipeline_id(pipeline_id or DEFAULT_PIPELINE_ID)
+    if not pipeline_id:
+        raise ValueError("pipeline id required for runtime_contract")
+    pipe_id = normalize_pipeline_id(pipeline_id)
     schema = load_pipeline_schema(pipe_id)
     pack_validate = Path(__file__).resolve().parent.parent / "pipelines" / pipe_id / "validate.py"
     return {

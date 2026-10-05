@@ -9,7 +9,7 @@ from pathlib import Path
 
 from artifact_paths import resolve_slug, workspace_root
 from pipeline_active_task import save_active_task
-from pipeline_runtime import DEFAULT_PIPELINE_ID, known_pipeline_ids, normalize_pipeline_id
+from pipeline_runtime import known_pipeline_ids, normalize_pipeline_id
 
 
 def main() -> None:
@@ -20,8 +20,8 @@ def main() -> None:
     parser.add_argument("--cli", choices=("qwen", "gigacode", "opencode"), default="qwen")
     parser.add_argument(
         "--pipeline",
-        default=DEFAULT_PIPELINE_ID,
-        help=f"Pipeline id (default {DEFAULT_PIPELINE_ID}). Known: {', '.join(known_pipeline_ids())}",
+        required=True,
+        help=f"Pipeline id. Known: {', '.join(known_pipeline_ids())}",
     )
     parser.add_argument("--session", default="")
     parser.add_argument("--workspace", type=Path, default=None)

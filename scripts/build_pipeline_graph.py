@@ -92,7 +92,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("slug")
     parser.add_argument("--run-id", default="auto")
-    parser.add_argument("--pipeline", choices=("auto", "spec", "calibration"), default="auto")
+    from pipeline_common import known_pipeline_ids
+    parser.add_argument("--pipeline", choices=known_pipeline_ids(), required=True)
     parser.add_argument("--workspace", type=Path)
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
@@ -110,7 +111,9 @@ def build_pack_target_graph(pipeline: str = DEFAULT_PIPELINE_ID) -> dict:
     """
     from pipeline_common import known_pipeline_ids
 
-    pipe_name = pipeline if pipeline in known_pipeline_ids() else DEFAULT_PIPELINE_ID
+    if pipeline not in known_pipeline_ids():
+        raise ValueError(f"unknown pipeline: {pipeline}")
+    pipe_name = pipeline
     schema_root = load_schema()
     schema = schema_root["pipelines"][pipe_name]
     orch = schema.get("orchestrator")
@@ -316,12 +319,7 @@ def load_aggregate_run_bundle(
 
 
 def detect_pipeline(history: list[dict], requested: str) -> str:
-    if requested != "auto":
-        return requested
-    steps = {row.get("step") for row in history}
-    if steps & CALIBRATION_STEPS:
-        return "calibration"
-    return "spec"
+    return requested
 
 
 def schema_step_ids(schema: dict) -> set[str]:
@@ -1000,7 +998,7 @@ def build_graph(
     slug: str,
     *,
     run_id: str | None = "auto",
-    pipeline: str = "auto",
+    pipeline: str,
 ) -> dict:
     schema_root = load_schema()
     manifest = load_manifest(root, slug)
@@ -1010,7 +1008,7 @@ def build_graph(
     schema_probe = read_jsonl(run_log_path(root, slug, rid))
     if merged_runs:
         _, probe_log, _, _, _, included_runs = load_aggregate_run_bundle(
-            root, slug, schema_root["pipelines"]["spec"], through_run_id=rid
+            root, slug, schema_root["pipelines"][pipeline], through_run_id=rid
         )
         if included_runs:
             schema_probe = probe_log
@@ -1086,14 +1084,14 @@ def build_graph(
 
     terminal_id = schema_terminal_id(schema, pipe_name)
     if (
-        pipe_name == "spec"
+        pipe_name == DEFAULT_PIPELINE_ID
         and not live
         and node_states.get("check-feature-code") == STATE_OK
         and terminal_id in node_states
     ):
         node_states[terminal_id] = STATE_OK
 
-    if pipe_name == "spec" and not live:
+    if pipe_name == DEFAULT_PIPELINE_ID and not live:
         branch_optional = {
             "resolve-gaps",
             "challenge-feature",
@@ -1111,12 +1109,12 @@ def build_graph(
     timeline = build_timeline(history)
     feature_verdict = ""
     dispatch_ready = False
-    if pipe_name == "spec":
+    if pipe_name == DEFAULT_PIPELINE_ID:
         if clear_restart_marker_if_ready(root, slug):
             restart_info = None
             marker = None
         else:
-            marker = load_restart_marker(root, slug, "spec")
+            marker = load_restart_marker(root, slug, pipe_name)
             restart_info = apply_restart_state(
                 marker,
                 node_states=node_states,
@@ -1124,7 +1122,7 @@ def build_graph(
                 terminal_id=terminal_id,
                 pipeline_id=pipe_name,
             )
-        fs = build_status(root, slug)
+        fs = build_status(root, slug, pipe_name)
         feature_verdict = fs.verdict or ""
         dispatch_ready = bool(
             (dispatch_snapshot or {}).get("ready") or fs.ready
@@ -1186,8 +1184,8 @@ def build_graph(
     else:
         last_log = log_history[-1] if log_history else None
         last_result = (last_log.get("result") if last_log else None) or STATE_OK
-        next_step = display_next_step if pipe_name == "spec" else ""
-        next_subagent = display_next_subagent if pipe_name == "spec" else ""
+        next_step = display_next_step if pipe_name == DEFAULT_PIPELINE_ID else ""
+        next_subagent = display_next_subagent if pipe_name == DEFAULT_PIPELINE_ID else ""
         next_note = (
             "Следующий шаг по run-log"
             if display_next_source == "run-log"
@@ -1246,11 +1244,11 @@ def build_graph(
         if (
             dispatch_ready
             and node["id"] == terminal_id
-            and (feature_verdict or pipe_name != "spec")
+            and (feature_verdict or pipe_name != DEFAULT_PIPELINE_ID)
         ):
             if feature_verdict:
                 node["label"] = feature_verdict
-            elif pipe_name != "spec":
+            elif pipe_name != DEFAULT_PIPELINE_ID:
                 node["label"] = "ready"
     attach_node_details(
         nodes,
@@ -1342,7 +1340,7 @@ def build_graph(
 
     validation: dict | None = None
     timings: dict | None = None
-    if pipe_name == "spec":
+    if pipe_name == DEFAULT_PIPELINE_ID:
         try:
             from pipeline_validate import validate_slug
 
@@ -1368,7 +1366,7 @@ def build_graph(
         "slug": slug,
         "run_id": rid,
         "agent_run_ids": agent_run_ids,
-        "history_aggregate": merged_runs and pipe_name == "spec",
+        "history_aggregate": merged_runs and pipe_name == DEFAULT_PIPELINE_ID,
         "calibration_run_id": cal_run_id,
         "pipeline": pipe_name,
         "pipeline_label": schema.get("label"),
@@ -1402,7 +1400,7 @@ def build_graph(
         "dispatch_fingerprint": dispatch_fingerprint,
         "outcome": (
             {"ready": dispatch_ready, "verdict": feature_verdict or "PASS"}
-            if pipe_name == "spec" or dispatch_ready
+            if pipe_name == DEFAULT_PIPELINE_ID or dispatch_ready
             else None
         ),        "divergence": {
             "summary": divergence.get("summary"),
