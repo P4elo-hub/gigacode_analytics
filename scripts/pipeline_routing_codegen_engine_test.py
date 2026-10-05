@@ -58,7 +58,7 @@ def _blank_pack(root: Path, pipeline_id: str = "demo-codegen") -> Path:
                 "  - id: find-context",
                 "    kind: step",
                 "  - id: analyze-routing",
-                "    kind: step",
+                "    kind: analyzer",
                 "  - id: check-feature",
                 "    kind: step",
                 "  - id: resolve-gaps",

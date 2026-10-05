@@ -545,7 +545,11 @@ def _layout_vertical_chain(
     step_y: float = 105,
 ) -> list[dict]:
     """Top-to-bottom main column (calibration and simple flows)."""
-    order = [n["id"] for n in nodes if n.get("kind") in ("orchestrator", "step", "terminal", "meta")]
+    order = [
+        n["id"]
+        for n in nodes
+        if n.get("kind") in ("orchestrator", "step", "analyzer", "terminal", "meta")
+    ]
     positions: dict[str, tuple[float, float]] = {}
     y = start_y
     for node_id in order:

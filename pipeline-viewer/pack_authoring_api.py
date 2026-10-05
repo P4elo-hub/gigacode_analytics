@@ -582,7 +582,7 @@ def sanitize_graph(graph: object) -> dict:
         node = {key: copy.deepcopy(raw[key]) for key in NODE_KEYS if key in raw}
         if raw.get("subagent") is None and "subagent" in raw:
             node["subagent"] = None
-        if node.get("kind") not in {"orchestrator", "step", "terminal", "meta"}:
+        if node.get("kind") not in {"orchestrator", "step", "analyzer", "terminal", "meta"}:
             node["kind"] = "step"
         if node.get("ask"):
             node["ask"] = True

@@ -173,7 +173,7 @@ Drop на холст «Схема» → `kind=step`, id/label/subagent, уник
 
 ### Фаза 3 закрыта. Следующей — фаза 4
 
-Сделано: на «Схеме» Shift+клик или «Стрелка к…» → ребро from/to. Инспектор: id/label/kind (orchestrator|step|terminal|ask|cycle|meta) / subagent из палитры; у стрелки kind main|branch|loop и label.
+Сделано: на «Схеме» Shift+клик или «Стрелка к…» → ребро from/to. Инспектор: id/label/kind (orchestrator|step|analyzer|terminal|ask|cycle|meta) / subagent из палитры; у стрелки kind main|branch|loop и label.
 cycle/ask — флаг на клетке, без calls и handshake. Ребро в пустоту в черновик не пишется. Второй оркестратор демоутит прежнего; снять последнего нельзя.
 Undo клеток/стрелок (кнопка и Cmd/Ctrl+Z). YAML нет. Прогон не трогали.
 

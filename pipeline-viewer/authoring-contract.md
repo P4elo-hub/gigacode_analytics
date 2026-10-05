@@ -41,13 +41,14 @@ Canvas читает **`graph.nodes` / `graph.edges`**. Остальное — и
 
 ### Типы клеток
 
-В JSON `kind` ∈ `orchestrator` \| `step` \| `terminal` \| `meta`.
+В JSON `kind` ∈ `orchestrator` \| `step` \| `analyzer` \| `terminal` \| `meta`.
 **cycle и ask — не kind**, а флаги на `step`. Инспектор фазы 3 мапит их в UI-kind.
 
 | UI-фигура | JSON | Пример spec | Рисовать |
 |-----------|------|-------------|----------|
 | Оркестратор | `kind: orchestrator`, id = `graph.orchestrator` | `spec-orchestrator` | эллипс (как прогон) |
 | Обычный шаг | `kind: step`, нет `cycle`, нет `ask` | `find-context` | прямоугольник |
+| Analyzer/router | `kind: analyzer` | `analyze-routing` | ромб со статусным цветом |
 | Cycle (составная) | `kind: step` + объект `cycle` | `write-feature` | один квадрат; внутренности — фаза 4, не вложенный граф |
 | Ask | `kind: step` + `ask: true` | `resolve-gaps` | шаг + пометка «пауза; apply без смены шага» |
 | Terminal | `kind: terminal` | `done` (label `PASS`) | ромб |

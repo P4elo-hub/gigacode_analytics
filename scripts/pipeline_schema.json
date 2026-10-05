@@ -120,7 +120,7 @@
         {
           "id": "analyze-routing",
           "label": "analyze-routing",
-          "kind": "step",
+          "kind": "analyzer",
           "subagent": "routing-analyzer"
         },
         {

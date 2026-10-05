@@ -143,14 +143,14 @@
           <span class="dot diverged"></span> mismatch
           <span class="dot redo"></span> заново
           <span class="dot stale"></span> устарел (лог)
-          <span class="legend-edges"> · квадрат — шаг · овал — analyze-routing · — основной · ╌ ветка</span>
+          <span class="legend-edges"> · квадрат — шаг · ромб — analyzer · — основной · ╌ ветка</span>
         </span>
         <span class="legend-actual hidden run-only">
           <span class="dot ok"></span> шаг ok
           <span class="dot fail"></span> fail
           <span class="dot stale"></span> устарел
           <span class="dot diverged"></span> переход ≠ схема
-          <span class="legend-edges"> · овал — analyze-routing после шага</span>
+          <span class="legend-edges"> · ромб — analyzer/router после шага</span>
         </span>
       </footer>
     </section>
@@ -175,7 +175,7 @@
        append_run_log → ingest → validate
   → dispatch → task …</pre>
         <p class="sidebar-hint infra-legend-note">
-          На графе: квадрат = шаг агента · овал = analyze-routing после шага ·
+          На графе: квадрат = шаг агента · ромб = analyzer/router после шага ·
           зелёный = ok · серый = не было в логе · розовый = redo после restart ·
           фиолетовая рамка = dispatch next.
         </p>
@@ -217,6 +217,7 @@
             <select id="schema-node-kind" name="kind">
               <option value="orchestrator">orchestrator</option>
               <option value="step">step</option>
+              <option value="analyzer">analyzer</option>
               <option value="terminal">terminal</option>
               <option value="ask">ask</option>
               <option value="cycle">cycle</option>
@@ -484,6 +485,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=60"></script>
+  <script src="/static/app.js?v=62"></script>
 </body>
 </html>

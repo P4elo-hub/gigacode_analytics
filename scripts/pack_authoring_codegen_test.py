@@ -58,7 +58,7 @@ def _smoke_graph(orch: str) -> dict:
                 "id": "analyze-routing",
                 "label": "analyze-routing",
                 "subagent": "routing-analyzer",
-                "kind": "step",
+                "kind": "analyzer",
             },
             {"id": "step-alpha", "label": "step-alpha", "subagent": None, "kind": "step"},
             {"id": "step-beta", "label": "step-beta", "subagent": None, "kind": "step"},

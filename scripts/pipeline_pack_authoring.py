@@ -327,7 +327,7 @@ def ensure_routing_state_authoring(payload: dict) -> dict:
                 "id": "analyze-routing",
                 "label": "analyze-routing",
                 "subagent": "routing-analyzer",
-                "kind": "step",
+                "kind": "analyzer",
             }
         )
         graph["nodes"] = nodes
@@ -386,7 +386,7 @@ def _template_routing_state(pipeline_id: str) -> dict:
             "id": "analyze-routing",
             "label": "analyze-routing",
             "subagent": "routing-analyzer",
-            "kind": "step",
+            "kind": "analyzer",
         },
     )
     payload["graph"]["edges"].append(

@@ -52,7 +52,7 @@ def _graph(orch: str, *, after_step: bool = True) -> dict:
                 "id": "analyze-routing",
                 "label": "analyze-routing",
                 "subagent": "routing-analyzer",
-                "kind": "step",
+                "kind": "analyzer",
             },
             {"id": "step-alpha", "label": "step-alpha", "subagent": None, "kind": "step"},
             {"id": "done", "label": "done", "kind": "terminal"},

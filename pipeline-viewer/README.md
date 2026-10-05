@@ -53,8 +53,9 @@ python3 pipeline-viewer/server.py
 - **Workflow validate** (вкладка Spec): баннер под header + блок в sidebar —
   `pipeline_validate.py` (block/warn/ok, `workflow_fix`). Обновляется по SSE после
   SubagentStop hook (`append_run_log` → ingest → validate)
-- **Целевой граф** — содержательные шаги spec (квадрат). `analyze-routing` не
-  хаб со всех сторон: овал под шагом, после которого он бежал. Hook, validate,
+- **Целевой граф** — содержательные шаги pipeline. `kind: step` — квадрат,
+  `kind: analyzer` — ромб с тем же статусным цветом; во «Факте» analyzer показывается маленьким ромбом
+  под шагом, после которого он бежал. Hook, validate,
   set_active_task — в sidebar «Инфраструктура»
 - На вкладке **Calibration** — excerpt из `human-review.md`, `delta-analysis.md`, `proposals.md` и т.д.
 

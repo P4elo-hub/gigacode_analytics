@@ -6,7 +6,7 @@ nodes:
     kind: orchestrator
   - id: analyze-routing
     label: analyze-routing
-    kind: step
+    kind: analyzer
     subagent: routing-analyzer
   - id: done
     label: done

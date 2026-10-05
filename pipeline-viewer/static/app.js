@@ -60,6 +60,7 @@ const RESULT_COLORS = {
 };
 
 const ROUTING_STEP = "analyze-routing";
+const ANALYZER_KIND = "analyzer";
 const AFTER_STEP_LABEL = "после завершения шага";
 const ROUTING_SATELLITE_DY = 50;
 const ROUTING_SAT_COLOR = "#4338ca";
@@ -67,6 +68,7 @@ const ROUTING_SAT_COLOR = "#4338ca";
 const PACK_NODE_COLORS = {
   orchestrator: "#2563eb",
   step: "#475569",
+  analyzer: "#475569",
   terminal: "#15803d",
   meta: "#64748b",
   cycle: "#0f766e",
@@ -80,6 +82,18 @@ const PACK_EDGE_COLORS = {
 
 function isRoutingStep(step) {
   return step === ROUTING_STEP;
+}
+
+function analyzerStepIds(data) {
+  const ids = new Set([ROUTING_STEP]);
+  for (const node of data?.nodes || []) {
+    if (node?.kind === ANALYZER_KIND && node.id) ids.add(String(node.id));
+  }
+  return ids;
+}
+
+function isAnalyzerStep(step, data) {
+  return analyzerStepIds(data).has(String(step || ""));
 }
 
 function routingSatelliteId(hostStep) {
@@ -124,10 +138,10 @@ function routingBurstsByHost(timeline) {
 function routingLiveHost(data) {
   const current = data?.current;
   const next = data?.dispatch?.next_step || data?.divergence?.summary?.expected_step;
-  if (current?.step !== ROUTING_STEP && next !== ROUTING_STEP) return null;
+  if (!isAnalyzerStep(current?.step, data) && !isAnalyzerStep(next, data)) return null;
   const timeline = data?.timeline || [];
   for (let i = timeline.length - 1; i >= 0; i -= 1) {
-    if (!isRoutingStep(timeline[i].step)) return timeline[i].step;
+    if (!isAnalyzerStep(timeline[i].step, data)) return timeline[i].step;
   }
   return "spec-orchestrator";
 }
@@ -135,14 +149,14 @@ function routingLiveHost(data) {
 function satelliteVisual(host, data, burst, liveHost) {
   const running =
     data?.current?.status === "running" &&
-    data?.current?.step === ROUTING_STEP &&
+    isAnalyzerStep(data?.current?.step, data) &&
     liveHost === host;
   if (running) {
     return { state: "active", color: RESULT_COLORS.active, label: "analyze-routing" };
   }
   const expected =
-    (data?.dispatch?.next_step || data?.divergence?.summary?.expected_step) ===
-      ROUTING_STEP && liveHost === host;
+    isAnalyzerStep(data?.dispatch?.next_step || data?.divergence?.summary?.expected_step, data) &&
+    liveHost === host;
   if (expected && data?.current?.status !== "running") {
     return { state: "next", color: ROUTING_SAT_COLOR, label: "analyze-routing" };
   }
@@ -204,7 +218,7 @@ let schemaInspectorSyncing = false;
 let schemaInspectorUndoArmed = false;
 const SCHEMA_UNDO_LIMIT = 40;
 const schemaUndoByPack = {};
-const SCHEMA_NODE_KINDS = ["orchestrator", "step", "terminal", "ask", "cycle", "meta"];
+const SCHEMA_NODE_KINDS = ["orchestrator", "step", "analyzer", "terminal", "ask", "cycle", "meta"];
 const SCHEMA_EDGE_KINDS = ["main", "branch", "loop"];
 const CYCLE_CLOSE = "on_done";
 const DISPATCH_OUTCOMES = ["ready", "stopped"];
@@ -371,6 +385,16 @@ function initCytoscape() {
         },
       },
       {
+        selector: 'node[kind = "analyzer"]',
+        style: {
+          shape: "diamond",
+          width: 132,
+          height: 88,
+          "font-size": "11px",
+          "text-max-width": "118px",
+        },
+      },
+      {
         selector: 'node[kind = "meta"]',
         style: {
           width: 140,
@@ -408,15 +432,15 @@ function initCytoscape() {
       {
         selector: 'node[kind = "routing-sat"]',
         style: {
-          width: 124,
-          height: 28,
+          width: 92,
+          height: 42,
           "font-size": "8px",
-          shape: "ellipse",
+          shape: "diamond",
           "background-color": "data(color)",
-          "border-color": "#a5b4fc",
+          "border-color": "#1e293b",
           "border-width": 1.5,
           color: "#eef2ff",
-          "text-max-width": "118px",
+          "text-max-width": "78px",
         },
       },
       {
@@ -1569,7 +1593,7 @@ function timingStepColor(stepId) {
 function nestRoutingUnderAgents(invocations) {
   const groups = [];
   for (const inv of invocations) {
-    if (isRoutingStep(inv.step)) {
+    if (isAnalyzerStep(inv.step, state.graph)) {
       const last = groups[groups.length - 1];
       if (last) last.routings.push(inv);
       else groups.push({ inv, routings: [], routingOnly: true });
@@ -1616,7 +1640,7 @@ function renderTimingInvocation(inv, nested) {
   const sub = inv.subagent
     ? `<span class="timing-pass-sub">${escapeHtml(inv.subagent)}</span>`
     : "";
-  const title = nested ? "analyze-routing" : inv.step || "?";
+  const title = nested ? inv.step || ROUTING_STEP : inv.step || "?";
   const work = inv.work ? `<p class="timing-work">${escapeHtml(inv.work)}</p>` : "";
   return (
     `<li class="${cls}">` +
@@ -1681,7 +1705,7 @@ function renderTimingsPanel(timings, timeline) {
     `<br><span class="timing-range">источник: ${escapeHtml(src)}</span></p>` +
     `<p class="timing-stale-hint">Строка — вызов агента шага` +
     (groups.length ? ` (${groups.length})` : "") +
-    `. Под ним — analyze-routing, как овал на «Факт». Фиолетовое — хук: что записал и к кому повёл.` +
+    `. Под ним — analyzer/router, как ромб на «Факт». Фиолетовое — хук: что записал и к кому повёл.` +
     (failedN ? ` Красным/жёлтым — агент упал или retry.` : "") +
     `</p>`;
 
@@ -1951,7 +1975,7 @@ function updateGraphViewHint(data) {
   const timeline = data?.timeline || [];
   const n = timeline.length;
   if (state.graphView === "timing") {
-    el.textContent = "Строка — агент шага · под ним routing, как овал на «Факт»";
+    el.textContent = "Строка — агент шага · под ним analyzer/router, как ромб на «Факт»";
   } else if (state.graphView === "actual") {
     const staleCount = staleTimelineRows(timeline).length;
     const activeCount = n - staleCount;
@@ -2068,10 +2092,10 @@ function buildActualGraphElements(data) {
       group: "nodes",
       data: {
         id: satId,
-        stepId: ROUTING_STEP,
+        stepId: last.step || ROUTING_STEP,
         seq: last.seq,
         hostStep: currentHostId,
-        label: "analyze-routing",
+        label: last.step || ROUTING_STEP,
         color: RESULT_COLORS[displayState] || ROUTING_SAT_COLOR,
         state: displayState,
         kind: "routing-sat",
@@ -2118,7 +2142,7 @@ function buildActualGraphElements(data) {
     }
 
     const row = item.row;
-    if (isRoutingStep(row.step)) {
+    if (isAnalyzerStep(row.step, data)) {
       routingBuf.push(row);
       return;
     }
@@ -2407,9 +2431,10 @@ function bindGraphInteractions(graph) {
       text = `Отменённые шаги · ${cyNode.data("staleCount")} проходов · клик — развернуть`;
     } else if (cyNode?.data("kind") === "routing-sat") {
       const host = cyNode.data("hostStep");
+      const analyzer = cyNode.data("stepId") || ROUTING_STEP;
       text = host
-        ? `analyze-routing после ${host}`
-        : "analyze-routing";
+        ? `${analyzer} после ${host}`
+        : analyzer;
     } else if (cyNode?.data("kind") === "visit") {
       text = `#${cyNode.data("seq")} ${stepId} · ${text}`;
       const reason = cyNode.data("staleReason");
@@ -2678,6 +2703,7 @@ function sanitizePackDraft(draft) {
 function nodeUiKind(node) {
   if (!node) return "step";
   if (node.kind === "orchestrator") return "orchestrator";
+  if (node.kind === ANALYZER_KIND) return ANALYZER_KIND;
   if (node.kind === "terminal") return "terminal";
   if (node.kind === "meta") return "meta";
   if (node.cycle) return "cycle";
@@ -2777,6 +2803,7 @@ function applyUiKindToNode(node, uiKind) {
   }
   delete next.cycle;
   if (kind === "orchestrator") next.kind = "orchestrator";
+  else if (kind === ANALYZER_KIND) next.kind = ANALYZER_KIND;
   else if (kind === "terminal") next.kind = "terminal";
   else if (kind === "meta") next.kind = "meta";
   else if (kind === "ask") {
@@ -3048,6 +3075,7 @@ function schemaKindHint(uiKind) {
     return "Ровно одна клетка-оркестратор. Другой оркестратор станет шагом.";
   }
   if (uiKind === "terminal") return "Терминал (PASS / done).";
+  if (uiKind === ANALYZER_KIND) return "Analyzer/router gate: routing-проверка и выбор следующего шага.";
   if (uiKind === "meta") return "Мета-шаг, не ask/cycle.";
   return "Обычный шаг. YAML не пишется.";
 }
@@ -4934,6 +4962,7 @@ function formatPackNodeLabel(node, opts = {}) {
       lines.push(calls.length ? `cycle · ${calls.length}` : "cycle");
     }
   } else if (node.ask) lines.push("пауза · apply здесь");
+  if (node.kind === ANALYZER_KIND) lines.push("analyzer");
   if (node.kind === "meta") lines.push("meta");
   return lines.join("\n");
 }
@@ -4971,6 +5000,7 @@ function packNodeTooltip(node) {
   const lines = [node.label || node.id, `id: ${node.id}`, `kind: ${node.kind || "step"}`];
   if (node.subagent) lines.push(`subagent: ${node.subagent}`);
   else if (node.kind === "orchestrator") lines.push("оркестратор");
+  if (node.kind === ANALYZER_KIND) lines.push("analyzer: routing/dispatch gate");
   if (node.draft) lines.push("черновик: клетка с палитры, не в YAML");
   const missing = node.subagent ? missingClisFor(node.subagent) : [];
   if (missing.length) lines.push(`нет в CLI: ${missing.join(", ")}`);
