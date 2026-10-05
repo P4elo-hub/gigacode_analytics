@@ -34,11 +34,11 @@ tools:
 Канон: правило `pipeline-enforcement`. Явно `--pipeline calibration`.
 `orchestrator_mode: orchestrator_only` — правил dispatch нет; delegate проверяет рёбра.
 
-1. `python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline calibration`
+1. `python3 scripts/pipeline_delegate.py <task_id> --cli opencode --pipeline calibration`
 2. `action` → `task` | `orchestrator_only` | `ask_user` | `ready` | `stopped` | `error`
 3. После `task` hook пишет лог; fallback:
    `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline calibration`
-4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline calibration` (если hook не сделал)
+4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli opencode --pipeline calibration` (если hook не сделал)
 5. `python3 scripts/pipeline_validate.py <task_id> --pipeline calibration`
 
 При `orchestrator_only` веди шаги по markdown ниже; для проверки ребра:

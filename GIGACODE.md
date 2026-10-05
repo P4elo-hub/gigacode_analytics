@@ -45,7 +45,7 @@ Workspace пишется и гоняется в **GigaCode CLI** (`gigacode`). �
   → /check-feature-code ↔ /resolve-code-alignment (≤3)
 ```
 
-Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli gigacode` →
+Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli gigacode --pipeline spec-v2` →
 `action: task` → **только** `task.subagent_type` из JSON. После subagent — снова delegate.
 Исключение: `action: ask_user` — после ответа `task` из того JSON, без повторного
 delegate; снова delegate после apply.

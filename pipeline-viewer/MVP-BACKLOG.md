@@ -32,7 +32,7 @@
 Перед коммитом минимуум:
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check spec-v2
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
 # если трогал dispatch / routing / overlay:
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py --pipeline spec-v2
 # smoke next-step (подставь актуальный slug при необходимости):
@@ -247,13 +247,13 @@ pipeline id всегда явный (CLI / active-task), иначе fail-fast.
 | # | Статус |
 |---|--------|
 | 0 | done |
-| 1 | todo |
-| 2 | todo |
-| 3 | todo |
+| 1 | done |
+| 2 | done |
+| 3 | done |
 | 4 | todo |
 | 5 | todo |
 | 6 | todo |
-| 7 | todo |
+| 7 | done |
 | 8 | todo |
 | 9 | todo |
 | 10 | todo |

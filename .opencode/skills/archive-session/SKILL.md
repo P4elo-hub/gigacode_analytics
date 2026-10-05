@@ -27,7 +27,7 @@ user-invocable: false
 ```bash
 python3 scripts/ingest_session_telemetry.py <slug> \
   [--session <uuid>] \
-  [--cli qwen|opencode|opencode] \
+  [--cli qwen|gigacode|opencode] \
   [--session-directory <path>] \
   [--run-id auto] \
   [--new-run] \

@@ -11,7 +11,7 @@ alwaysApply: true
 Оркестратор **не выбирает** следующий шаг по intuition. Перед `task`:
 
 ```bash
-python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec-v2
+python3 scripts/pipeline_delegate.py <task_id> --cli gigacode --pipeline spec-v2
 ```
 
 `pipeline_dispatch.py` и `feature_status.py` — read-only для человека; оркестратор
@@ -23,11 +23,11 @@ Default отсутствует: передавай явный `--pipeline spec-v
 
 Один цикл для любого pack с orchestrator + agents/skills:
 
-1. `python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline <id>`
+1. `python3 scripts/pipeline_delegate.py <task_id> --cli gigacode --pipeline <id>`
 2. `action` → `task` | `ask_user` | `write_feature_cycle` | `orchestrator_only` | `ready` | `stopped` | `error`
 3. После `task` hook SubagentStop пишет лог; fallback:
    `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline <id>`
-4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline <id>` (если hook не сделал)
+4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli gigacode --pipeline <id>` (если hook не сделал)
 5. `python3 scripts/pipeline_validate.py <task_id> --pipeline <id>`
 
 Не вызывай `pipeline_dispatch.py` и `pipeline_set_active_task.py` отдельно.

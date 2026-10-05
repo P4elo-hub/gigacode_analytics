@@ -31,7 +31,7 @@ delegate.
 `pipeline_delegate.py` между ответом и apply. Снова delegate после возврата apply.
 
 1. SubagentStop hook: run-log + ingest + validate (или fallback вручную).
-2. **`pipeline_delegate.py <slug> --cli qwen`** (не между блоками write-feature)
+2. **`pipeline_delegate.py <slug> --cli qwen --pipeline spec-v2`** (не между блоками write-feature)
 3. `action: task` → следующий `task` **в том же ходе** на **только** `subagent_type` из JSON.
 4. Без «упало», «остановлюсь», «продолжить?».
 

@@ -25,9 +25,14 @@ class ResolvePipelineIdTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pipeline id required"):
             resolve_pipeline_id(None, None)
 
-    def test_cli_wins_over_active_task(self) -> None:
-        active = {"pipeline": "calibration"}
+    def test_cli_matches_active_task(self) -> None:
+        active = {"pipeline": ACTIVE_PIPELINE}
         self.assertEqual(resolve_pipeline_id(ACTIVE_PIPELINE, active), ACTIVE_PIPELINE)
+
+    def test_cli_mismatch_active_task_is_error(self) -> None:
+        active = {"pipeline": "calibration"}
+        with self.assertRaisesRegex(ValueError, "pipeline mismatch"):
+            resolve_pipeline_id(ACTIVE_PIPELINE, active)
 
     def test_active_task_used_when_cli_missing(self) -> None:
         active = {"pipeline": ACTIVE_PIPELINE}

@@ -2,228 +2,141 @@
 report_type: code-alignment
 slug: bph-moex-tax
 source_document: Feature-writing/bph-moex-tax/bph-moex-tax.md
-generated_at: 2026-01-01
-alignment_iteration: 1
-scope: full
+generated_at: 2026-10-05
+alignment_iteration: 3
+scope: repositories/ only
 language: ru
 verdict: PASS WITH GAPS
 ---
 
-# Аудит соответствия спецификации коду (`check-feature-code`)
+# Отчёт о соответствии коду: bph-moex-tax
 
-Спецификация: `Feature-writing/bph-moex-tax/bph-moex-tax.md` (1981 строка).
-Источник фактов: `repositories/` (код и миграции — истина), `db-export/` — справочник.
-Итерация: 1 из 3.
+**Документ:** `Feature-writing/bph-moex-tax/bph-moex-tax.md`
+**Отчёт:** `Feature-writing/bph-moex-tax/bph-moex-tax-code-alignment.md`
+**Область проверки:** только код в `repositories/` (справочно — `db-export/БД ИО.md` для прод-схемы)
 
-## Легенда статусов
+## Сводка
+- CONFIRMED: 36 · MISMATCH: 0 · PARTIAL: 0 · NOT FOUND: 2 · UNVERIFIABLE: 1
+- **Вердикт:** PASS WITH GAPS
 
-- **CONFIRMED** — утверждение spec подтверждено кодом/DDL (с путём и цитатой).
-- **MISMATCH** — код противоречит утверждению spec.
-- **PARTIAL** — подтверждено частично.
-- **NOT FOUND** — в коде не найдено.
-- **UNVERIFIABLE** — проверить по доступным источникам невозможно.
+Критических и Major MISMATCH нет. Все четыре правки предыдущего прогона (P-10, C-06, C-07,
+§4.2.5) подтверждены кодом и переведены в CONFIRMED. Остаются только ожидаемые TO BE-гэпы
+(NOT FOUND для новых строк БД/фикстур, которые появятся после merge) и один UNVERIFIABLE
+(runtime-значения timeout/retry вне `repositories/`). Ядро фичи (data-driven INSERT →
+`TAXES|MOEX_TAX → tax` с `comment` из `info`) — полностью CONFIRMED.
 
----
+## Приоритетные находки (указания пользователя)
 
-## 1. Контракты (REST / OpenAPI)
+Перепроверены findings предыдущего прогона (итерация 2, verdict FAIL) — все MISMATCH/PARTIAL
+сняты:
 
-**Источник контракта:** `repositories/ИО/history-ops/src/main/swagger/bph/bph.yml`.
+1. **P-10 (был Major MISMATCH) — ИСПРАВЛЕНО, теперь CONFIRMED.** §4.2.4 «Validation и rejection»
+   (строка разделена на два под-случая), примечание «Observability», §4.2.2 alt-сценарий 2a,
+   §2 CN-15, §6 ACC-N03 теперь корректно различают: (а) «subtype известен в кэше, но нет
+   `operation` с `bph_active`» → молчаливый no-op; (б) «subtype полностью отсутствует в кэше»
+   (CN-15, INSERT не выполнен) → `BphOperationConverter.convert()` бросает
+   `IllegalArgumentException("Unexpected subtype value …")` → ловится в
+   `ListRequestService.convertEntry()` → WARN-лог «Failed to convert operations» + метрика
+   `parse_error`. Соответствует коду (`BphTypesHolder.getSubtype()`,
+   `BphOperationConverter.convert()/getSubType()`, `ListRequestService.convert()/convertEntry()`).
+2. **C-06 (был Minor MISMATCH) — ИСПРАВЛЕНО, теперь CONFIRMED.** §4.1.1 `pageSize` теперь
+   ссылается на `app-config-dynamic.bph-dynamic.max-records-from-bph`
+   (`BphDynamicProperties.getMaxRecordsFromBph()`). Соответствует коду
+   (`BphGateway.createRequest()` → `request.setPageSize(bphDynamicProperties.getMaxRecordsFromBph())`).
+3. **C-07 (был Minor PARTIAL) — ИСПРАВЛЕНО, теперь CONFIRMED.** §4.1.1 `dateForFilter` теперь
+   указывает `FORMATION_DATE` по умолчанию, `EVENT_DATE` при тоггле
+   `ENABLE_SORTING_BY_EXECUTION_TIME` (`BphGateway.resolveSortingType()`). Соответствует коду.
+4. **§4.2.5 «Порядок rollout» — ПРИВЕДЕНО В СООТВЕТСТВИЕ.** Примечание теперь повторяет
+   фактическое поведение CN-15 (`IllegalArgumentException` → WARN + `parse_error`), без
+   формулировки «молчаливый no-op».
 
-| Утверждение spec | Раздел | Статус | Evidence |
-|---|---|---|---|
-| Endpoint `POST /api/v1/incoming-gateway/operations-with-details`, header `rqUID` (required), `systemName` (required) | §4.1.1 | **CONFIRMED** | `bph.yml:216-245` — `path: /api/v1/incoming-gateway/operations-with-details`, `parameters: rqUID (required)`, `systemName (required)`, `requestBody: $ref RequestParamsData`, `200/400/500` |
-| `RequestParamsData.subtypesAndStatuses[]` — массив объектов с `type`/`subtype`/`statuses`/`additionalTypes`; `required: [type, subtype, statuses]`; `maxItems: 1000` | §4.1.1 | **CONFIRMED** | `bph.yml:1292-1321` — `subtypesAndStatuses: type: array, maxItems: 1000`, вложенные `type`/`subtype`/`additionalTypes`/`statuses`, `required: - type - subtype - statuses` |
-| `type`/`subtype`/`statuses[]` в элементе — `maxLength: 225` | §4.1.1 | **CONFIRMED** | `bph.yml:1305,1314,1324` — `maxLength: 225` у `type`, `subtype`, `statuses[]` |
-| `additionalTypes` — `array`, каждый элемент `maxLength: 225` | §4.1.1 | **CONFIRMED** | `bph.yml:1309-1315` |
-| Ответ `data[].lead` (объект операции) + `data[].details[]` (`key`/`value`) | §4.1.1 | **CONFIRMED** | `bph.yml:1238-1252` — `DetailsData: { lead: OperationData, details: [DetailData{key,value}] }` |
-| `lead.id`, `lead.type`, `lead.total_sum`, `lead.comment`, `lead.currency` — поля исходящего объекта HO | §4.1.1, §4.2.3 | **CONFIRMED** | `BphCommonClientConverter.java` — `lead.setComment(...)` (`:135`), `currency` из `operationConverterService.convert(currencyEnum.getValue())`, `totalSum` из `operation.totalPrice()`; маппинг полей см. §3 |
-| `OperationData.subtype`/`subType`/`type`/`additionalType`/`externalSystemId`/`totalPrice`/`price` | §4.1.1 §4.2.3 | **CONFIRMED** | `bph.yml:1086-1120` — `type`, `subType`, `subtype`, `additionalType`, `externalSystemId`, `price`, `totalPrice` |
-| `OperationData.totalPrice` — `$ref PriceData {value: big_decimal, currency: string}` | §4.1.1 §4.2.3 | **CONFIRMED** | `bph.yml:1119-1120` + `PriceData` (`:1226-1235`) |
-| HTTP-коды 200/400/500 | §4.1.1 | **CONFIRMED** | `bph.yml:246-260` — ответы `'200'`, `'400'`, `'500'` |
-| Enum `subtype`: `TAX_RETAIN`, `TAX_REFUND_BROK_ACCOUNT`, `MOEX_TAX` | §4.1.1 §4.2.2 | **CONFIRMED** | `TAX_RETAIN` — в кэше (тест `LikeBCBphIntegrationTest.java:29`: `"bph_subtype":"TAX_RETAIN"`); `TAX_REFUND_BROK_ACCOUNT` — в кэше (`find_all_operations_v2`-снапшоте, `"bph_subtype":"TAX_REFUND_BROK_ACCOUNT"`); `MOEX_TAX` — новый подтип (TO BE, в проде отсутствует → NOT FOUND для TO BE, см. §7) |
-| Enum `additionalTypes`: `OUT_MONEY`, `OUT_SECURITIES`, `TAX_PERIOD_END`, `INCENTIVE_PAYMENT` | §4.1.1 §4.2.2 | **CONFIRMED** | тестовая конфигурация кэша `LikeBCBphIntegrationTest.java:29` — `TAXES/TAX_RETAIN` с `info[]`: `OUT_MONEY`, `OUT_SECURITIES`, `TAX_PERIOD_END`, `INCENTIVE_PAYMENT` — совпадает 1:1 |
+## Находки по категориям
 
-**Вывод по контрактам:** все существующие поля и required/maxItems подтверждены кодом.
-`MOEX_TAX` — новая сущность (TO BE), её отсутствие в проде ожидаемо (см. §7).
+### Контракты
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| C-01 | §4.1.1 Endpoint | `POST /api/v1/incoming-gateway/operations-with-details` | `repositories/ИО/history-ops/src/main/swagger/bph/bph.yml:216` (`/api/v1/incoming-gateway/operations-with-details:` → `post:`) | CONFIRMED | Info |
+| C-02 | §4.1.1 Request headers | `rqUID` (required), `systemName` (required) | `bph.yml:222-232` (`rqUID` required, example `c4a5dccd-0fe2-4aa1-823e-a5a5d9ee04a4`; `systemName` required) | CONFIRMED | Info |
+| C-03 | §4.1.1 Request body | `subtypesAndStatuses[]` = `{type, subtype, additionalTypes[0-1], statuses[]}`, required `type`/`subtype`/`statuses`, `maxItems: 1000` | `bph.yml:1292-1318` | CONFIRMED | Info |
+| C-04 | §4.1.1 Response body | `OperationData` поля `type`/`subType`/`subtype`/`additionalType`/`formationDate`/`eventDate`/`externalSystemId`/`totalPrice`/`status`/`agreement` | `bph.yml:1088-1203` (`OperationData` schema) | CONFIRMED | Info |
+| C-05 | §2 CN-06, §4.1.1 | Фронтовый enum `PortfolioOperationType` содержит `tax` и `tax_input` | `repositories/ИО/history-ops/src/main/swagger/history/history.yml:71` (`- tax`), `:93` (`- tax_input`) | CONFIRMED | Info |
+| C-06 | §4.1.1 Request body, `pageSize` | `pageSize` = «Лимит записей (`app-config-dynamic.bph-dynamic.max-records-from-bph`, метод `BphDynamicProperties.getMaxRecordsFromBph()`)» | `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/adapter/bph/BphGateway.java:130` — `request.setPageSize(bphDynamicProperties.getMaxRecordsFromBph())`; `BphDynamicProperties.java:12-15` (`@ConfigurationProperties(prefix = "app-config-dynamic.bph-dynamic")`, поле `maxRecordsFromBph`) | CONFIRMED | Info |
+| C-07 | §4.1.1 Request body, `dateForFilter` | `dateForFilter` = `FORMATION_DATE` по умолчанию; при тоггле `ENABLE_SORTING_BY_EXECUTION_TIME` — `EVENT_DATE` | `BphGateway.java:138-142` (`resolveSortingType()` → `shouldUseSortingByExecutionTime ? FilterDateEnum.EVENT_DATE : FilterDateEnum.FORMATION_DATE`); `FeatureToggleName.java:36` (`ENABLE_SORTING_BY_EXECUTION_TIME("enable_sorting_by_execution_time")`) | CONFIRMED | Info |
 
----
+### БД и миграции
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| D-01 | §4.2.3 | Таблицы `bph`, `operation`, `info`, `status_to_operation`, справочники `type`/`operation_type`/`status`/`general_status`/`bph_bc` существуют | `create_schema.sql:13-61`; `db-export/БД ИО.md` | CONFIRMED | Info |
+| D-02 | §4.2.3 | `type` id=7 `TAXES` | `create_schema.sql:585` (`values (7, 'taxes')`), `:628` (`update history_ops.type set name='TAXES' where id=7`) | CONFIRMED | Info |
+| D-03 | §4.2.3 | `operation_type` id=2 `tax`, id=20 `tax_input` | `create_schema.sql:193` (`(2,'tax')`), `:590` (`(20,'tax_input')`) | CONFIRMED | Info |
+| D-04 | §4.2.3 | `status` id=19 `COMPLETE` → `general_status` id=1 `executed` | `create_schema.sql:607-608` (`insert into history_ops.status(id, name, general_status_id) values (19, 'COMPLETE', 1)`) | CONFIRMED | Info |
+| D-05 | §4.2.3 | `bph` id=19 `TAX_RETAIN` (type_id=7), id=20 `TAX_REFUND_BROK_ACCOUNT` (type_id=7) | `create_schema.sql:593-596` | CONFIRMED | Info |
+| D-06 | §4.2.3 | `operation` id=2 (`operation_type_id=2`, `bc_id=110`, `bph_id=19`); id=23 (`tax_input`, `bc_id=NULL`, `bph_id=20`) | `create_schema.sql:599-604` (`update operation set bph_id=19 where id=2`; `insert operation (23, 20, null, 20, …)`) | CONFIRMED | Info |
+| D-07 | §4.2.3 | `bph_bc` id=110 `TAX_WITHHOLDING` (`bph_type_id=8` `MONEY_DIAS`) | `create_schema.sql:699` (`(110, 8, 'TAX_WITHHOLDING', True)`) | CONFIRMED | Info |
+| D-08 | §4.2.3 | `info` для `TAX_RETAIN` (`OUT_MONEY`/`INCENTIVE_PAYMENT`/`OUT_SECURITIES`/`TAX_PERIOD_END`), для `TAX_REFUND_BROK_ACCOUNT` (`additional_type=NULL`) | `create_schema.sql:620-624` (id 46-49) | CONFIRMED | Info |
+| D-09 | §4.2.3 | `status_to_operation` id=28 (operation 2 ↔ status 19), id=29 (operation 23 ↔ status 19) | `create_schema.sql:611-613` (`values (28, 2, 19), (29, 23, 19)`) | CONFIRMED | Info |
+| D-10 | §4.2.3 ER-диаграмма | `operation.bc_id → bph_bc.id`, `name VARCHAR(255)` | **Прод**: `db-export/БД ИО.md` (`bc_id INTEGER REFERENCES bph_bc(id)`, `name VARCHAR(255) NOT NULL`); **тест DDL**: `create_schema.sql:43-48` (`bc_id INTEGER REFERENCES history_ops.bc(id)`, `name TEXT NOT NULL`) | CONFIRMED (против прода) — тестовый DDL рассинхронизирован (legacy `bc`, `TEXT`) | Info |
+| D-11 | §4.2.3, §4.2.5 | id новых строк: test `22/24/52/37`, prod `25/27/79/57` | В коде/выгрузке отсутствуют (TO BE). Согласованы со «следующим свободным id»: test DDL `bph`→21, `operation`→23, `info`→51, `status_to_operation`→30; прод `bph`→24, `operation`→26, `info`→78, `status_to_operation`→56 | NOT FOUND (TO BE, ожидаемо до merge) | Major (не MISMATCH) |
+| D-12 | §1.1 CN-01, BR-01 | `MOEX_TAX` отсутствует в коде и выгрузках | grep `MOEX_TAX` → 0 совпадений в `repositories/` | CONFIRMED | Info |
+| D-13 | §4.2.3, §4.2.5 | Кэш SQL связывает `operation.bc_id → bph_bc` | `repositories/ИО/history-ops/src/main/resources/db/find_all_operations_v2.sql` — `LEFT JOIN history_ops.bph_bc bb ON o.bc_id = bb.id` | CONFIRMED | Info |
 
-## 2. База данных и миграции
+### Конфигурация
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| K-01 | §4.2.5, CONTEXT | Ключ кэша `app-config.operation-cache` (`updateDelayMs`, `defaultValue`, `includingNameTypes`) | `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/configuration/properties/OperationCacheLoaderProperties.java:8` (`@ConfigurationProperties(prefix = "app-config.operation-cache")`, record с `updateDelayMs`, `defaultValue`, `includingNameTypes`) | CONFIRMED | Info |
+| K-02 | §4.2.5 | Bootstrap `operation-cache.default-value` JSON содержит `TAXES|TAX_RETAIN → tax` и `TAXES|TAX_REFUND_BROK_ACCOUNT → tax_input` | `repositories/ИО/history-ops/src/test/resources/application-test.yml:125` | CONFIRMED | Info |
+| K-03 | §4.2.5 Validation | «bootstrap JSON и строки БД согласованы; иначе кэш поведёт себя по-разному» | Bootstrap JSON использует поле `bc_code` (Integer, не читается в маппинге); прод-кэш SQL отдаёт `bc_type`/`bc_subtype` (String). Расхождение pre-existing, для `MOEX_TAX` (`bc_id=NULL`) несущественно | CONFIRMED (риск зафиксирован) | Info |
+| K-04 | §2 CN-12 | timeout/retry — runtime-конфиг `WebClientBphConfiguration`, вне scope | `WebClientBphConfiguration.java:24-25` (`bphProperties.url()`, `bphProperties.deadline()`); `BphProperties.java:8` | CONFIRMED | Info |
+| K-05 | §4.1.1 | BPH gateway управляется тогглом | `FeatureToggleName.java:23` — `ENABLE_BPH("enableServiceBPH")`; `BphGateway.java:60` (`enabled()` → `FeatureToggleName.ENABLE_BPH`) | CONFIRMED | Info |
 
-**Источник DDL:** `repositories/ИО/history-ops/liquibase/changesets/`.
+### Поведение и алгоритмы
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| P-01 | BR-06, CN-08 | `additionalTypes[]` собирается только из non-null `info.additional_type`; при `additional_type=NULL` поле опускается | `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/service/filter/BphBcFilterService.java:118-124` (`filter(Objects::nonNull)`; `if (!additionalTypes.isEmpty()) setAdditionalTypes(...)`) | CONFIRMED | Info |
+| P-02 | BR-07 | Статус-членство: `bphActive && type==bphType && subtype==bphSubtype && statusMap.containsKey(status)` | `BphBcFilterService.java:69-78` (`isCommonOperationByBphContext`) | CONFIRMED | Info |
+| P-03 | BR-08 | Watershed: `formationDate` не раньше `historyStart` | `BphBcFilterService.java:283-285` (`validateStartDateAndSetActual` → `!startDate.isAfter(formationDate)`) | CONFIRMED | Info |
+| P-04 | BR-09 | `additionalType`-фильтр + INFO-лог + метрика `unexpected_additional_type_for_common_operation` | `BphBcFilterService.java:230-244` (`log.info(...)`, `meterService.countGeneralError("unexpected_additional_type_for_common_operation", 1)`) | CONFIRMED | Info |
+| P-05 | BR-13, CN-09 | При отсутствии bc-контекста (`bc_id=NULL`) — ранний `return true`, watershed/additionalType пропускаются | `BphBcFilterService.java:184-186` (`if (!hasBphContext || !hasBcContext) { return true; }`) | CONFIRMED | Info |
+| P-06 | BR-10, CN-06 | Маппинг `type|subtype → operation_type` data-driven из кэша | `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/adapter/bph/BphConverter.java:52-75` (`getTypesMap`/`enrichTypesMapByCacheData`) | CONFIRMED | Info |
+| P-07 | BR-11 | id = `bph_<type>_<externalSystemId>` = `bph_tax_<id>` | `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/service/conversion/BphCommonClientConverter.java:170-187` (`getId()` → `"bph_%s_%s".formatted(...)`) | CONFIRMED | Info |
+| P-08 | BR-03 | `comment` из `info` по `additional_type` (null → `""`); fallback `operation.accComment()` при пустом для `TAXES` | `BphCommonClientConverter.java:123-140` (`getAdditionalInfoFromCache`, `isCorrectAdditionalType`, `if (TAXES.equals(bphType) && commentFromTable.isBlank()) lead.setComment(operation.accComment())`) | CONFIRMED | Info |
+| P-09 | §4.2.4 | `operationDisplayName` из `info.displayed_name` | `BphCommonClientConverter.java:220-224` (`enrichOperationDisplayName`) | CONFIRMED | Info |
+| P-10 | §4.2.4, §4.2.2 (2a), §2 CN-15, §6 ACC-N03 | Под-случаи разделены: «subtype известен, нет `bph_active`» → no-op; «subtype полностью отсутствует в кэше» → `IllegalArgumentException` → WARN «Failed to convert operations» + метрика `parse_error` | `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/service/BphTypesHolder.java:80-82` (`getSubtype()` бросает `IllegalArgumentException("Unexpected subtype value …")`); `BphOperationConverter.java:181-190` (`getSubType()` → `getSubtype()`), `convert()` вызывает `validateSimpleAttributes()`; `ListRequestService.java:108-119` (`convertEntry()` ловит RuntimeException; `logWarn("Failed to convert operations: …")` + `countIntegrationError(..., "parse_error", ...)`) | CONFIRMED | Info |
+| P-11 | §4.2.4 | Поле подтипа читается из `lead.subtype` (приоритет) либо `lead.subType` (fallback) | `BphOperationConverter.java:181-190` (`getSubType` → `subtype` затем `subType`) | CONFIRMED | Info |
+| P-12 | §4.2.4 | `totalSum = abs(totalPrice)`; `currency = CurrencyConverterUtil.convert` | `BphCommonClientConverter.java:67-70` (`abs`), `:59-60` (`operationConverterService.convert`) | CONFIRMED | Info |
 
-| Утверждение spec | Раздел | Статус | Evidence |
-|---|---|---|---|
-| Продовые DDL объявляют `id INT NOT NULL PRIMARY KEY` **без** `SERIAL` и без sequence | §4.2.3 (D-39) | **CONFIRMED** | `20241029_SIHIST-2774_7_create_operation.xml:8-11` — `<column name="id" type="INT"><constraints nullable="false" primaryKey="true"/></column>`; `..._3_create_info.xml:8-11`; `..._4_create_status_to_operation.xml:8-11`; `..._2_create_bph.xml` (аналогично). Ни `autoIncrement`, ни `defaultValueSequenceNext`, ни `createSequence` в changeset нет |
-| Способ генерации `id` — ручное назначение из конфига (`${moexTax.*}`) при INSERT | §4.2.3 (D-39) | **CONFIRMED** | спецификация паттерна подтверждается DDL (id без источника значения → значение задаётся в INSERT); сам changeset фичи — TO BE (см. §7) |
-| Штатный pre-check `SELECT COALESCE(MAX(id),0)` по 4 таблицам | §4.2.3 (D-39) | **CONFIRMED** | «Pre-checks» таблица spec (`:1378-1381`) — 4 запроса `SELECT COALESCE(MAX(id),0) FROM history_ops.{bph,operation,info,status_to_operation}`; соответствует отсутствию sequence в DDL (§2 выше) |
-| INSERT +1 (`bph`) / +1 (`operation`) / +4 (`info`) / +1 (`status_to_operation`) | §4.2.3 «Область изменения» | **CONFIRMED** | DDL таблиц соответствует меняемым сущностям: `bph` (`..._2`), `operation` (`..._7`), `info` (`..._3`, 5 колонок `additional_type/comment/logo_url/logo_url_small/displayed_name`), `status_to_operation` (`..._4`, колонки `operation_id/status_id`) |
-| FK: `info.operation_id → operation.id`, `status_to_operation.operation_id → operation.id` | §4.2.3 (D-32) | **CONFIRMED** | `..._7_create_operation.xml:25-46` — `fk_operation_to_info` и `fk_operation_to_status_to_operation` (baseColumnNames `operation_id` → referencedColumnNames `id`) |
-| UNIQUE-ограничение на `operation.bc_id` (позволяет много NULL) | §4.2.2 | **CONFIRMED** | `..._7_create_operation.xml:19-22` — `addUniqueConstraint columnNames="bc_id"` |
-| Отсутствие CS5 (нет `setval` / sequence) | §4.2.3 (D-39) | **CONFIRMED** | в DDL-файлах `20241029_SIHIST-2774_*` нет `setval`, `ALTER SEQUENCE`, `createSequence`; spec §4.2.3 (`:1520-1524`) явно фиксирует отсутствие CS5 |
-| Liquibase `includeAll path="changesets"` | §4.2.3 | **CONFIRMED** | механизм включения changesets (`logicalFilePath=changesets/...`) согласуется с `includeAll` (файлы лежат в `liquibase/changesets/`) |
-| Rollback `DELETE` по id-предикатам (`${moexTax.*}`) | §4.2.3 (D-32) | **CONFIRMED** | DDL-блоки в spec (`:1431-1517`) содержат `<rollback><delete><where>id = ${moexTax.*}</where></delete></rollback>` — DELETE по конкретным id, без бизнес-предикатов |
-| Кэш собирается запросом `find_all_operations_v2.sql` | §4.2.2 §4.2.3 | **CONFIRMED** | `src/main/resources/db/find_all_operations_v2.sql:1-58` — `SELECT json_agg(jsonb_build_object('operation_type', ot.name, 'bph_subtype', ..., 'status_and_general_status', ..., 'info', ...))` |
+### Тесты и фикстуры
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| T-01 | §6 Test data | Фикстура кэша `application-test.yml` (bootstrap JSON), фикстуры `json/response/bph/` | `application-test.yml:122-125` (структура кэша подтверждена); новая запись `TAXES|MOEX_TAX → tax` (`bc_active=false`, `additional_type=null`) **отсутствует** (TO BE) | NOT FOUND (TO BE, ожидаемо до merge) | Info |
 
-**Замечание (Minor):** структура кэша в spec (`json_object_agg` для `status_and_general_status`) совпадает с SQL: `status_and_general_status` → `json_object_agg(DISTINCT s.name, gs.name)` (объект `{status: general_status}`), `info` → `array_agg(jsonb_build_object(...))` (массив). Это подтверждает описание spec (§4.2.3 «Как заполняется кэш»).
+## Рекомендуемые действия
 
-**Важное уточнение (Minor / PARTIAL):** SQL `find_all_operations_v2.sql` **не** содержит `bc_status_and_general_status` в… — нет, содержит: `'bc_status_and_general_status', (SELECT COALESCE(json_object_agg(...)) FROM history_ops.bc_status_to_operation ...)` (`find_all_operations_v2.sql:31-38`). `BphBcFilterService` читает `cacheOperation.getBcStatusAndGeneralStatus()` (`:...`). Соответствие подтверждено.
+Блокеров нет — все Critical/Major MISMATCH сняты. Остались только ожидаемые TO BE-гэпы, которые
+закрываются самим merge-ом фичи (data-driven INSERT), а не правкой SPEC:
 
-**Наблюдение по DDL (Info):** DDL `operation` объявляет FK **на** `info`/`status_to_operation` (дочерние ссылаются на `operation`), но **FK `operation.bph_id → bph.id` в changeset отсутствует** (в `..._7` FK-блоков три, но для `bph_id`/`bc_id` — нет). Спецификация в §4.2.3 «Откат» формулирует порядок как «обратный FK: `status_to_operation`/`info` → `operation` → `bph`» — то есть подразумевает FK `operation → bph`, которого в DDL **нет**. Это **PARTIAL/MISMATCH (Minor)**: порядок отката всё равно корректен (удаление `bph` после `operation` безопасно и без FK), но утверждение про существующий FK `operation → bph` кодом **не подтверждается**. Рекомендация — уточнить формулировку (§4.2.3), сославшись только на фактически объявленные FK.
+1. **D-11 / T-01 (NOT FOUND, TO BE) — не требуют правки SPEC.** Новые id строк (test 22/24/52/37,
+   prod 25/27/79/57) и фикстуры (`application-test.yml` + `json/response/bph/`) появятся в коде после
+   реализации. До merge они закономерно отсутствуют. SPEC корректно маркирует их как `[NEW]`/«Черновик».
+2. **D-10 (Info) — опционально.** §4.2.3 ER-диаграмма корректен для прода; при желании добавить в
+   §4.2.5 примечание о рассинхроне тестового `create_schema.sql` (`bc_id REFERENCES bc(id)`, `name TEXT`)
+   с продом (`bph_bc`, `VARCHAR(255)`). Не блокер.
+3. **CN-12 (UNVERIFIABLE) — не блокер.** Конкретные значения timeout/retry BPH — runtime-конфигурация
+   вне `repositories/`; SPEC явно помечает их как вне scope.
 
----
+## Пропущено
 
-## 3. Маппинг данных и алгоритм поведения
+- Конкретные значения timeout/retry для BPH (`app-config.bph.deadline`): runtime-конфигурация вне
+  `repositories/` — SPEC помечает их CN-12 как вне scope (UNVERIFIABLE, не блокер).
+- Координация id с sibling `bph-portfolio-size-tax`: id зафиксированы как плановые (CN-03, D-06/D-11);
+  пересечение с sibling-черновиками в этом прогоне не проверялось (проверка самого sibling-документа —
+  вне scope).
 
-**Источник:** `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/service/conversion/BphCommonClientConverter.java`, `.../service/filter/BphBcFilterService.java`.
+## Журнал решений (итерация 3, 2026-10-05)
 
-### 3.1 `totalPrice = null → lead.total_sum = null` (D-40 / CN-16)
-
-**CONFIRMED.** `BphCommonClientConverter.java`:
-```java
-BigDecimal totalSum = Optional.ofNullable(operation.totalPrice())
-        .map(BigDecimal::abs)
-        .orElse(null);
-```
-Операция **не** отбрасывается при `totalPrice == null` — `Optional.map(...).orElse(null)` кладёт `null` без фильтрации/`if`. Это прямо подтверждает §4.2.3 (D-40): `totalPrice = null` → `lead.total_sum = null`, операция сохраняется (аналогично `TAX_RETAIN`). Утверждение spec CONFIRMED.
-
-### 3.2 Правило источника комментария (D-31 / D-33)
-
-**CONFIRMED.** `BphCommonClientConverter.java:131-136`:
-```java
-String commentFromTable = Optional.ofNullable(historyOperationBase.getLead().getComment())
-        .orElse("");
-
-if (TAXES.equals(bphType) && commentFromTable.isBlank()) {
-    String accComment = operation.accComment();
-    lead.setComment(accComment);
-}
-```
-и `private static final String TAXES = "TAXES";`. Логика точно соответствует §4.2.3 (UC-TOBE-R05): комментарий из таблицы `info` применяется всегда; `accComment` из ответа BPH — **только** при `TAXES` и `blank` комментарии из таблицы. До вызова идёт `enrichComment(historyOperationBase, additionalInfo.getComment())` (`:126`), т.е. комментарий из `info.comment` по совпавшему `additionalType`. Утверждение CONFIRMED.
-
-### 3.3 `lead.currency`
-
-**CONFIRMED (PARTIAL источник в присланном фрагменте).** В `BphCommonClientConverter` валюта выводится из ответа BPH через `currencyEnum` → `operationConverterService.convert(currencyEnum.getValue())` (подтверждено ранее прочитанным содержимым файла). Поле `lead.currency` заполняется; spec (§4.2.3) не заявляет обратного.
-
-### 3.4 Watershed `isActualBphOperation()` + метрика `unexpected_additional_type_for_common_operation`
-
-**CONFIRMED.** `BphBcFilterService.java`:
-```java
-if (isActualOperationByWatershed.get() && !isActualOperationByAdditionalType) {
-    ...
-    String meterTemplate = "unexpected_additional_type_for_common_operation";
-    meterService.countGeneralError(meterTemplate, 1);
-}
-return isActualOperationByWatershed.get() && isActualOperationByAdditionalType;
-```
-Лог «Unexpected additional type for common BPH operation id=%s type=%s subType=%s additionalType=%s» (`BphBcFilterService`) и метрика `history_ops_general{comment="unexpected_additional_type_for_common_operation"}` (через `MeterService.countGeneralError`) — совпадают с §5 spec.
-
-### 3.5 Статус-членство и `bc_id = NULL` → ранний `true`
-
-**CONFIRMED.** `isActualBphOperation`: при наличии контекста `operationInternal.type() != null && bphSubtype() != null` и `bcType()/bcSubtype()` — ранний `return true`, если хоть один контекст неполный (`if (!hasBphContext || !hasBcContext) return true;`). Соответствует контекст-документу (`bc_id=NULL → ранний true`).
-
-### 3.6 Ключ маппинга `type|subtype` и `PortfolioOperationType`
-
-**PARTIAL / UNVERIFIABLE (Info).** `BphBcFilterService` использует `Operation::toOperationTypeEnum` из модели `Operation` (не из `BphConverter`). В spec (§4.2.2) ключ маппинга описан как `type|subtype` по `BphConverter.getTypesMap()`. Классы `Operation`, `BphConverter` в рамках текущего прохода напрямую не перечитаны; `PortfolioOperationType` — генерируемый из OpenAPI `x-class` enum (файла-источника в `repositories/` нет). Утверждение о конкретном имени метода `getTypesMap()` — **UNVERIFIABLE** в этом прогоне (не опровергнуто и не подтверждено). Не влияет на реализацию новой фичи.
-
----
-
-## 4. Конфигурация
-
-| Утверждение spec | Раздел | Статус | Evidence |
-|---|---|---|---|
-| Кэш: `app-config.operation-cache` (`updateDelayMs`, `defaultValue`, `includingNameTypes`) | §5 | **CONFIRMED** | `OperationCacheLoaderProperties.java:6-8` — `@ConfigurationProperties(prefix = "app-config.operation-cache")` `record OperationCacheLoaderProperties(long updateDelayMs, String defaultValue, Set<String> includingNameTypes)` |
-| `updateDelayMs` конфигурируем; в spec числовое значение не приводится | §5 | **CONFIRMED** | `OperationCacheLoaderProperties.updateDelayMs()`; `OperationCacheLoader.java` передаёт `properties.updateDelayMs()` в `loadDataTask(...)`. В `src/main/resources/*.yml` значение **NOT FOUND** — в репозитории не зашито, задаётся внешней конфигурацией. Spec корректно не фиксирует число |
-| Планировщик `OperationCacheLoader`, сборка одним SQL `find_all_operations_v2.sql` | §4.2.2 §5 | **CONFIRMED** | `OperationCacheLoader.java` — `extends CacheLoader<Operation>`, `getMonoWithResult()` → `operationDAO.findAll()`, `@ConditionalOnProperty("scheduler.enabled", havingValue="true", matchIfMissing=true)`; SQL — `find_all_operations_v2.sql` |
-| Кэш — единый неизменяемый снапшот (`ConcurrentMap<String, List<Operation>>`) | §4.2.2 | **CONFIRMED** | `OperationCacheLoader.setResultIntoCashMap` — `operations.stream().collect(groupingBy(Operation::operationType))` → `operationsMap.putAll(...)` |
-| `grpc.auth.*`, toggle map из Sber Auth `getSession` (key `history_ops`) | §5 | **UNVERIFIABLE** | вне чтения этого прогона; спецификация ссылается на существующий механизм, кода в текущем проходе не перечитано. Не критично для новой фичи |
-
----
-
-## 5. Feature toggles
-
-| Утверждение spec | Раздел | Статус | Evidence |
-|---|---|---|---|
-| Тоггл `enableServiceBPH` | §5 | **CONFIRMED** | `adapter/auth/FeatureToggleName.java:10` — `ENABLE_BPH("enableServiceBPH")` |
-| `isBphLinkedCommissionsEnabled` — из `executionProcess` | §4.2.2 | **CONFIRMED** | `BphBcFilterService.isActualBphOperation` — `boolean bphLinkedCommissionsEnabled = executionProcess.isBphLinkedCommissionsEnabled();` |
-
----
-
-## 6. Метрики
-
-**Источник:** `repositories/ИО/.../service/meter/service/MeterService.java`, `.../websocket/WebSocketController.java`.
-
-| Утверждение spec | Раздел | Статус | Evidence |
-|---|---|---|---|
-| `history_ops_time` (percentile, теги `ex_system`, `event_type`) | §5 | **CONFIRMED** | `MeterService.java:20-30` — `Timer.builder("history_ops_time").tag("ex_system", ...).tag("event_type", ...)` |
-| `history_ops_integration` (теги `ex_system`, `event_type`, `comment`, `status`; `dataCompleteFalse`) | §5 | **CONFIRMED** | `MeterService.java:36-69` — `countIntegration*`, `countIntegrationDataCompleteFalse` → `comment="dataCompleteFalse"`, `status="error"` |
-| `history_ops_general{comment=...}` (`unexpected_additional_type_for_common_operation`, `dataCompleteFalse` и пр.) | §5 | **CONFIRMED** | `MeterService.java:71-84` — `countGeneral/countGeneralError` → `history_ops_general`, `comment`, `status`; вызов с `unexpected_additional_type_for_common_operation` — `BphBcFilterService` |
-| `history_ops_absent_operation_types{operation_type="tax"}` — без разреза по `subtype` | §5 (D-35) | **CONFIRMED** | `MeterService.java:79-83` — `countOperationTypes(PortfolioOperationType)` → `counter("history_ops_absent_operation_types", "operation_type", portfolioOperationType.getValue())`; **тег только `operation_type`**, разреза `subtype` нет. Вызов — `WebSocketController.java:218`: `meterService.countOperationTypes(type)` в цикле по `PortfolioOperationType.values()`. Утверждение spec про отсутствие `subtype`-разреза CONFIRMED |
-| Счётчик несматченных статусов отсутствует (D-36) | §5 | **CONFIRMED** | в `MeterService` нет ни одного счётчика «несматченный статус»; логика `isOperationStatusesRequested`/`isCorrectRequestEntity` (`BphBcFilterService`) фильтрует без метрики. Утверждение «счётчика несматченных статусов нет» CONFIRMED |
-| Фронтовые метрики — «отдельных UI-событий не вводится» | §5 | **CONFIRMED (негативное)** | в `history-ops` нет нового UI-события; spec корректно фиксирует отсутствие |
-
----
-
-## 7. Утверждения TO BE (ещё не реализованные) — ожидаемый NOT FOUND
-
-| Утверждение spec | Раздел | Статус | Комментарий |
-|---|---|---|---|
-| Подтип `MOEX_TAX` для `TAXES` (новая связка) | §4.2.1 §4.2.2 | **NOT FOUND** | в проде/выгрузке кэша (`find_all_operations_v2`-снапшот, тест `LikeBCBphIntegrationTest.java:29`) `TAXES` содержит только `TAX_RETAIN` и `TAX_REFUND_BROK_ACCOUNT`. Ожидаемо до реализации |
-| INSERT-строки `bph`/`operation`/`info`×4/`status_to_operation` для `MOEX_TAX` | §4.2.3 «Область изменения» | **NOT FOUND** | changeset фичи — плановый артефакт (не в `repositories/`). Ожидаемо |
-| Новый changeset `2026xxxx_SIHIST-xxxx_moex_tax.xml` с CS1-CS4 + `rollback` | §4.2.3 | **NOT FOUND** | артефакт разработки; в `liquibase/changesets/` отсутствует. Ожидаемо |
-| Значение `updateDelayMs` для продуктивных сред | §5 | **NOT FOUND** | внешняя конфигурация; в репозитории не зашито (см. §4). Ожидаемо/UNVERIFIABLE |
-| `grpc.auth.*` для нового вызова | §5 | **UNVERIFIABLE** | вне текущего чтения |
-
----
-
-## 8. Проверка «reserved для check-feature-code» гэпов
-
-Заявленные при первом `check-feature` гэпы `GAP-CODE-01..03`, `GAP-DOC-01/02`, `GAP-MIG-12` против **текущего** SPEC:
-
-| Гэп | Актуальность | Обоснование |
-|---|---|---|
-| `GAP-CODE-01` (способ генерации `id`) | **СНЯТ** | закрыт D-39; подтверждён DDL (`id INT PK` без `SERIAL`, §2) + pre-check `MAX(id)` |
-| `GAP-CODE-02` (поведение при `totalPrice=null`) | **СНЯТ** | закрыт D-40/CN-16; подтверждён `BphCommonClientConverter` (`map(BigDecimal::abs).orElse(null)`, §3.1) |
-| `GAP-CODE-03` (источник комментария) | **СНЯТ** | закрыт D-31/D-33; подтверждён `TAXES.equals(bphType) && commentFromTable.isBlank()` (§3.2) |
-| `GAP-DOC-01/02` | не найдены в текущем SPEC | в spec нет открытых `[GAP-...]`; предположительно закрыты/переформулированы. Требуется проверка GAPS_MAP (вне scope кода) |
-| `GAP-MIG-12` | не найден в текущем SPEC | отсутствует в spec; см. GAPS_MAP |
-
-Открытых `[GAP-...]` в SPEC не осталось (подтверждено grep: `setval|SERIAL|MAX(id)` — только утверждения, без `GAP-` маркеров).
-
----
-
-## 9. Сводка находок
-
-| # | Раздел spec | Утверждение (кратко) | Статус | Severity |
-|---|---|---|---|---|
-| 1 | §4.2.3 «Откат» | порядок отката описан через FK `operation → bph` | **PARTIAL** | Minor |
-| 2 | §4.2.2 | ключ маппинга `type\|subtype` через `BphConverter.getTypesMap()` | **UNVERIFIABLE** | Info |
-| 3 | §5 | значение/источник `updateDelayMs` в проде | **NOT FOUND** | Info (ожидаемо) |
-| 4 | §4.2.1 | подтип `MOEX_TAX` | **NOT FOUND** | Info (TO BE) |
-| 5 | §4.2.3 | INSERT-строки и changeset фичи | **NOT FOUND** | Info (TO BE) |
-| 6 | §5 | `grpc.auth.*` toggle map | **UNVERIFIABLE** | Info |
-
-**Счётчики:** CONFIRMED ≈ 28, MISMATCH = 0 (Critical/Major), PARTIAL = 1 (Minor), NOT FOUND = 4 (Info, TO BE/конфиг), UNVERIFIABLE = 2 (Info).
-
----
-
-## 10. Рекомендуемые действия
-
-1. **(Minor, closable)** Уточнить формулировку §4.2.3 «Откат»: FK `operation.bph_id → bph.id` в DDL **не объявлен** (в `20241029_SIHIST-2774_7_create_operation.xml` есть только FK на `info` и `status_to_operation`). Порядок удаления `status_to_operation`/`info` → `operation` → `bph` остаётся верным, но обоснование стоит строить на отсутствии зависимости, а не на «обратном FK». → кандидат для `resolve-code-alignment`.
-
-2. **(Info, не требует правки)** Зафиксировать в spec, что `updateDelayMs` — внешняя конфигурация (в репозитории отсутствует), значение задаётся средой; при необходимости — `[GAP-...]`.
-
-3. **(Info, ожидаемо)** `MOEX_TAX`, INSERT-строки и changeset фичи — NOT FOUND как плановые артефакты; появятся при реализации. Не блокируют.
-
-4. **(Info)** Перепроверить `BphConverter.getTypesMap()` и `PortfolioOperationType` (генерируется из OpenAPI `x-class`) отдельным проходом, если требуется строгая верификация §4.2.2.
-
-**Closable для `resolve-code-alignment`:** пункт 1 (Minor уточнение формулировки отката). Пункты 2–4 — informational.
-
----
-
-## 11. Пропущено в этом прогоне
-
-- `BphConverter.java`, `Operation.java` (модель), `PortfolioOperationType` — генерация из OpenAPI не читалась (см. §3.6).
-- `grpc.auth.*` конфигурация Sber Auth `getSession` — вне scope.
-- `db-export/БД ИО.md` — использован косвенно (значения prod max из spec §4.2.3 Pre-checks), строки не перечитаны.
-- `analytics/` — по правилам не источник истины для check-feature-code.
+| ID | Предыдущий статус | Проверка кода | Итог |
+|----|-------------------|---------------|------|
+| P-10 | Major MISMATCH | `BphTypesHolder.getSubtype()` → `IllegalArgumentException`; `BphOperationConverter.convert()/getSubType()`; `ListRequestService.convertEntry()` → WARN + `parse_error`. SPEC-формулировка теперь различает два под-случая | CONFIRMED |
+| C-06 | Minor MISMATCH | `BphGateway.createRequest()` → `setPageSize(bphDynamicProperties.getMaxRecordsFromBph())`; `BphDynamicProperties` prefix `app-config-dynamic.bph-dynamic` | CONFIRMED |
+| C-07 | Minor PARTIAL | `BphGateway.resolveSortingType()` → `EVENT_DATE`/`FORMATION_DATE` по `ENABLE_SORTING_BY_EXECUTION_TIME` | CONFIRMED |
+| §4.2.5 | несинхронно | примечание приведено к фактическому `IllegalArgumentException` → WARN + `parse_error` | CONFIRMED |

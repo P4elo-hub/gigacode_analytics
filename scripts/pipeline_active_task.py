@@ -73,9 +73,12 @@ def write_cycle_still_open(root: Path, slug: str, active: dict | None) -> bool:
         resolve_cycle_folder,
         resolve_cycle_out,
     )
-    from pipeline_pack import DEFAULT_PIPELINE_ID
+    raw_pipeline = active.get("pipeline") or active.get("pipeline_id")
+    if not raw_pipeline:
+        raise ValueError("active-task.pipeline required for write-cycle state")
+    from pipeline_runtime import normalize_pipeline_id
 
-    pipeline_id = str(active.get("pipeline") or DEFAULT_PIPELINE_ID)
+    pipeline_id = normalize_pipeline_id(str(raw_pipeline))
     step = str(active.get("step") or "")
     cycle = cycle_config_for_step(pipeline_id, step)
     if not cycle:
@@ -119,11 +122,16 @@ def save_active_task(
     step: str,
     subagent: str,
     cli: str = "qwen",
-    pipeline: str = "spec",
+    pipeline: str | None = None,
     session: str = "",
     persistent: bool = False,
 ) -> dict:
     root = root.resolve()
+    if not pipeline:
+        raise ValueError("active-task.pipeline required")
+    from pipeline_runtime import normalize_pipeline_id
+
+    pipe_id = normalize_pipeline_id(str(pipeline))
     started_at = utc_now_iso()
     if persistent:
         existing = load_active_task_for_slug(root, slug)
@@ -139,7 +147,7 @@ def save_active_task(
         "step": step,
         "subagent": subagent,
         "cli": cli,
-        "pipeline": pipeline,
+        "pipeline": pipe_id,
         "session": session or None,
         "started_at": started_at,
         "persistent": persistent or None,

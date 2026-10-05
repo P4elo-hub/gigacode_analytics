@@ -22,6 +22,6 @@ description: Критический разбор спецификации — co
 ## После шага — продолжай пайплайн
 
 Когда субагент вернул результат, не жди новой слэш-команды. Сразу:
-`python3 scripts/pipeline_delegate.py <slug> --cli qwen` → `task` на `task.subagent_type` из JSON
+`python3 scripts/pipeline_delegate.py <slug> --cli gigacode --pipeline spec-v2` → `task` на `task.subagent_type` из JSON
 (`run_in_background: false`). Не спрашивай «запускать X?». Повторяй, пока
 нет паузы по существу или verdict PASS / PASS WITH GAPS.

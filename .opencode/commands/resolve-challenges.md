@@ -22,5 +22,5 @@ description: Закрыть вопросы CH-* из банка challenges и п
 ## После шага — продолжай пайплайн
 
 Когда субагент **применил** ответы (не после `ASK_PARENT`), сразу:
-`python3 scripts/pipeline_delegate.py <slug> --cli qwen` → `task` на `task.subagent_type` из JSON
+`python3 scripts/pipeline_delegate.py <slug> --cli opencode --pipeline spec-v2` → `task` на `task.subagent_type` из JSON
 (`run_in_background: false`). Не спрашивай «запускать X?».

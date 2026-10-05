@@ -3,8 +3,8 @@ report_type: gaps-resolved
 slug: bph-moex-tax
 source_document: Feature-writing/bph-moex-tax/bph-moex-tax.md
 context_document: Feature-context/bph-moex-tax.md
-generated_at: 2026-09-12
-session: 5
+generated_at: 2026-10-05
+session: 2
 ---
 
 # Карта закрытых gaps: bph-moex-tax
@@ -13,214 +13,77 @@ session: 5
 **Карта:** `Feature-writing/bph-moex-tax/bph-moex-tax-gaps-resolved.md`
 
 ## Сводка
-- Закрыто: 95 · Отложено: 0
+- Закрыто: 62
+- Осталось открытыми: 0
 
-## Сессия 1 (2026-09-12)
-
-| ID | Выбор | Решение | Затронутые § | Связанный Q |
-|----|-------|---------|--------------|-------------|
-| GAP-GOAL-01 | a | Статус BPH `COMPLETE` → `executed`; строка `status_to_operation` (`status_id=19`), набор как у `TAX_RETAIN` (D-05) | §1.1 (gaps), §4.1.1, §4.2.2, §4.2.3, §7.2 | Q-03 |
-| GAP-UCAS-03 | a | То же (D-05) | §1.2 (gaps) | Q-03 |
-| GAP-UCTB-04 | a | То же (D-05) | §1.3 (gaps) | Q-03 |
-| GAP-CONS-01 | a | Тип/статус-связка подтверждены решением (D-05) | §2 (CN-10, gaps), §4.1.1 | Q-03 |
-| GAP-INT-13 | a | Контракт статуса подтверждён (D-05) | §4.1.1 (gaps) | Q-03 |
-| GAP-ALG-01 | a | Шаг 3: статус `COMPLETE` имеет строку `status_to_operation` (`status_id=19`) (D-05) | §4.2.2 (шаг 3, gaps) | Q-03 |
-| GAP-DM-01 | a | `status_and_general_status = {"COMPLETE": "executed"}`; `status_to_operation` `status_id=19` (D-05) | §4.2.3 (модель/маппинг/образец кэша, gaps) | Q-03 |
-| GAP-MAP-04 | a | Допущение статуса подтверждено решением (D-05) | §4.2.3 (маппинг, gaps) | Q-03 |
-| GAP-MIG-05 | a | Pre-checks/Validation: статус BPH `COMPLETE`, строка `status_to_operation` `status_id=19` (D-05) | §4.2.3 (миграция: таблица, validation, risks, gaps) | Q-03 |
-| GAP-NFR-REL-03 | a | Статус-членство подтверждено: для `MOEX_TAX` заведён `COMPLETE` (D-05) | §7.2 (gaps, таблица зависимостей) | Q-03 |
-| GAP-GOAL-03 | a | Налог `MOEX_TAX` не влияет на агрегацию/Total-секции — отдельный учёт (D-06) | §1.1 (gaps) | Q-10 |
-| GAP-UCAS-04 | a | То же (D-06) | §1.2 (gaps) | Q-10 |
-| GAP-UCTB-06 | a | То же (D-06); зафиксировано в постусловии UC | §1.3 (gaps, постусловия) | Q-10 |
-| GAP-CONS-05 | a | То же (D-06) | §2 (gaps) | Q-10 |
-| GAP-ALG-04 | a | То же (D-06) | §4.2.2 (gaps) | Q-10 |
-| GAP-DM-06 | a | То же (D-06) | §4.2.3 (gaps) | Q-10 |
-
-**Изменения в spec по D-05:** §2 CN-10 — обязательная строка `status_to_operation`
-(`status_id=19`, набор как у `TAX_RETAIN`); §4.1.1 — `COMPLETE → executed` (D-05),
-`lead.general_status = executed при COMPLETE`; §4.2.2 шаг 3 — статус-членство
-подтверждено; §4.2.3 — `status_to_operation.status_id = 19`, образец кэша
-`"status_and_general_status": ["COMPLETE:executed"]`; §4.2.3 (миграция) —
-INSERT `status_to_operation` подтверждён (D-05).
-
-**Изменения в spec по D-06:** §1.1 — новое бизнес-правило BR-10 (налог `MOEX_TAX`
-не влияет на агрегацию и итоговые (Total-) секции, отдельный учёт); §1.3 —
-постусловие «Успех» дополнено ссылкой на BR-10.
-
-## Сессия 2 (2026-09-12)
-
-Закрыто 23 gap-пункта батча 1 по решениям D-07…D-13.
+## Сессия 1 (2026-10-05)
 
 | ID | Выбор | Решение | Затронутые § | Связанный Q |
 |----|-------|---------|--------------|-------------|
-| GAP-MAP-01 | a | `operation.name` = «Удержание суммы налога» (D-07) | §4.2.3 (модель, маппинг, gaps) | Q-06 |
-| GAP-MAP-02 | a | `info.comment` = «биржевой налог» для всех `additional_type` (D-07) | §4.1.1, §4.2.3 (модель, маппинг, примеры, gaps) | Q-06 |
-| GAP-MAP-03 | a | Фактический `additionalType` = набор `TAX_RETAIN` (D-08) | §4.2.3 (validation, risks, gaps) | Q-02 |
-| GAP-MAP-05 | a | `type` строго `TAXES`, Java не меняется (D-12) | §4.2.3 (маппинг, gaps) | Q-05 |
-| GAP-MIG-02 | a | Фактический `additionalType` = набор `TAX_RETAIN` (D-08) | §4.2.3-migration (risks, gaps) | Q-02 |
-| GAP-MIG-03 | a | `operation.name` = «Удержание суммы налога» (D-07) | §4.2.3-migration (scope, pre-checks, gaps) | Q-06 |
-| GAP-MIG-04 | a | `info.comment` = «биржевой налог» (D-07) | §4.2.3-migration (scope, pre-checks, risks, gaps) | Q-06 |
-| GAP-MIG-09 | a | Пролив штатным Liquibase changeset (D-13) | §4.2.3-migration (среды, gaps) | Q-08 |
-| GAP-UCAS-02 | a | `comment` = «биржевой налог» (D-07) | §1.2 (gaps) | Q-06 |
-| GAP-UCTB-02 | a | BC-аналога нет, `bc_id=NULL`, водораздел не применяется (D-11) | §1.3 (gaps, alt 3a.2) | Q-09 |
-| GAP-UCTB-03 | a | Незарегистрированный subtype не отображается, лог/метрика не нужны (D-09) | §1.3 (gaps, alt 6c.3), §4.2.2 | Q-01 |
-| GAP-UCTB-05 | a | `comment` = «биржевой налог» (D-07) | §1.3 (gaps) | Q-06 |
-| GAP-UCTB-07 | a | Значение `tax` в `PortfolioOperationType` подтверждено (D-10) | §1.3 (gaps) | Q-07 |
-| GAP-CONS-03 | a | `comment` = «биржевой налог» (D-07) | §2 (gaps), §4.1.1 | Q-06 |
-| GAP-CONS-04 | a | BC-аналога нет (D-11) | §2 (gaps), §4.2.3-migration (scope, risks) | Q-09 |
-| GAP-CONS-06 | a | Пролив штатным Liquibase changeset (D-13) | §2 (gaps) | Q-08 |
-| GAP-ALG-02 | a | `comment` = «биржевой налог» (D-07) | §4.2.2 (gaps) | Q-06 |
-| GAP-ALG-03 | a | Незарегистрированный subtype не отображается (D-09) | §4.2.2 (шаг 4, таблица, gaps) | Q-01 |
-| GAP-ALG-05 | a | `type` строго `TAXES`, Java не меняется (D-12) | §4.2.2 (gaps) | Q-05 |
-| GAP-DM-03 | a | BC-аналога нет, `bc_id=NULL` (D-11) | §4.2.3 (gaps) | Q-09 |
-| GAP-DM-04 | a | `comment` = «биржевой налог» для 4 `additional_type` (D-07) | §4.2.3 (модель, gaps) | Q-06 |
-| GAP-DM-05 | a | `operation.name` = «Удержание суммы налога» (D-07) | §4.2.3 (модель, gaps) | Q-06 |
-| GAP-GOAL-02 | a | Значение `tax` в `PortfolioOperationType` подтверждено (D-10) | §1.1 (gaps) | Q-07 |
+| GAP-GOAL-02 | a | subtype = `MOEX_TAX` (подтверждено контрактом BPH) | §1.1 (BR-01, CN-01) | Q-01 |
+| GAP-UCTB-01 | a | subtype = `MOEX_TAX` | §1.3 (предусловие, happy path) | Q-01 |
+| GAP-CONS-01 | a | subtype = `MOEX_TAX` (допущение AS-01 → подтверждено) | §2 (CN-01) | Q-01 |
+| GAP-INT-01 | a | subtype = `MOEX_TAX` в request/response | §4.1.1 | Q-01 |
+| GAP-ALG-06 | a | subtype = `MOEX_TAX` | §4.2.2 | Q-01 |
+| GAP-DM-01 | a | `bph.subtype` = `MOEX_TAX` | §4.2.3 | Q-01 |
+| GAP-MAP-01 | a | Source `subtype` = `MOEX_TAX` | §4.2.4 (маппинг) | Q-01 |
+| GAP-MIG-01 | a | INSERT `subtype='MOEX_TAX'` | §4.2.5 (миграция) | Q-01 |
+| GAP-ACC-04 | a | `subtype = MOEX_TAX` | §6 (test data) | Q-01 |
+| GAP-GOAL-03 | b | `additionalType` = `NULL` (одна строка `info` с `additional_type=NULL`) | §1.1 («Противоречия») | Q-02 |
+| GAP-UCTB-02 | b | `additionalType` = `NULL` | §1.3 (happy path) | Q-02 |
+| GAP-CONS-02 | b | `additionalType` = `NULL` | §2 (CN-08) | Q-02 |
+| GAP-INT-02 | b | `additionalType` = `NULL`; `additionalTypes[]` не заполняется | §4.1.1 | Q-02 |
+| GAP-ALG-02 | b | `additionalType` = `NULL` | §4.2.2 | Q-02 |
+| GAP-DM-02 | b | `info.additional_type` = `NULL` | §4.2.3 | Q-02 |
+| GAP-MAP-02 | b | Source `additionalType` = `NULL` | §4.2.4 (маппинг) | Q-02 |
+| GAP-MIG-02 | b | `info.additional_type = NULL`, одна строка | §4.2.5 (миграция) | Q-02 |
+| GAP-ACC-02 | b | `additionalType = NULL` | §6 (сценарии ACC-E01) | Q-02 |
+| GAP-GOAL-04 | b | `bc_id` = `NULL` (только BPH, ранний return) | §1.1 (BR-04) | Q-03 |
+| GAP-UCTB-03 | b | `bc_id` = `NULL` | §1.3 (happy path, фильтры пропускаются) | Q-03 |
+| GAP-CONS-03 | b | `bc_id` = `NULL` (допущение AS-02 → CN-09) | §2 (CN-09) | Q-03 |
+| GAP-ALG-01 | b | `bc_id` = `NULL` | §4.2.2 (BR-13) | Q-03 |
+| GAP-DM-03 | b | `operation.bc_id` = `NULL` | §4.2.3 | Q-03 |
+| GAP-MAP-03 | b | watershed/`additionalType`-фильтр не применяются | §4.2.4 (маппинг) | Q-03 |
+| GAP-MIG-03 | b | `bc_id = NULL` | §4.2.5 (миграция) | Q-03 |
+| GAP-ACC-03 | b | `bc_id = NULL` | §6 (сценарии ACC-E02, N01) | Q-03 |
+| GAP-GOAL-05 | a | `operation.name`=«Удержание налога MOEX», `info.comment`=«НАЛОГ МОСКОВСКОЙ БИРЖИ» | §1.1 (BR-03) | Q-04 |
+| GAP-UCTB-04 | a | comment = «НАЛОГ МОСКОВСКОЙ БИРЖИ» | §1.3 (happy path) | Q-04 |
+| GAP-CONS-04 | a | comment/name зафиксированы | §2 | Q-04 |
+| GAP-INT-05 | a | comment = «НАЛОГ МОСКОВСКОЙ БИРЖИ» | §4.1.1 (маппинг) | Q-04 |
+| GAP-ALG-03 | a | comment = «НАЛОГ МОСКОВСКОЙ БИРЖИ» | §4.2.2 | Q-04 |
+| GAP-DM-04 | a | `operation.name`=«Удержание налога MOEX», `info.comment`=«НАЛОГ МОСКОВСКОЙ БИРЖИ», `displayed_name`=NULL | §4.2.3 | Q-04 |
+| GAP-MAP-04 | a | comment = «НАЛОГ МОСКОВСКОЙ БИРЖИ», operationDisplayName = NULL | §4.2.4 (маппинг) | Q-04 |
+| GAP-MIG-04 | a | comment/name зафиксированы | §4.2.5 (миграция) | Q-04 |
+| GAP-ACC-01 | a | comment = «НАЛОГ МОСКОВСКОЙ БИРЖИ» | §6 (ACC-002) | Q-04 |
+| GAP-CONS-05 | b | без watershed (ключ `TAXES\|MOEX_TAX` не добавляется) | §2 (CN-10) | Q-05 |
+| GAP-ALG-05 | b | watershed не задаётся | §4.2.2 | Q-05 |
+| GAP-MAP-06 | b | watershed не применяется | §4.2.4 (маппинг) | Q-05 |
+| GAP-MIG-06 | b | watershed не задаётся | §4.2.5 (миграция) | Q-05 |
+| GAP-ACC-07 | b | watershed не применяется (ACC-E03 → не применимо) | §6 | Q-05 |
+| GAP-DM-05 | a | id строк: test 22/24/52/37, prod 25/27/79/57 | §4.2.3, §2 (CN-03) | Q-06 |
+| GAP-MIG-05 | a | id строк зафиксированы | §4.2.5 (миграция) | Q-06 |
+| GAP-UCTB-05 | a | статус `COMPLETE` (id=19), переиспользовать `status_to_operation` | §1.3 | Q-07 |
+| GAP-CONS-06 | a | статус `COMPLETE` (допущение AS-03 → CN-11) | §2 (CN-11) | Q-07 |
+| GAP-INT-03 | a | статус `COMPLETE` | §4.1.1 | Q-07 |
+| GAP-ALG-04 | a | статус `COMPLETE` | §4.2.2 | Q-07 |
+| GAP-DM-06 | a | `status_to_operation.status_id` = 19 | §4.2.3 | Q-07 |
+| GAP-MAP-05 | a | enum status `COMPLETE` → `executed` | §4.2.4 (маппинг) | Q-07 |
+| GAP-MIG-07 | a | статус `COMPLETE` | §4.2.5 (миграция) | Q-07 |
+| GAP-ACC-05 | a | статус `COMPLETE` | §6 | Q-07 |
+| GAP-UCAS-01 | a | диаграмма: один участник «МП / композит (screen-api)» (принято) | §1.2 (диаграмма) | — |
+| GAP-UCAS-02 | a | имя сообщения описательное (принято) | §1.2 (диаграмма) | — |
+| GAP-UCTB-06 | a | диаграмма: участник/имя сообщения (принято) | §1.3 (диаграмма), §2 (CN-13) | — |
+| GAP-UCAS-03 | a | degraded `bcDataComplete=false`; timeout/retry вне scope | §1.2 (постусловие) | — |
+| GAP-UCTB-07 | a | degraded `bcDataComplete=false` | §1.3 (постусловие) | — |
+| GAP-INT-04 | a | degraded `bcDataComplete=false`; timeout/retry вне scope (CN-12) | §4.1.1 | — |
 
-**Изменения в spec по D-07:** текст `info.comment` = «биржевой налог» для всех
-значений `additional_type`; `operation.name` = «Удержание суммы налога»;
-заголовок деталки «Удержание налога» сохраняется (D-03).
-
-**Изменения в spec по D-08:** фактический `additionalType` от BPH совпадает с
-набором `TAX_RETAIN` — отражено в §4.2.3 (validation, risks) и migration.
-
-**Изменения в spec по D-09:** незарегистрированный subtype семейства `TAXES`
-не отображается; отдельный лог/метрика не требуются — §1.3 (alt 6c.3), §4.2.2.
-
-**Изменения в spec по D-10:** значение `tax` в `PortfolioOperationType`
-подтверждено — снят GAP-GOAL-02 и GAP-UCTB-07.
-
-**Изменения в spec по D-11:** BC-аналога нет, `bc_id=NULL`, водораздел
-`historyStart` не применяется — §1.3, §2, §4.2.3.
-
-**Изменения в spec по D-12:** `type` строго `TAXES`, Java не меняется — §4.2.2,
-§4.2.3 (маппинг).
-
-**Изменения в spec по D-13:** пролив штатным Liquibase changeset — §2,
-§4.2.3-migration (каталог прошлого пролива уточняется у сопровождения).
-
-## Сессия 3 (2026-09-12)
-
-Закрыто 50 gap-пунктов батча 2 по решениям D-14…D-18 (NFR, наблюдаемость,
-допущения миграции/целей/границ).
-
-| ID | Выбор | Решение | Затронутые § | Связанный Q |
-|----|-------|---------|--------------|-------------|
-| GAP-NFR-PERF-01…18 | a | Отдельных SLO/числовых нагрузочных целей нет — те же лимиты, что у соседних BPH-налогов (D-14) | §7 (Performance, NFR-таблицы, gaps) | Q-11 |
-| GAP-NFR-REL-01 | a | То же (D-14) | §7 (Reliability, SLO) | Q-11 |
-| GAP-NFR-REL-02 | a | То же (D-14) | §7 (Reliability, SLO) | Q-11 |
-| GAP-NFR-REL-04 | a | Деградация при недоступности BPH — пустой/частичный ответ, как у существующих налогов (D-15) | §7 (Graceful Degradation) | Q-12 |
-| GAP-NFR-REL-05 | a | Идемпотентность changeset штатная (`preConditions`/`MARK_RAN`) (D-15) | §7 (Reliability, идемпотентность) | Q-12 |
-| GAP-NFR-REL-06 | a | Без спец. retry-политики — как у существующих налогов (D-15) | §7 (Reliability) | Q-12 |
-| GAP-NFR-SEC-01…06 | a | Новых требований ИБ нет — каналы/доступ как у существующих налогов; PII в новых строках отсутствует (D-16) | §7 (Security) | Q-13 |
-| GAP-NFR-CONF-01…04 | a | Отдельных настроек не вводится; релевантен только существующий `enableServiceBPH` (D-17) | §7 (Configuration) | Q-14 |
-| GAP-NFR-TOGL-01…03 | a | Отдельных тоглов не вводится — как остальные налоги (D-17) | §7 (Toggles) | Q-14 |
-| GAP-OBS-01 | a | Бизнес-журнал — как у существующего `TAX_RETAIN`; отдельный журнал не вводится (D-18) | §7 (Logging, бизнес-журнал) | Q-15 |
-| GAP-OBS-02 | a | `service`/`environment`/`level`/`logger` — logback-конфигурация, состав полей не меняется (D-18) | §7 (Logging, автоматические поля) | Q-15 |
-| GAP-OBS-03 | a | Ветка «неизвестный `additionalType`» при `bc_id=NULL` не срабатывает; отдельный лог не требуется (D-18) | §7 (Logging, ERROR-шаблон) | Q-15 |
-| GAP-OBS-04 | a | Логирование кэша операций — штатное, изменений нет (D-18) | §7 (Logging, `DB_RESPONSE`/`DB_REQUEST`) | Q-15 |
-| GAP-OBS-05 | a | Политика маскирования тел — как у существующих налогов, PII не добавляется (D-18) | §7 (Logging, rqStr/rsStr) | Q-15 |
-| GAP-OBS-06 | a | Отдельных UI-событий не вводится; деталка/заголовок не меняются (D-03), UI фичей не правится (D-18) | §7 (Фронтовые метрики) | Q-15 |
-| GAP-OBS-07 | a | Публикация перцентилей `history_ops_time` — штатная, изменений нет (D-18) | §7 (Технические метрики) | Q-15 |
-| GAP-OBS-08 | a | Отдельных алертов/SLO на ошибки не вводится — как у существующих налогов (D-18) | §7 (Метрики ошибок) | Q-15 |
-| GAP-OBS-09 | a | `history_ops_absent_operation_types{operation_type="tax"}` без разреза по subtype — как сейчас (D-18) | §7 (Бизнес-метрики) | Q-15 |
-| GAP-OBS-10 | a | Новых метрик не появляется; подтверждённые используют префикс `history_ops_` (D-18) | §7 (Префикс метрик) | Q-15 |
-| GAP-DM-02 | a | Информационная модель новых строк — как у существующих налогов, без новых сущностей (D-18) | §4.2.3 (модель данных) | Q-15 |
-| GAP-MIG-01 | a | Допущение миграции принято «как у существующих налогов» (D-18) | §4.2.3-migration | Q-15 |
-| GAP-MIG-06 | a | То же (D-18) | §4.2.3-migration | Q-15 |
-| GAP-MIG-07 | a | То же (D-18) | §4.2.3-migration | Q-15 |
-| GAP-MIG-08 | a | То же (D-15, идемпотентность changeset) | §4.2.3-migration | Q-12 |
-| GAP-MIG-10 | a | Допущение принято «как у существующих налогов» (D-18) | §4.2.3-migration | Q-15 |
-| GAP-MIG-11 | a | То же (D-18) | §4.2.3-migration | Q-15 |
-| GAP-GOAL-11 | a | Цели/метрики успеха — как у существующих налогов (D-18) | §1.1 | Q-15 |
-| GAP-GOAL-12 | a | То же (D-18) | §1.1 | Q-15 |
-| GAP-UCTB-01 | a | Границы сценария — как у существующих налогов (D-18, D-14) | §1.3, §7 (Graceful Degradation) | Q-15 |
-| GAP-CONS-02 | a | Ограничения — как у существующих налогов (D-18, D-14, D-17) | §2, §7 (Performance, Configuration) | Q-15 |
-| GAP-INT-08 | a | Timeout/retry транспорта — как у существующих интеграций (D-15) | §4.1.1 (контракт) | Q-12 |
-| GAP-INT-09 | a | Транспорт/аутентификация — как у существующих интеграций (D-16) | §4.1.1 (контракт) | Q-13 |
-
-**Изменения в spec по D-14:** §7 (Performance) — вместо числовых SLO-гэпов
-зафиксировано «обработка `MOEX_TAX` идёт в тех же лимитах history-ops, что и
-соседние BPH-налоги»; удалены gap-таблицы PERF-01…18, REL-01/02, CONS-02 (NFR).
-
-**Изменения в spec по D-15:** §7 (Reliability, Migration) — поведение при
-недоступности BPH (пустой/частичный ответ), идемпотентность штатная
-(`preConditions`/`MARK_RAN`), без спец. retry; удалены gap-таблицы REL-04…06.
-
-**Изменения в spec по D-16:** §7 (Security) — новых требований ИБ нет, PII в
-новых строках отсутствует; удалена gap-таблица SEC-01…06.
-
-**Изменения в spec по D-17:** §7 (Configuration, Toggles) — отдельных
-тоглов/настроек нет, релевантен только `enableServiceBPH`; удалены
-gap-таблицы CONF-01…04, TOGL-01…03.
-
-**Изменения в spec по D-18:** §7 (Logging, Metrics) — новых логов/метрик не
-вводится, используются существующие (`eventType`, `history_ops_*`); допущения
-по миграции/целям/границам приняты «как у существующих налогов»; удалены
-gap-таблицы OBS-01…10.
-
-## Сессия 4 (2026-09-12)
-
-Закрыто 4 gap-пункта батча 3 (контракт BPH, статусы, разбор подтипа, коды
-ошибок) по решениям D-19…D-22.
+## Сессия 2 (2026-10-05)
 
 | ID | Выбор | Решение | Затронутые § | Связанный Q |
 |----|-------|---------|--------------|-------------|
-| GAP-MAP-06 | a | Для `MOEX_TAX` заводится только `COMPLETE`; иные статусы не заявляются, новых строк `status_to_operation` не требуется (D-19) | §4.2.3 (маппинг: допущение по набору статусов) | Q-16 |
-| GAP-INT-10 | a | HO не завязывается на response headers `GET_OPERATIONS_WITH_DETAILS` — текущее поведение сохраняется (D-20) | §4.1.1 (Response headers) | Q-17 |
-| GAP-INT-11 | a | Разбор подтипа идёт по `subtype`; `subType` не используется, дополнительных действий нет (D-21) | §4.1.1 (Response body: `subType`, примечание) | Q-18 |
-| GAP-INT-12 | a | Для `401`/`403`/`429` — штатная обработка ошибок транспорта, как у существующих интеграций (D-22) | §4.1.1 (Коды ошибок) | Q-19 |
-
-**Изменения в spec по D-19:** §4.2.3 — вместо gap-таблицы с `GAP-MAP-06`
-зафиксировано допущение: поддержка только `COMPLETE`, новых строк
-`status_to_operation` не требуется.
-
-**Изменения в spec по D-20:** §4.1.1 (Response headers) — зафиксировано, что HO
-опирается только на тело ответа и не завязывается на заголовки.
-
-**Изменения в spec по D-21:** §4.1.1 — поле `subType` помечено как неиспользуемое
-при разборе; добавлено примечание, что разбор ведётся по `subtype`.
-
-**Изменения в spec по D-22:** §4.1.1 (Коды ошибок) — для не описанных в контракте
-кодов `401`/`403`/`429` зафиксирована штатная обработка ошибок транспорта.
-
-**Правки карты (без изменения spec):** в строках GAP-INT-08/09/13 исправлена
-неточная ссылка §4.1.2 → §4.1.1 (правильный раздел контракта
-`GET_OPERATIONS_WITH_DETAILS`; §4.1.2 — Kafka-события).
-
-## Отложено
-
-| ID | Причина |
-|----|---------|
-| — | В этой сессии отложенных нет |
-
-## Сессия 5 (2026-09-12)
-
-Закрыто 2 gap-пункта батча 5 (способ генерации `id` в продовой схеме;
-поведение при `totalPrice = null`) по решениям D-39, D-40.
-
-| ID | Выбор | Решение | Затронутые § | Связанный Q |
-|----|-------|---------|--------------|-------------|
-| GAP-DB-SERIAL-01 | b | Штатный для history-ops способ задания `id` — **ручное назначение** из конфига (`${moexTax.*}`) при INSERT + pre-check `SELECT max(id)` по таблицам; продуктовые DDL объявляют `id INT PK` без `SERIAL`, sequence не создаётся. Из spec убраны: changeset CS5 (`setval`), SQL-блок `SELECT setval(...)`, утверждения о `SERIAL`/`history_ops.<table>_id_seq`; `SERIAL` оставлен только как факт тестовой схемы. `[GAP-DB-SERIAL-01]` закрыт (D-39) | §4.2.3 (модель: `type`/`operation_type`/`bph`/`operation`/`info`/`status_to_operation`; «Занятые id в проде»; migration: CS5, SQL-эквивалент, порядок пролива), риск-таблица, «Gaps и допущения» | Q-21 |
-| GAP-CODE-TOTALPRICE-01 | c | Признать D-30 недействительным: при `totalPrice = null` операция **не отбрасывается** — показывается с `lead.total_sum = null` (как у `TAX_RETAIN`), по факту `BphCommonClientConverter.convert()`. Осознанное ограничение зафиксировано новым CN-16; `[GAP-CODE-TOTALPRICE-01]` закрыт (D-40) | §1.3 (постусловие «Неуспех (бизнес)», шаг 1 Happy Path), §2 (CN-16), §4.1.1 (`totalPrice`, `lead.total_sum`), «Gaps и допущения» | Q-27 |
-
-**Изменения в spec по D-39:** §4.2.3 — колонки `id` в описаниях таблиц
-приведены к `INT ... PK` с пометкой «назначается вручную из конфига; в тестовой
-схеме `SERIAL`»; абзац «Занятые id в проде» переписан на штатный способ «ручное
-назначение `id` из конфига + pre-check `SELECT max(id)`»; из Liquibase-секции
-удалён changeset CS5 (`setval`), из SQL-эквивалента — блок `SELECT setval(...)`
-и упоминания sequence; из риск-таблицы удалена строка про неподтверждённый
-`SERIAL`/CS5.
-
-**Изменения в spec по D-40:** §1.3 — постусловие «Неуспех (бизнес)» и шаг 1
-Happy Path переписаны: отсутствие `totalPrice` не отбрасывает операцию,
-`total_sum = null` (CN-16); §2 — добавлено ограничение **CN-16** (налог может
-отображаться без суммы); §4.1.1 — строки `totalPrice` и `lead.total_sum`
-описывают `null → total_sum = null` без отбрасывания.
-
-**Примечание по источнику (D-39):** формулировка «как у `bph-portfolio-size-tax`»
-из DECISIONS не подтверждена буквальным текстом sibling-spec: его ERD объявляет
-`id : SERIAL <<PK>>`, прямой записи про «ручное назначение id + pre-check» там
-нет (в нём зафиксирован только общий чекпойнт `SELECT max(id)+1` для prod-id —
-`GAP-DM-02`). Поэтому в spec механизм описан по фактическому DDL продуктовой
-схемы (`id INT PK`, без `SERIAL`), без ссылки на несуществующий текст sibling.
+| GAP-GOAL-01 | b | Источник = бриф (Product request); инициатор и дата/версия не указаны («—») | §1.1 «Источник требования» | — |
+| GAP-GOAL-06 | b | non-SMART: метрики и срок не заданы в брифе («не задано в брифе») | §1.1 «Цель фичи», SMART | — |
+| GAP-MIG-08 | b | Версия PostgreSQL не фиксируется | §4.2.4 «Контекст миграции» | — |
+| GAP-MIG-09 | b | Downtime не требуется (additive DML) | §4.2.4 «Контекст миграции» | — |
+| GAP-MIG-10 | b | Объём — единичные строки (по одной в 4 таблицах) | §4.2.4 «Контекст миграции» | — |
+| GAP-ACC-06 | b | Владелец приёмки и стенды не определены в брифе («—»), задаются на этапе релиза | §6 «Контекст тестирования» | — |

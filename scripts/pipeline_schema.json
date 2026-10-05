@@ -353,9 +353,9 @@
           "to": "spec-reviewer",
           "kind": "branch",
           "condition": "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp",
-          "condition_label": "SPEC есть, и после последней правки ещё не было успешного check-feature",
+          "condition_label": "SPEC есть, и после последней правки ещё не было успешного check-feature ( исключение - правка была совершена самим check-feature - тогда не нужно повторно идти в этот же шаг)",
           "condition_labels": {
-            "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp": "SPEC есть, и после последней правки ещё не было успешного check-feature"
+            "has_spec_est_i_posle_poslednei_pravki_eshche_ne_bylo_usp": "SPEC есть, и после последней правки ещё не было успешного check-feature ( исключение - правка была совершена самим check-feature - тогда не нужно повторно идти в этот же шаг)"
           }
         },
         {
@@ -382,7 +382,7 @@
           ],
           "condition_labels": {
             "has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili": "Нет отчёта или он устарел Коротко: ALIGNMENT нет или старше SPEC Чуть точнее: сверки с кодом ещё не было, или SPEC новее ALIGNMENT",
-            "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa": "Отчёт есть, но без PASS Коротко: ALIGNMENT без PASS / PASS WITH GAPS Чуть точнее: отчёт есть и не stale, но verdict не PASS — нужен повторный аудит"
+            "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa": "Отчёт есть, но без PASS Коротко: ALIGNMENT без PASS / PASS WITH GAPS ( ранее вызывался alignment-resolve, но результат его работы повторно не проверялся)"
           }
         },
         {

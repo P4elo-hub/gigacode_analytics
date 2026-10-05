@@ -48,13 +48,22 @@ def resolve_pipeline_id(
     *,
     default: str | None = None,
 ) -> str:
-    """CLI flag wins, then active-task.pipeline; no silent runtime default."""
-    if pipeline_arg and pipeline_arg not in {"", "auto"}:
-        return normalize_pipeline_id(pipeline_arg)
+    """Resolve an explicit pipeline id and fail when CLI and active-task disagree."""
+    marked = None
     if active_task:
-        marked = active_task.get("pipeline") or active_task.get("pipeline_id")
-        if marked:
-            return normalize_pipeline_id(str(marked))
+        raw = active_task.get("pipeline") or active_task.get("pipeline_id")
+        if raw:
+            marked = normalize_pipeline_id(str(raw))
+    if pipeline_arg and pipeline_arg not in {"", "auto"}:
+        cli_pipeline = normalize_pipeline_id(pipeline_arg)
+        if marked and marked != cli_pipeline:
+            raise ValueError(
+                f"pipeline mismatch: --pipeline {cli_pipeline!r} "
+                f"!= active-task.pipeline {marked!r}"
+            )
+        return cli_pipeline
+    if marked:
+        return marked
     if default not in {None, "", "auto"}:
         return normalize_pipeline_id(str(default))
     raise ValueError("pipeline id required: pass --pipeline <id> or set active-task.pipeline")

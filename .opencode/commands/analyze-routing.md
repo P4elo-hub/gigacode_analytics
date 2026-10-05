@@ -20,6 +20,6 @@ description: Записать routing-state.json для детерминиров
 ## После шага — продолжай пайплайн
 
 Когда субагент вернул результат, не жди новой слэш-команды. Сразу:
-`python3 scripts/pipeline_delegate.py <slug> --cli qwen --pipeline <pipeline_id>` →
+`python3 scripts/pipeline_delegate.py <slug> --cli opencode --pipeline <pipeline_id>` →
 `task` на `task.subagent_type` из JSON (`run_in_background: false`).
 Не спрашивай «запускать X?».

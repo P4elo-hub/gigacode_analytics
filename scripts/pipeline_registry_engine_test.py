@@ -120,6 +120,19 @@ class HookGatedIsolationTest(unittest.TestCase):
         self.assertEqual(_decision(allow), "allow", json.dumps(allow, ensure_ascii=False))
         self.assertEqual(_decision(deny), "deny", json.dumps(deny, ensure_ascii=False))
 
+    def test_pipeline_arg_mismatch_active_task_is_denied(self) -> None:
+        save_active_task(
+            self.tmp,
+            slug=self.slug,
+            step="capture-review",
+            subagent="review-capturer",
+            pipeline="calibration",
+        )
+        payload = validate_task(self.tmp, "review-capturer", slug_hint=self.slug, pipeline_arg=ACTIVE_PIPELINE)
+        self.assertEqual(_decision(payload), "deny", json.dumps(payload, ensure_ascii=False))
+        reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("pipeline mismatch", reason)
+
 
 if __name__ == "__main__":
     unittest.main()

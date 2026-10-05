@@ -10,7 +10,7 @@ description: Дашборд фичи — что открыто, какой ве�
 бери из `python3 scripts/feature_status.py <slug>` (не считай вручную).
 Скилл read-only: сам файлы не правь.
 
-Затем **`pipeline_delegate.py <slug> --cli qwen`** и **сразу** `task` только на
+Затем **`pipeline_delegate.py <slug> --cli opencode --pipeline spec-v2`** и **сразу** `task` только на
 `task.subagent_type` из JSON (`run_in_background: false`). Не считай next step
 вручную и не спрашивай «запускать?». После каждого `task` — снова delegate,
 пока нет паузы по существу или verdict PASS / PASS WITH GAPS.

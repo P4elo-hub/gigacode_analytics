@@ -19,7 +19,7 @@ from pipeline_pack import add_pack_dir_argument, apply_pack_dir_from_args, works
 from pipeline_position import resolve_position
 from pipeline_runtime import load_pipeline_schema, resolve_pipeline_id
 
-DELEGATE_CMD = "python3 scripts/pipeline_delegate.py <slug> --cli qwen"
+DELEGATE_CMD = "python3 scripts/pipeline_delegate.py <slug> --pipeline <id>"
 
 
 def parse_hook_input(raw: str) -> dict:

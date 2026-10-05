@@ -49,7 +49,7 @@ Workspace пишется и гоняется в **Qwen Code CLI** (`qwen`). Об
 устаревший JSON → снова `analyze-routing`. Check-feature без правок файлов
 не зовёт анализатор: хук ставит stamp в JSON.
 
-Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli qwen` →
+Перед **каждым** `task`: `python3 scripts/pipeline_delegate.py <slug> --cli qwen --pipeline spec-v2` →
 `action: task` → **только** `task.subagent_type` из JSON. После subagent — снова delegate.
 Исключение: `action: ask_user` — после ответа `task` из того JSON, без повторного
 delegate; снова delegate после apply.

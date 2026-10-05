@@ -24,6 +24,7 @@ from pipeline_active_task import (  # noqa: E402
 
 SLUG = "write-cycle-hook"
 OTHER = "pipeline-viewer-smoke"
+PIPELINE = "spec-v2"
 
 
 class LoadActiveTaskLatestTest(unittest.TestCase):
@@ -59,6 +60,7 @@ class LoadActiveTaskLatestTest(unittest.TestCase):
                 slug=SLUG,
                 step="write-feature",
                 subagent="spec-writer",
+                pipeline=PIPELINE,
                 persistent=True,
             )
             other_dir = tmp / "Feature-writing" / OTHER
@@ -90,6 +92,7 @@ class WriteCycleStillOpenTest(unittest.TestCase):
             "slug": SLUG,
             "step": "write-feature",
             "subagent": "spec-writer",
+            "pipeline": PIPELINE,
             "persistent": True,
             "started_at": started,
         }
@@ -151,6 +154,16 @@ class WriteCycleStillOpenTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_cycle_check_requires_pipeline_on_persistent_task(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="cycle-no-pipeline-"))
+        try:
+            active = self._active("2026-09-16T07:56:14Z")
+            active.pop("pipeline")
+            with self.assertRaisesRegex(ValueError, "active-task.pipeline required"):
+                write_cycle_still_open(tmp, SLUG, active)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_save_roundtrip(self) -> None:
         tmp = Path(tempfile.mkdtemp(prefix="cycle-save-"))
         try:
@@ -160,10 +173,26 @@ class WriteCycleStillOpenTest(unittest.TestCase):
                 slug=SLUG,
                 step="write-feature",
                 subagent="spec-writer",
+                pipeline=PIPELINE,
                 persistent=True,
             )
             loaded = load_active_task(tmp)
             self.assertTrue(loaded.get("persistent"))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_save_requires_pipeline(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="cycle-save-pipeline-"))
+        try:
+            (tmp / "Feature-writing" / SLUG).mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, "active-task.pipeline required"):
+                save_active_task(
+                    tmp,
+                    slug=SLUG,
+                    step="write-feature",
+                    subagent="spec-writer",
+                    persistent=True,
+                )
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -176,6 +205,7 @@ class WriteCycleStillOpenTest(unittest.TestCase):
                 slug=SLUG,
                 step="write-feature",
                 subagent="spec-writer",
+                pipeline=PIPELINE,
                 persistent=True,
             )
             marker = tmp / ".pipeline-active-task.json"
@@ -189,6 +219,7 @@ class WriteCycleStillOpenTest(unittest.TestCase):
                 slug=SLUG,
                 step="write-feature",
                 subagent="spec-writer",
+                pipeline=PIPELINE,
                 persistent=True,
             )
             self.assertEqual(second["started_at"], "2026-01-01T00:00:00Z")
@@ -198,6 +229,7 @@ class WriteCycleStillOpenTest(unittest.TestCase):
                 slug=SLUG,
                 step="check-feature",
                 subagent="spec-reviewer",
+                pipeline=PIPELINE,
                 persistent=True,
             )
             self.assertNotEqual(other["started_at"], "2026-01-01T00:00:00Z")

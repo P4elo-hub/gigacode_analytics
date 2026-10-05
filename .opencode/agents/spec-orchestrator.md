@@ -50,11 +50,11 @@ find-context → write-feature
 
 Канон: правило `pipeline-enforcement`. **Не выбирай шаг и субагента сам.**
 
-1. `python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec-v2`
+1. `python3 scripts/pipeline_delegate.py <task_id> --cli opencode --pipeline spec-v2`
 2. `action` → `task` | `ask_user` | `write_feature_cycle` | `ready` | `stopped` | `error`
 3. После `task` hook пишет лог; fallback:
    `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline spec-v2`
-4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline spec-v2` (если hook не сделал)
+4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli opencode --pipeline spec-v2` (если hook не сделал)
 5. `python3 scripts/pipeline_validate.py <task_id> --pipeline spec-v2`
 
 Читай JSON: поле `action` и `instruction`. **Не** вызывай `pipeline_dispatch.py`
@@ -111,7 +111,7 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
    из брифа или существующей папки и **сразу используй**. `ask_user_question` только если
    кандидатов несколько и выбрать нельзя. Запрещены имена `update`, `changes`,
    `wip`.
-2. `pipeline_delegate.py <slug> --cli qwen --pipeline spec-v2` — **единственный** источник next step/subagent.
+2. `pipeline_delegate.py <slug> --cli opencode --pipeline spec-v2` — **единственный** источник next step/subagent.
    Не считай GAP/CH/Q и порядок шагов вручную. Не вызывай `task` без delegate в этом ходе
    (кроме apply после `ask_user` — `task` из того JSON).
 3. При `action: task` — **сразу** `task` на `task.subagent_type` из JSON.
@@ -128,7 +128,7 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
 
    ```bash
    python3 scripts/append_run_log.py --slug <slug> --step <шаг> --subagent <имя> --result ok --pipeline spec-v2
-   python3 scripts/ingest_session_telemetry.py <slug> --cli qwen --pipeline spec-v2
+   python3 scripts/ingest_session_telemetry.py <slug> --cli opencode --pipeline spec-v2
    python3 scripts/pipeline_validate.py <slug> --json --pipeline spec-v2
    ```
 
