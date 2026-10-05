@@ -1,4 +1,4 @@
-"""Gate-step stamp for spec pack — no domain parse (that is analyze-routing)."""
+"""Gate-step stamp for spec-v2 pack — no domain parse (that is analyze-routing)."""
 
 from __future__ import annotations
 
@@ -27,10 +27,10 @@ def refresh_fields(
 ) -> dict:
     del root
     out = dict(current_fields)
-    review_step = _satisfied_by_step("spec", "needs_check_feature", "check-feature")
+    review_step = _satisfied_by_step("spec-v2", "needs_check_feature", "check-feature")
     status = SimpleNamespace(
         slug=slug,
-        pipeline_id="spec",
+        pipeline_id="spec-v2",
         has_gaps_map=bool(out.get("has_gaps_map")),
         has_challenges=bool(out.get("has_challenges")),
         has_alignment=bool(out.get("has_alignment")),

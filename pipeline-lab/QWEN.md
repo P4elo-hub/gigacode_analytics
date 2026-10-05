@@ -42,7 +42,7 @@ Next step не выдумывай.
 
 ```bash
 PYTHONPATH=../scripts python3 ../scripts/pipeline_delegate.py <slug> \
-  --cli qwen --pipeline spec --pack-dir pack
+  --cli qwen --pipeline spec-v2 --pack-dir pack
 ```
 
 Пока `gate: task` — не завершай ход.

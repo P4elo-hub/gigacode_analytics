@@ -46,14 +46,14 @@ tools:
 
 ```bash
 PYTHONPATH=../scripts python3 ../scripts/pipeline_delegate.py <slug> \
-  --cli qwen --pipeline spec --pack-dir pack
+  --cli qwen --pipeline spec-v2 --pack-dir pack
 ```
 
 Равносильно из корня репо:
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_delegate.py <slug> \
-  --cli qwen --pipeline spec --pack-dir pipeline-lab/pack
+  --cli qwen --pipeline spec-v2 --pack-dir pipeline-lab/pack
 ```
 
 1. Вызови delegate. `action` → `task` | `ask_user` | `write_feature_cycle` |
@@ -75,7 +75,7 @@ Preflight:
 
 ```bash
 PYTHONPATH=../scripts python3 ../scripts/pipeline_delegate.py <slug> \
-  --assert-subagent <имя> --pipeline spec --pack-dir pack
+  --assert-subagent <имя> --pipeline spec-v2 --pack-dir pack
 ```
 
 Код ≠ 0 → не `task`.

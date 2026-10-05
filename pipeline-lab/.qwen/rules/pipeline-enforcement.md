@@ -17,7 +17,7 @@ python3 run.py --tick <lab-slug>
 
 ```bash
 PYTHONPATH=../scripts python3 ../scripts/pipeline_delegate.py <lab-slug> \
-  --cli qwen --pipeline spec --pack-dir pack
+  --cli qwen --pipeline spec-v2 --pack-dir pack
 ```
 
 `task` **только** на `launch.subagent_type` / `task.subagent_type` из JSON.

@@ -8,22 +8,22 @@
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_delegate.py lab-empty \
-  --cli qwen --pipeline spec --pack-dir pipeline-lab/pack
+  --cli qwen --pipeline spec-v2 --pack-dir pipeline-lab/pack
 ```
 
-`--pack-dir` грузит YAML/Python из `pipeline-lab/pack/` (не `pipelines/spec/`).
+`--pack-dir` грузит YAML/Python из `pipeline-lab/pack/` (не `pipelines/spec-v2/`).
 Workspace по умолчанию — `pipeline-lab/` (`Feature-writing/`, `agent-logs/` только здесь).
-JSON тот же контракт, что у боевого spec: `action` / `task` / `dispatch.next_step`.
+JSON тот же контракт, что у боевого spec-v2: `action` / `task` / `dispatch.next_step`.
 
-Без флага поведение прода не меняется — pack spec из `pipelines/` и скомпилированных
+Без флага поведение прода не меняется — pack spec-v2 из `pipelines/` и скомпилированных
 `scripts/pipeline_schema.json` + `scripts/generated/pipeline_registry.json`:
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_delegate.py <slug> \
-  --cli qwen --pipeline spec
+  --cli qwen --pipeline spec-v2
 ```
 
-Равносильный env: `PIPELINE_PACK_DIR=pipeline-lab/pack` (опционально `PIPELINE_PACK_ID=spec`).
+Равносильный env: `PIPELINE_PACK_DIR=pipeline-lab/pack` (опционально `PIPELINE_PACK_ID=spec-v2`).
 
 ## Fixtures (сессия 2)
 

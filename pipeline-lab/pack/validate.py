@@ -42,7 +42,7 @@ def extra_advice(root: Path, task_id: str, status, dispatch: dict, report, add) 
     from pipeline_routing_state import SPEC_STALE_VS, add_routing_state_advice
     from pipeline_status import resolve_artifact_paths
 
-    pid = getattr(status, "pipeline_id", None) or "spec"
+    pid = getattr(status, "pipeline_id", None) or "spec-v2"
     paths = resolve_artifact_paths(root, task_id, pid)
     check_needed = bool(getattr(status, "needs_check_feature", False))
     check_reason = str(getattr(status, "needs_check_feature_reason", "") or "")

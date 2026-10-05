@@ -53,7 +53,7 @@ def ensure_lab_git(workspace: Path) -> None:
 
 MAX_TURNS = 12
 CLI = "qwen"
-PIPELINE_ID = "spec"
+PIPELINE_ID = "spec-v2"
 PATH_NAME = ".lab-path.json"
 
 

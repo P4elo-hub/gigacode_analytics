@@ -47,7 +47,7 @@
    каталоге .qwen/agents основного репо.
 3. Workspace прогонов: pipeline-lab/ как корень (Feature-writing/, agent-logs/
    только здесь). Боевой Feature-writing/ не использовать.
-4. Смоук без LLM: pipeline_delegate.py <lab-slug> --cli qwen --pipeline spec
+4. Смоук без LLM: pipeline_delegate.py <lab-slug> --cli qwen --pipeline spec-v2
    --pack-dir pipeline-lab/pack на пустом lab-slug. JSON должен быть того же
    контракта, что боевой spec (action/task/next_step).
 5. Короткий README в pipeline-lab/: как звать delegate с --pack-dir, чего не трогать.
@@ -56,7 +56,7 @@
 
 Критерий готовности:
 - python3 scripts/pipeline_compile.py --check проходит как до правки (стенд не в drift).
-- Delegate с --pack-dir отвечает JSON; без флага — как раньше, pack spec из pipelines/.
+- Delegate с --pack-dir отвечает JSON; без флага — как раньше, pack spec-v2 из pipelines/.
 - В git нет нового каталога под pipelines/.
 ```
 

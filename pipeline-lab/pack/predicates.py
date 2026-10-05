@@ -8,7 +8,7 @@ from pathlib import Path
 from pipeline_edge_conditions import predicates_from_edge_conditions
 from pipeline_pack import load_pack
 
-PIPELINE_ID = "spec"
+PIPELINE_ID = "spec-v2"
 PREDICATES = predicates_from_edge_conditions(PIPELINE_ID)
 DOMAIN_PREDICATE_NAMES = frozenset(PREDICATES)
 DOMAIN_INVARIANT_NAMES = frozenset({"needs-check-feature"})
