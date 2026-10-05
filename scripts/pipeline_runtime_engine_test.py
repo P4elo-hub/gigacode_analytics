@@ -185,6 +185,103 @@ class TimelineLiveRowTest(unittest.TestCase):
         self.assertEqual(deduped[0]["call_id"], "call_00_fuakq9SjZeWBBkyBUYQj0692")
         self.assertEqual(deduped[1]["source"], "current")
 
+    def test_dedupe_collapses_hook_sync_and_fallback_stamp(self) -> None:
+        history = [
+            {
+                "ts": "2026-10-05T19:19:31Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "merged",
+                "note": "Review spec after alignment resolve",
+            },
+            {
+                "ts": "2026-10-05T19:19:31.988Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "run-log",
+                "call_id": "call_00_ET_UKWEGRO7RcjqkOl9DdnH9495",
+                "note": "sync:call_00_ET_UKWEGRO7RcjqkOl9DdnH9495 · Review spec after alignment resolve",
+            },
+            {
+                "ts": "2026-10-05T19:19:38Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "run-log",
+            },
+            {
+                "ts": "2026-10-05T19:22:45.311Z",
+                "step": "analyze-routing",
+                "result": "ok",
+                "source": "run-log",
+                "call_id": "call_00_ET_5ivcoRpeJoX7zPBF6peK5838",
+            },
+        ]
+
+        deduped = dedupe_run_log_stamps(history)
+
+        self.assertEqual([row["step"] for row in deduped], ["spec-reviewer", "analyze-routing"])
+        self.assertEqual(deduped[0]["call_id"], "call_00_ET_UKWEGRO7RcjqkOl9DdnH9495")
+
+    def test_dedupe_keeps_next_spawn_with_a_different_note(self) -> None:
+        history = [
+            {
+                "ts": "2026-10-05T16:44:10.772Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "run-log",
+                "call_id": "call_review",
+                "note": "sync:call_review · Review and fix bph-moex-tax spec",
+            },
+            {
+                "ts": "2026-10-05T16:44:16Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "merged",
+                "note": "Re-review bph-moex-tax spec",
+            },
+        ]
+
+        deduped = dedupe_run_log_stamps(history)
+
+        self.assertEqual(len(deduped), 2)
+
+    def test_dedupe_drops_spawn_that_matches_a_later_completion(self) -> None:
+        history = [
+            {
+                "ts": "2026-10-05T16:44:16Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "merged",
+                "note": "Re-review bph-moex-tax spec",
+            },
+            {
+                "ts": "2026-10-05T16:49:08.449Z",
+                "step": "spec-reviewer",
+                "result": "ok",
+                "source": "run-log",
+                "call_id": "call_rereview",
+                "note": "sync:call_rereview · Re-review bph-moex-tax spec",
+            },
+            {
+                "ts": "2026-10-05T17:32:58.171Z",
+                "step": "gap-resolver",
+                "result": "ok",
+                "source": "run-log",
+                "call_id": "call_gap",
+                "note": "sync:call_gap · Resolve remaining open gaps",
+            },
+            {
+                "ts": "2026-10-05T17:35:01Z",
+                "step": "gap-resolver",
+                "result": "fail",
+                "source": "run-log",
+            },
+        ]
+
+        deduped = dedupe_run_log_stamps(history)
+
+        self.assertEqual([row.get("call_id") for row in deduped], ["call_rereview", "call_gap"])
+
     def test_running_current_adds_next_active_pass(self) -> None:
         timeline = [
             {

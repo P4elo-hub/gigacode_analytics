@@ -1,144 +1,151 @@
-# Контекст для фичи: налог за размер портфеля из BPH
+# Контекст для фичи: bph-portfolio-size-tax
 
 ## Задача (бриф)
 
-> Добавление новой операции из источника БПХ (BPH). Операция **неторговая**
-> (non-trading), посвящена **налогу за размер портфеля клиента** с порогом
-> **от 5 000 000 ₽**. Налог приходит/взимается **отдельно по каждой операции**
-> (не агрегированно).
+> Добавить новую **неторговую (non-trading)** операцию из источника **BPH (БПХ)** — налог за размер портфеля клиента с порогом от **5 000 000 ₽**. Налог приходит/взимается **отдельно по каждой операции** (не агрегированно).
 
-Трактовка: в интеграции `history-ops` ↔ BPH по `GET_OPERATIONS_WITH_DETAILS`
-добавляется новый подтип налоговой операции. Механика аналогична существующим
-налогам (`TAX_RETAIN`, `MOEX_TAX`): data-driven через таблицы маппинга БД HO,
-без правок Java-кода. Отличие — **новый BPH subtype** (в выгрузках не найден) и
-**иной comment** для UI.
+**Трактовка брифа (дана пользователем):** в интеграции `history-ops` ↔ BPH по `GET_OPERATIONS_WITH_DETAILS` добавляется новый **подтип налоговой операции** (семейство `TAXES`). Механика аналогична существующим налогам `TAX_RETAIN` и `MOEX_TAX`: **data-driven через таблицы маппинга БД HO**, без правок Java-кода. Отличие — новый BPH subtype (в выгрузках не найден) и **иной `comment`** для UI.
 
-Отдельного SIHIST-тикета под «налог за размер портфеля» в `analytics/` **не
-найдено** — бриф является первичным источником требования (см. Q-01).
+Это **current-state** документ: фиксирует существующий механизм маппинга налогов из BPH и что потребуется добавить данными, без проектирования решения.
+
+**Важное замечание по брифе:** отдельного SIHIST-тикета под «налог за размер портфеля» нет — эта часть брифа оборвана (см. Q-07, Q-08).
 
 ## Затронутые области
 
 | Область | Что затрагивается | Документы / код |
 |---|---|---|
-| БД маппинга HO | Новый `bph.subtype` (family `TAXES`), запись `operation`, строка `info`, связка `status_to_operation` | `db-export/БД ИО.md`; Liquibase-образец SIHIST-3321 в `create_schema.sql` |
-| Запрос к BPH | Включение нового subtype в `subtypesAndStatuses` при `operationTypes` содержит `tax`/`tax_input` | `BphBcFilterService.buildBphRequestEntityByBphParams()` |
-| Обработка ответа BPH | Фильтрация по `additionalType`, маппинг `comment`, watershed, статус | `BphBcFilterService.isActualBphOperation()`, `BphCommonClientConverter` |
-| Исходящий ответ SEND_OPERATIONS | `type`, `comment`, `total_sum`, `general_status` — как у существующих налогов | SIHIST-3321, SIHIST-2811 |
-| МП / композит | Без изменений — уже запрашивает `tax`, деталка `HISTORY_OPS_TAX_DETAILS_SCREEN` | `HistoryOperationTaxDetailsHeaderSection`, `TaxSectionCreator` |
-| Java history-ops | **Не меняется** (по аналогии с MOEX_TAX) | — |
-| Тесты | Liquibase test DB, фикстура ответа BPH, operation-cache | `application-test.yml`, `json/response/bph/` |
+| Интеграция `history-ops` ↔ BPH | Обмен `GET_OPERATIONS_WITH_DETAILS` — новый subtype семейства `TAXES` в запросе/ответе | `analytics/02-Modules/MOD-001-history-ops/integrations/bph.md`; `repositories/ИО/history-ops/src/main/swagger/bph/bph.yml` |
+| Маппинг БД HO (PostgreSQL `history_ops`) | Таблицы `bph`, `operation`, `info`, `status_to_operation` — добавление строк (data-only) | `db-export/БД ИО.md`; `analytics/02-Modules/MOD-001-history-ops/data/bc-bph-mapping-db.md` |
+| Java `history-ops` | **Не меняется** — data-driven через кэш маппинга | `BphCommonClientConverter.java`; `BphBcFilterService.java`; `BphOperationConverter.java` |
+| Лента операций МП | Исходящий объект `operation_type = tax` с новым `comment` | `analytics/.../behavior/operation-type-catalog.md` (секция «Удержание налогов из BPH») |
+| Соседние фичи | Общая зона таблиц/id с `bph-moex-tax` (`MOEX_TAX`) — тот же паттерн `TAXES → tax` | `Feature-writing/bph-moex-tax/` |
 
 ## Релевантная аналитика и спеки
 
-| Документ | Что описывает | Почему релевантно |
+| Документ (analytics/, Feature-writing/) | Что описывает | Почему релевантно задаче |
 |---|---|---|
-| [SIHIST-3321](analytics/SIHIST/SIHIST_markdown_back/[SIHIST-3321]_Добавление_списание_налогов_для_типовых_операций_из_BPH.md) | Добавление налогов `TAX_RETAIN`/`TAX_REFUND_BROK_ACCOUNT` из BPH: таблица type/subtype/additionalType, маппинг в `tax`/`tax_input`, UPDATE БД | **Образец фичи** для нового налога |
-| [SIHIST-3367](analytics/SIHIST/SIHIST_markdown_back/[SIHIST-3367]_Изменение_логики_обработки_ответа_от_bph_-_GET_OPERATIONS_WITH_DETAILS.md) | Алгоритм фильтрации типовых операций BPH (кэш, `additionalType`, watershed) | Операция включается, если есть в кэше и `additionalType` совпадает с `info` |
-| [SIHIST-3476](analytics/SIHIST/SIHIST_markdown_back/[SIHIST-3476]_Технические_задачи_в_7.14.0.md) | Правило comment для налогов: после водораздела comment из `info` по `additional_type`; до — `accComment` | Ключевое правило comment для налогов |
-| [SIHIST-2774](analytics/SIHIST/SIHIST_markdown_back/[SIHIST-2774]_База_данных_маппинга_простых_операций_из_BC_и_операций_из_BPH.md) | Схема таблиц `bph`, `operation`, `info`, `status_to_operation` | Куда добавлять новый subtype |
-| [SIHIST-2796](analytics/SIHIST/SIHIST_markdown_back/[SIHIST-2796]_Формирование_запросов_к_BC_и_BPH_с_учётом_данных_из_БД.md) | Формирование запроса к BPH из кэша маппинга | Запрос строится автоматически при `bph_active=true` |
-| [SIHIST-2811](analytics/SIHIST/SIHIST_markdown_back/[SIHIST-2811]_Обработка_ответов_от_BC_и_BPH_с_учётом_данных_из_БД.md) | Маппинг ответа BPH → SEND_OPERATIONS | Правила полей (`comment`, `total_sum`, `type`) |
-| SPEC `bph-moex-tax` (Feature-writing/bph-moex-tax/) | Ближайший аналог: `TAXES/MOEX_TAX` → `tax`, `bc_id=110`, `additionalType=NULL`, comment из `info` | Паттерн «TAXES / subtype → tax» для нового налога |
+| `analytics/02-Modules/MOD-001-history-ops/behavior/operation-type-catalog.md` | Секция «Удержание налогов из BPH (3321)»: `TAXES/TAX_RETAIN` → `tax` (additionalTypes `OUT_MONEY`/`OUT_SECURITIES`/`TAX_PERIOD_END`/`INCENTIVE_PAYMENT`); `TAX_REFUND_BROK_ACCOUNT` → `tax_input` (не в 3321); `comment` из `info.comment` по `additionalType`, `display_name` из `info.displayed_name` | Эталон механики, к которому добавляется новый подтип |
+| `analytics/02-Modules/MOD-001-history-ops/behavior/bph-response-processing.md` | DB-aware маппинг запроса/ответа BPH: `subtypesAndStatuses` + `additionalTypes[]` из кэша; post-filter — матчинг `additionalType` ↔ `info[].additional_type`; comment/logo из `info[]` | Описывает алгоритм, который «просто заработает» после INSERT новых строк |
+| `analytics/02-Modules/MOD-001-history-ops/data/bc-bph-mapping-db.md` | Схема таблиц маппинга (`operation_type`, `type`, `bph`, `bph_bc`, `operation`, `info`, `status`, `status_to_operation`, …), кэш-строка | Справочник по устройству таблиц, куда пишется INSERT |
+| `analytics/02-Modules/MOD-001-history-ops/integrations/bph.md` | Контракт `GET_OPERATIONS_WITH_DETAILS` (endpoint, headers, body `subtypesAndStatuses`, ответ `data[].lead`) | Контракт источника — поля `type`/`subtype`/`additionalType`/`status` |
+| `Feature-writing/bph-moex-tax/bph-moex-tax.md` (+ `-decisions.md`, `-code-alignment.md`, `-challenges.md`) | **Sibling-фича** `MOEX_TAX` из того же семейства `TAXES` → `tax`, тот же data-driven паттерн; решения D-01…D-25 закрывают вопросы, идентичные для этой фичи (написание subtype, comment, bc_id, статус, additional_type, id-строки, pre-check) | Прямой аналог: те же таблицы, тот же механизм, общая зона риска по id-строкам и статусам. Рекомендуется выровнять значения с этой фичей (см. D-16: `bph-moex-tax` объявлен authoritative для `MOEX_TAX`) |
 
 ## Релевантный код
 
-| Файл | Компонент | Текущее поведение | Почему важно |
+| Файл | Компонент (класс / метод / endpoint) | Текущее поведение | Почему важно для фичи |
 |---|---|---|---|
-| `.../service/filter/BphBcFilterService.java:102-121` | `buildBphRequestEntityByBphParams()` | Собирает `type`, `subtype`, `statuses`, `additionalTypes` (только non-null из `info`) в запрос BPH | Новый subtype автоматически попадёт в запрос после INSERT в БД |
-| `.../service/filter/BphBcFilterService.java:166-250` | `isActualBphOperation()` | Проверяет watershed (`formationDate` vs `historyStart`), затем `additionalType` ∈ `info.additional_type`; иначе INFO-лог + метрика `unexpected_additional_type_for_common_operation` | Нужна корректная строка в `info` с правильным `additional_type` |
-| `.../service/conversion/BphCommonClientConverter.java:40,133-135` | константа `TAXES`, fallback `accComment` | Для `TAXES` при пустом comment из `info` подставляет `details.accComment` | Поведение comment для налогов после/до водораздела |
-| `.../service/conversion/BphCommonClientConverter.java:220-262` | `getAdditionalInfoFromCache()`, `isCorrectAdditionalType()`, `getOperationFromCache()` | Матчит `bphType+bphSubtype` → `operation` (только `bphActive`), затем `additionalType` → `info.comment`; `additionalType` и `info.additional_type` сравниваются как `""` при null | Отличие нового налога — другой comment из БД |
-| `.../service/conversion/BphCommonClientConverter.java:168-187` | `getId()` | `"bph_%s_%s"` от `operationType` и `externalSystemId` → `bph_tax_{id}` | Формат id на фронте |
-| `.../adapter/bph/BphGateway.java:34,149,154` | `BphGateway`, `GET_OPERATIONS_WITH_DETAILS` | Gateway вызова BPH `POST /api/v1/incoming-gateway/operations-with-details` | Точка интеграции, Java не меняется |
-| `.../model/Operation.java:11-46` | record `Operation`, `hasBphContext()`, `concatTypeAndSubtype()` | `hasBphContext = bphActive && type != null && statusAndGeneralStatus != null`; ключ watershed = `type\|subtype` | Условие включения в запрос и ключ водораздела |
-| `.../adapter/bph/BphDynamicConfig.java:18-19` | `getStartDateWithDB()` | watershed по ключу `concatTypeAndSubtype()` | Для нового subtype нужен `historyStart` (Q-08) |
-| `src/main/swagger/bph/bph.yml:216-240` | `POST /api/v1/incoming-gateway/operations-with-details` | Endpoint `GET_OPERATIONS_WITH_DETAILS`; headers `rqUID`,`systemName` required | Контракт BPH |
-| `src/main/swagger/bph/bph.yml:1088-1098` | `OperationData` | Поля `type`, `subtype`/`subType`, `additionalType`, `totalPrice`, `formationDate`, `eventDate`, `status`, `agreement` | Ответ BPH для нового налога |
-| `src/main/swagger/bph/bph.yml:1292-1326` | `subtypesAndStatuses[]` | `{ type, subtype, additionalTypes[0-1], statuses[1] }`; required `type`,`subtype`,`statuses` | Формат запроса BPH |
-| `src/main/swagger/history/history.yml:60-93` | enum `PortfolioOperationType` | Содержит `tax` (71) и `tax_input` (93) | Фронтовый тип операции |
-| `history-ops-screen-api/.../HistoryOperationTaxDetailsScreen.java:10` | `@Screen(bindWithScreenCode = "HISTORY_OPS_TAX_DETAILS_SCREEN")` | Деталка налога | UI не меняется |
-| `history-ops-screen-api/.../HistoryOperationTaxDetailsHeaderSection.java:30` | `defaultTitleName("Удержание налога")` | Заголовок деталки налога без различия по subtype | UI не меняется |
-| `history-ops-screen-api/.../TaxSectionCreator.java:28` | `titleText("Удержание налога")` | Заголовок карточки налога в ленте | UI не меняется |
+| `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/service/conversion/BphCommonClientConverter.java` | `convert()`; `getAdditionalInfoFromCache()`; `isCorrectAdditionalType()`; `enrichComment()`; `getId()`; константа `TAXES = "TAXES"` | Ищет `Operation` в кэше по `originalType`+`bphType` (фильтр `bphActive`); из `operation.info()` подбирает строку по `additional_type == lead.additionalType` (NULL→`""`, `equals`); применяет `comment`/`displayedName`; для `TAXES` при пустом comment — fallback `lead.accComment`; `id = bph_{operation_type}_{externalSystemId}`; `totalSum = abs(totalPrice)` | Тот же код без изменений: новый subtype с `info(additional_type=NULL)` подхватится матчингом `"" == ""`, если BPH-ответ приходит без `additionalType` |
+| `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/service/filter/BphBcFilterService.java` | `buildBphRequestEntityByBphParams()`; `isActualBphOperation()` | `additionalTypes[]` формируется из `info[].additional_type` с `filter(Objects::nonNull)` (строки 115-119), передаётся только при непустом списке; при отсутствии BC-контекста (`bc_id=NULL`) — ранний `return true` (строки 190/194/264), watershed/additionalType-фильтр не блокируют; статус-членство проверяется всегда `statusMap.containsKey(status)` (строки 85, 353) | Для нового subtype с `bc_id=NULL` и `additional_type=NULL` запрос к BPH идёт без `additionalTypes[]`, а watershed/additionalType не блокируют; блокирующим остаётся только статус-членство |
+| `repositories/ИО/history-ops/src/main/java/com/sberbank/si20/history/ops/adapter/bph/BphOperationConverter.java` | `convert()`; `validateSimpleAttributes()`; `getSubType()` | Валидирует обязательные поля `type`, `subType`/`subtype`, `formationDate`, `eventDate`, `externalSystemId`, `status`, `agreement`; `getSubType()` читает оба имени (`subtype`, `subType`) через `BphTypesHolder` | Показывает, что контракт BPH имеет два имени поля подтипа и что маппинг типов идёт через `BphTypesHolder` (кэш) |
+| `repositories/ИО/history-ops/src/main/swagger/bph/bph.yml` | `POST /api/v1/incoming-gateway/operations-with-details` (строка 216); schema `RequestParamsData` (`subtypesAndStatuses`), `OperationData` | Контракт BPH: запрос с `subtypesAndStatuses[].{type, subtype, statuses, additionalTypes?}` (maxItems 1000, maxLength 225); ответ `data[].lead` c `type`/`subtype`/`additionalType`/`status`/`totalPrice`; `OperationData` имеет оба поля `subType` и `subtype` | Контракт неизменен; новый подтип — лишь новое значение `subtype` в `subtypesAndStatuses` |
 
 ## Данные (БД, выгрузки)
 
-| Таблица / поле | Где найдено | Текущее устройство | На что влияет фича |
+Все факты — `db-export/БД ИО.md` (выгрузка схемы и данных БД HO, PostgreSQL `history_ops`).
+
+| Таблица / поле | Где найдено (якорь) | Текущее устройство | На что влияет фича |
 |---|---|---|---|
-| `history_ops.type` id=7 | `db-export/БД ИО.md:319` | `TAXES` — семейство налогов | Новый subtype ссылается на `type_id=7` |
-| `history_ops.operation_type` id=2 / id=20 | `db-export/БД ИО.md:326,344` | `tax` / `tax_input` | Фронтовый тип для нового налога |
-| `history_ops.bph` id=19,20 | `db-export/БД ИО.md:425,428`; `create_schema.sql:592-596` | `TAX_RETAIN`, `TAX_REFUND_BROK_ACCOUNT` (type_id=7, active) | **INSERT** новый subtype (след. свободный id=25, т.к. max=24) |
-| `history_ops.operation` id=2,23 | `db-export/БД ИО.md:476,477`; `create_schema.sql:599-604` | id=2 → `operation_type_id=2 (tax)`, `bc_id=110`, `bph_id=19`; id=23 → `operation_type_id=20 (tax_input)`, `bc_id=NULL`, `bph_id=20` | **INSERT** операция (след. свободный id=27, т.к. max=26) |
-| `history_ops.info` id=2,46-49 | `db-export/БД ИО.md:527-531`; `create_schema.sql:620-624` | Comment для TAX_RETAIN по `additional_type`: `OUT_MONEY`, `OUT_SECURITIES`, `TAX_PERIOD_END`, `INCENTIVE_PAYMENT`; для TAX_REFUND_BROK_ACCOUNT — `additional_type=NULL` | **INSERT** info с comment для нового налога (след. свободный id=79, т.к. max=78) |
-| `history_ops.status` id=19 | `create_schema.sql:607-608`; `db-export/БД ИО.md:375` | `COMPLETE` → `general_status_id=1 (executed)` | Переиспользовать статус `COMPLETE` |
-| `history_ops.status_to_operation` id=28 | `create_schema.sql:611-613`; `db-export/БД ИО.md:586` | `operation_id=2 ↔ status_id=19` | **INSERT** связку (след. свободный id=57, т.к. max=56) |
-| `history_ops.bph_bc` id=110 | `create_schema.sql:699`; `db-export/БД ИО.md:439` | `TAX_WITHHOLDING` (type_id=8 `MONEY_DIAS`) — BC-аналог налога | `bc_id=110` если у нового налога есть BC-аналог (Q-06) |
-| Кэш `app-config.operation-cache` | `application-test.yml:125` | JSON: `TAX_RETAIN` c `bc_code:110`, `bc_active:true`, `status_and_general_status: {COMPLETE:executed}`, `info[]` с `additional_type` | Обновить default-value под новый subtype |
+| `type` id `7` = `TAXES` | `db-export/БД ИО.md`, object `type` | Справочник BPH-типов; семейство налогов = `TAXES` (id 7) | Семейство нового subtype уже существует — `type` добавлять не нужно |
+| `operation_type` id `2` = `tax`, id `20` = `tax_input` | `db-export/БД ИО.md`, object `operation_type` | Нормализованный тип МП | Целевой `operation_type` для нового налога (по аналогии `TAX_RETAIN`/`MOEX_TAX` → `tax`, id 2) — см. Q-03 |
+| `bph` (24 строки): id `19` = `TAX_RETAIN` (type_id 7, active), id `20` = `TAX_REFUND_BROK_ACCOUNT` (type_id 7, active); **max id `24`** | `db-export/БД ИО.md`, object `bph` (полный листинг 24 строк) | Справочник BPH `type/subtype` + `is_active` | Нового подтипа **нет** ни в одной из 24 строк — добавляется новая строка `bph(subtype=<новый>, type_id=7, is_active=true)` |
+| `operation`: id `2` = `tax` (bc_id `110` `TAX_WITHHOLDING`, bph_id `19`); id `23` = `tax_input` (bc_id `NULL`, bph_id `20`); **max id `26`** | `db-export/БД ИО.md`, object `operation` | Центральная строка маппинга: `operation_type_id` + `bc_id` + `bph_id` + `name` | Добавляется строка `operation(operation_type_id=?, bc_id=?, bph_id=<новый>, name=?)`; `bc_id` (`NULL` vs `110`) — открытый вопрос Q-04 |
+| `info`: operation `2` → 4 строки с `additional_type` = `OUT_MONEY`/`INCENTIVE_PAYMENT`/`OUT_SECURITIES`/`TAX_PERIOD_END` (свои `comment`); operation `23` → 1 строка `additional_type=NULL`, `comment='Возврат излишне удержанного налога'` | `db-export/БД ИО.md`, object `info` | UI-метаданные: `additional_type`, `comment`, `displayed_name`, `logo_url*` | Добавляется строка(и) `info` с `comment` для нового налога; значение `additional_type` (`NULL` vs конкретное) — Q-06 |
+| `status` id `19` = `COMPLETE` → `general_status_id=1` `executed` | `db-export/БД ИО.md`, object `status` | BPH-статус → general_status | Фактический статус нового subtype и его связка — Q-05 |
+| `status_to_operation`: operation `2` ↔ status `19`; operation `23` ↔ status `19` | `db-export/БД ИО.md`, object `status_to_operation` | Статус-членство (`statusMap.containsKey`) — жёсткий фильтр | Добавляется связка `operation_id=<новый> ↔ status_id=19` — иначе операция отфильтруется |
+| Liquibase changeset `SIHIST-3321` (добавление налогов data-driven) | `db-export/БД ИО.md` (`databasechangelog`, 103 строки) | Прецедент data-driven добавления налогов через SQL changeset | Шаблон миграции, который повторяется для нового подтипа |
 
-**Новый налог в текущей выгрузке БД отсутствует** — нет ни строки `bph.subtype`,
-ни `operation`, ни `info` с комментарием про «размер портфеля».
+## Интеграции и контракты, которые нужно учесть
 
-## Интеграции и контракты
-
-- Обмен: BPH `GET_OPERATIONS_WITH_DETAILS` (`POST /api/v1/incoming-gateway/operations-with-details`, `bph.yml:216`).
-- Вход от BPH (lead): `type=TAXES` (уточнить, Q-02), `subtype=<новый>`, `additionalType=<значение|NULL>`, `status=COMPLETE`, `totalPrice`, `formationDate`, `eventDate`, `agreement`, `externalSystemId`.
-- Запрос к BPH: `subtypesAndStatuses[]` = `{ type, subtype, additionalTypes[0-1], statuses[] }` (required `type`,`subtype`,`statuses`).
-- Исходящий SEND_OPERATIONS: `type` из кэша (`tax`/`tax_input`), `comment` из `info`, `id = bph_<type>_<externalSystemId>`, `general_status=executed`.
-- МП/композит передаёт `operationTypes: ["tax", ...]` — изменений на фронте не требуется.
-- Фронтовый enum `PortfolioOperationType` уже содержит `tax` и `tax_input` — новый тип вводить не нужно.
+- **`GET_OPERATIONS_WITH_DETAILS`** — `POST /api/v1/incoming-gateway/operations-with-details`, headers `rqUID` + `systemName=history_ops`, body `RequestParamsData` с `subtypesAndStatuses[]` (`type`, `subtype`, `statuses`, опц. `additionalTypes`). Ответ: `data[].lead` c `type`, `subtype`, `additionalType`, `status`, `totalPrice`, `formationDate`/`eventDate`. Контракт **не меняется** — меняются только данные маппинга. Якоря: `bph.yml:216+`, `analytics/.../integrations/bph.md`.
+- **Термины домена:** `TAXES` = BPH-тип (family, `type.id=7`), `TAX_RETAIN` / `TAX_REFUND_BROK_ACCOUNT` = существующие subtypes, `MOEX_TAX` = новый subtype из sibling-фичи `bph-moex-tax`, `additionalType` = сужающий фильтр BPH, `subtypesAndStatuses` = фильтр запроса, `bc_id`/`bph_id` = связи `operation` с источниками.
+- **Формирование запроса:** `additionalTypes[]` добавляется только для `info[].additional_type` с не-NULL значением (`BphBcFilterService`, `filter(Objects::nonNull)`). Для `additional_type=NULL` фильтр не добавляется — запрос идёт по `type+subtype+statuses` без сужения.
+- **Маппинг ответа:** `comment`/`displayedName` подбираются из `info[]` по `additional_type == lead.additionalType` (NULL ↔ `""`, `"" == ""` → true); при пустом `comment` для `TAXES` — fallback `lead.accComment` (`BphCommonClientConverter`).
+- **Кэш маппинга:** обновляется cron-ом (`app-config.operation-cache.updateDelayMs`); при ошибке SQL кэш не перезаписывается. Новые строки видны в рантайме только после обновления кэша.
 
 ## Ограничения и риски текущего состояния
 
-- Без строки `info` с правильным `additional_type` операция **отфильтруется**
-  (`unexpected_additional_type_for_common_operation` + INFO-лог).
-- Один `operation` в кэше = одна пара `bph.type + bph.subtype`; для нового налога
-  нужна **отдельная** запись `operation`, даже при том же `operation_type` (`tax`).
-- Алгоритм запроса/ответа **не меняется** — ошибка в данных БД не компенсируется кодом.
-- Watershed (`BphDynamicConfig.getStartDateWithDB()`, ключ `type|subtype`): для нового
-  subtype нужно согласовать `historyStart`, иначе операции могут не запрашиваться/не
-  показываться.
-- Правило comment (SIHIST-3476): после водораздела comment из `info` по
-  `additional_type`; при пустом comment — fallback `details.accComment`.
-- Порог «от 5 млн ₽» — бизнес-условие начисления на стороне BPH, в коде HO фильтра по
-  порогу нет (Q-09).
+- **Новый BPH subtype не подтверждён ни в одном источнике** (`analytics/`, `repositories/`, `db-export/`) — 0 совпадений. В sibling-контексте `bph-moex-tax` этот подтип ранее упоминался как `PORTFOLIO_SIZE_TAX` (семейство `TAXES` → `tax`), но сам файл `Feature-writing/bph-portfolio-size-tax/` и `Feature-context/bph-portfolio-size-tax.md` **удалены** — актуального подтверждения значения нет. Расхождение по написанию → запрос вернёт пусто и налог «молча» не отобразится (Q-01).
+- **Java-код не меняется** — фича целиком data-driven. Алгоритм нельзя поменять кодом, только данными таблиц маппинга и кэшем.
+- **Кэш маппинга обновляется cron-ом** — временной лаг между проливом changeset и фактическим поведением; при стабильном сбое обновления строки в БД есть, в рантайме нет.
+- **Статус-членство — жёсткий фильтр** (`statusMap.containsKey(status)`): без корректной связки `status_to_operation` операция отфильтруется. Для `bc_id=NULL` watershed и additionalType-фильтр **не** блокируют (ранний `return true`).
+- **Общая зона риска с sibling-фичей** `bph-moex-tax` (тоже `TAXES` → `tax`): id новых строк (`bph`/`operation`/`info`/`status_to_operation`) не должны пересекаться. Sibling отложил id на DBA и использует SERIAL/sequence-авто (D-10, D-20).
+- **Порог 5 000 000 ₽** — по брифе это бизнес-условие начисления налога (для портфелей свыше порога); в HO **не** реализуется фильтр по порогу — решение о начислении принимает BPH, HO лишь маппит пришедшую операцию. Требует подтверждения (Q-07), т.к. часть брифа оборвана.
+- **`info.additional_type` NULL vs пустая строка `''`**: `filter(Objects::nonNull)` пропускает `''` (не NULL), что исказит `additionalTypes[]` и матчинг (риск, выявленный sibling-фичей — D-18).
 
 ## Что учесть при написании фичи
 
-- Следовать паттерну SIHIST-3321 / MOEX_TAX: таблица «BPH type / subtype / additionalType / operationTypes / comment».
-- Зафиксировать, что **Java-код не меняется**; scope = Liquibase + тесты + пролив на стенды.
-- Описать INSERT в `bph`, `operation`, `info`, `status_to_operation` (и `status` при необходимости).
-- Указать `additionalType` и количество строк `info` (NULL — как MOEX_TAX, или несколько — как TAX_RETAIN).
-- Обновить test fixtures: `application-test.yml` (operation-cache), JSON ответа BPH, `bph_request_all_completed.json`.
-- Negative-сценарий: неизвестный `additionalType` → операция не попадает в ответ.
-- Композит и МП — out of scope (тот же `tax`, та же деталка).
-- Связать с SIHIST-3476: comment из `info`, не из `details.accComment`.
+- Это **data-only** фича: INSERT в `bph` (+1), `operation` (+1, `operation_type_id`), `info` (+1 или более, с `comment`), `status_to_operation` (+1). Новые `type`, `operation_type`, `status` заводить не нужно (все существуют).
+- **Эталонный паттерн «BPH-only налог»** — `TAX_REFUND_BROK_ACCOUNT` (operation `23`, `bc_id=NULL`, `info.additional_type=NULL`, статус `COMPLETE`). Новый налог отличается от него `operation_type` (`tax` вместо `tax_input`) и своим `comment`.
+- **Выровнять с sibling `bph-moex-tax`**: тот прошёл полный цикл resolve (D-01…D-25) и зафиксировал решения по идентичным вопросам — написание subtype, `comment`, `bc_id=NULL`, статус `COMPLETE`, `additional_type=NULL`, pre-check «0 строк», SERIAL-авто id, non-SMART метрика, data-level приёмка. Рекомендуется переиспользовать эти решения, где применимо, и явно зафиксировать непересечение id с `bph-moex-tax`.
+- Механику маппинга `comment` по `additional_type` (NULL ↔ `""`) обязательно отразить в spec как подтверждённую кодом (`BphCommonClientConverter.java`).
+- Сверить с контрактом BPH точное написание нового subtype, наличие/отсутствие `additionalType` в ответе и фактический `status` — до пролива.
+- Учесть обновление кэша (`operation-cache`, cron) и pre-check на дубли (`bph.subtype` без UNIQUE — см. D-24 sibling).
 
+### Актуализация после resolve (2026-10-06)
+
+Решения из resolve, которые писатель и ревьюер должны считать актуальнее исходного current-state:
+
+- GAP-GOAL-03, GAP-UCAS-01, GAP-UCTB-01, GAP-CONS-01, GAP-INT-01, GAP-ALG-01, GAP-DM-01, GAP-MAP-01, GAP-OBS-01: Написание подтипа — `PORTFOLIO_SIZE_TAX`
+- GAP-GOAL-04, GAP-UCTB-02, GAP-CONS-07, GAP-INT-02, GAP-ALG-02, GAP-DM-02, GAP-MAP-02: `comment` для UI — «Налог за размер портфеля»
+- GAP-GOAL-05, GAP-UCTB-03, GAP-CONS-02, GAP-INT-03, GAP-ALG-03, GAP-DM-03, GAP-MAP-03: `operation_type` = `tax` (id=2)
+- GAP-CONS-03, GAP-UCTB-05, GAP-ALG-04, GAP-DM-04, GAP-MAP-04, GAP-OBS-03: `operation.bc_id` = `NULL` (BPH-only)
+- GAP-CONS-04, GAP-UCTB-06, GAP-INT-04, GAP-ALG-05, GAP-DM-05, GAP-MAP-05: BPH-статус `COMPLETE` (id=19) + `status_to_operation(operation↔19)`
+- GAP-CONS-05, GAP-UCTB-04, GAP-INT-05, GAP-ALG-06, GAP-DM-06, GAP-MAP-06: `info.additional_type` = `NULL` (одна info-строка)
+- GAP-GOAL-06, GAP-CONS-06, GAP-UCTB-07, GAP-ALG-07: Порог «от 5 000 000 ₽» — BPH-side правило (CN-04), HO не фильтрует
+- GAP-CONS-08, GAP-ALG-08, GAP-DM-08, GAP-MAP-08: `operation.name` = «Налог за размер портфеля», `info.displayed_name` = NULL
+- GAP-DM-07, GAP-MAP-07: id новых строк — sequence автоматически (INSERT без явного id), непересечение через pre-check (CN-06)
+- GAP-GOAL-01, GAP-GOAL-02, GAP-GOAL-07, GAP-OBS-02: Non-SMART: полнота налоговой ленты через `history_ops_integration_total` + SQL-сверка + интеграционный тест; инициатор/тикет не критичны
+- GAP-NFR-01, GAP-NFR-04: Производительность и SLO/SLA наследуются без новых target'ов (CN-14)
+- GAP-UCAS-02, GAP-NFR-02, GAP-NFR-03, GAP-NFR-06, GAP-NFR-07: Значения timeout/retry/deadline/page-size задаются внешним конфигом; partial failure без retry (CN-15)
+- GAP-NFR-05, GAP-NFR-09, GAP-OBS-04: Аутентификация/хранение/маскирование — детали внешние (Vault/SOWA, `log_masking_rules.yml`); новые классы чувствительных данных не вводятся (CN-16)
+- GAP-NFR-08: Отдельный toggle не вводится; раскатка data-driven (`bph.is_active` + кэш), лаг = `update-delay-ms` (CN-17)
+- GAP-OBS-05: Вне scope — новых UI-метрик нет
+- CH-05: —
+- CH-06: —
+- CH-09: —
+- CH-10: —
+- CH-12: B (D-15)
+- CH-01: A (D-16)
+- CH-02: A (D-17)
+- CH-03: A (D-18)
+- CH-04: A (D-19)
+- CH-07: A (D-20)
+- CH-08: A (D-21)
+- CH-13: B (D-22)
+- CH-15: B (D-23)
+- CH-11: A (D-24)
+- CH-14: A (D-25)
+- CH-16: B (D-26)
+
+**Якоря полей из актуальной SPEC:**
+
+`comment`, `GET_OPERATIONS_WITH_DETAILS`, `TAXES`, `PORTFOLIO_SIZE_TAX`, `operation_type`, `tax`, `TAX_RETAIN`, `MOEX_TAX`, `type`, `tax_input`, `bph`, `operation`
+
+См. также § «Закрытые вопросы» ниже — не переспрашивать закрытые Q.
 ## Открытые вопросы / что проверить
 
 | ID | Вопрос | Где искать ответ |
 |---|---|---|
-| Q-01 | Точное имя BPH subtype для «налог за размер портфеля» (в `analytics/`, `db-export/`, `repositories/` не найдено; для TAXES известны только `TAX_RETAIN`, `TAX_REFUND_BROK_ACCOUNT`, `TAX_RETAIN_REVERSAL`, `TRANSFER_IN`, `TRANSFER_OUT`) | Контракт BPH (`bph_config_*`), PO/бизнес-аналитик; Jira |
-| Q-02 | Семейство операции — `TAXES` (type_id=7) или иное? Бриф: «налог» + «неторговая» | Контракт BPH; команда BPH |
-| Q-03 | Фронтовый `operation_type` — `tax` (id=2) или `tax_input` (id=20)? «Взимается» → вероятно `tax` | PO; аналог SIHIST-3321 (TAX_RETAIN→tax) |
-| Q-04 | `additionalType` в ответе BPH: `NULL` (один comment, как MOEX_TAX/TAX_REFUND_BROK_ACCOUNT) или несколько значений (как TAX_RETAIN — 4 шт.)? | Контракт BPH |
-| Q-05 | Текст `comment` для UI нового налога | PO / бизнес-аналитик |
-| Q-06 | `bc_id`: `110` (TAX_WITHHOLDING) как у `tax`, или `NULL` (только BPH, как `TAX_REFUND_BROK_ACCOUNT`)? | Контракт BC; аналог SIHIST-3321 |
-| Q-07 | Статус BPH — `COMPLETE` (id=19 → `executed`), как у налогов? | Контракт BPH; SIHIST-3321 |
-| Q-08 | Watershed `historyStart` для нового subtype (ключ `type|subtype`) | `bph_dynamic` config; команда BPH/сопровождения |
-| Q-09 | Порог «от 5 млн ₽» — фильтруется ли на стороне HO или это условие начисления только в BPH? | PO; команда BPH |
-| Q-10 | Смысл «отдельно по каждой операции»: нет агрегации/дедупликации? Влияет ли на уникальность `externalSystemId`/id? | PO; SIHIST-3367 (дедупликация) |
+| Q-01 | Точное написание нового BPH-подтипа (ранее в удалённом sibling-контексте фигурировал `PORTFOLIO_SIZE_TAX`). 0 совпадений в `analytics/`/`repositories/`/`db-export/`. Расхождение критично для `subtypesAndStatuses` и lookup `operation` — налог «молча» не отобразится | Команда BPH / контракт BPH (ответ `GET_OPERATION_TYPES`, `bph_config_*`) |
+| Q-02 | Точный текст `comment` для UI («иной comment» из брифа). Бриф не даёт конкретного значения | Product Owner / команда BPH |
+| Q-03 | Целевой `operation_type` нового налога: `tax` (id 2, как `TAX_RETAIN`/`MOEX_TAX`) или `tax_input` (id 20) или новый? | Product Owner (по аналогии с существующими налогами); sibling `bph-moex-tax` → `tax` |
+| Q-04 | `operation.bc_id`: `NULL` (BPH-only, паттерн `TAX_REFUND_BROK_ACCOUNT`) или `110` (`TAX_WITHHOLDING`, как `TAX_RETAIN`)? Влияет на watershed/ранний `return true` в `isActualBphOperation()` | Product Owner; проверка по коду `BphBcFilterService.java` |
+| Q-05 | Фактический BPH-статус нового subtype и связка `status_to_operation` (по аналогии `COMPLETE` id=19 → `executed`)? | Команда BPH / контракт; `db-export/БД ИО.md` |
+| Q-06 | `info.additional_type`: `NULL` (одна info-строка, как у `TAX_REFUND_BROK_ACCOUNT`) или конкретное значение? Бриф: «отдельно по каждой операции (не агрегированно)» | Команда BPH / Product Owner |
+| Q-07 | Порог «от 5 000 000 ₽» — это BPH-side бизнес-правило начисления (HO не фильтрует по порогу), или требуется какая-то логика в HO? Часть брифа оборвана, отдельного SIHIST-тикета нет | Product Owner / владелец брифа |
+| Q-08 | Номер SIHIST-тикета / релиз для этой фичи (в `analytics/` совпадений нет; бриф об этом не сообщает) | Product Owner / Jira (SIHIST-XXXX) |
+| Q-09 | Значения `operation.name` и `info.displayed_name` для новой строки: уникальный текст или переиспользование формулировки существующего налога? | Product Owner (см. sibling D-02/D-19: у `MOEX_TAX` оба = «Удержание суммы налога», `displayed_name=NULL`) |
 
 ## Закрытые вопросы
 
 | ID | Дата | Решение | Где в spec | Источник |
 |----|------|---------|------------|----------|
-| Q-01 | 2026-08-29 | BPH subtype = `PORTFOLIO_SIZE_TAX` | §1.1, §1.2, §1.3, §4.1.1, §4.2.3 | /resolve-gaps (GAP-GOAL-01, GAP-UCAS-01) |
-| Q-02 | 2026-08-29 | Семейство = `TAXES` (type_id=7) | §1.1, §4.1.1, §4.2.3 | /resolve-gaps (GAP-C-01) |
-| Q-03 | 2026-08-29 | `operation_type` = `tax` (id=2) | §1.1, §4.1.1, §4.2.3 | /resolve-gaps (GAP-UCTB-01) |
-| Q-04 | 2026-08-29 | `additionalType` = `PORTFOLIO_AMOUNT_TAX` (одно непустое) | §4.1.1, §4.2.3 | /resolve-gaps (GAP-UCTB-02, GAP-INT-01) |
-| Q-05 | 2026-08-29 | `comment`/`name` = «Налог за размер портфеля» | §4.1.1, §4.2.3 | /resolve-gaps (GAP-GOAL-02) |
-| Q-06 | 2026-08-29 | `bc_id` = `NULL` — только BPH, без BC-аналога | §4.2.3 | /resolve-gaps (GAP-C-01) |
-| Q-07 | 2026-08-29 | Статус BPH = `COMPLETE` (id=19 → `executed`) | §4.2.3 | /resolve-gaps (GAP-C-01) |
-| Q-08 | 2026-08-29 | `historyStart` из ответа BPH `GET_OPERATION_TYPES` (ключ `type\|subtype`), без ручной настройки HO | §2, §4.2.2, §5.4 | /resolve-gaps (GAP-UCTB-03, GAP-C-02, GAP-ALG-01, GAP-NFR-01) |
-| Q-08 (уточн.) | 2026-08-29 | Для `bc_id=NULL` `historyStart` **не используется**: `isActualBphOperation()` возвращает `true` досрочно, watershed/additionalType/статус и лог+метрика не выполняются; алерт не требуется | §2 Watershed, §4.2.2.2, §5.4 | /resolve-challenges (CH-01, CH-04) |
-| Q-09 | 2026-08-29 | Порог «от 5 млн ₽» — условие начисления на стороне BPH; HO не фильтрует и отображает безусловно; алерт/метрика не требуется | §1.1 BR-02 | /resolve-challenges (CH-08) |
-| Q-10 | 2026-08-29 | HO не дедуплицирует типовые операции по `externalSystemId` в одном ответе; дедупликация = торговые + типовые по окну start/end + сверка с кэшем Ignite (по id); уникальность externalSystemId — ответственность BPH | §1.1 BR-03, §4.2.2 | /resolve-challenges (CH-07) |
+| Q-01 | 2026-10-06 | Написание нового BPH-подтипа — `PORTFOLIO_SIZE_TAX` | §1.1, §1.3, §2, §4.1.1, §4.2.3, §4.2.4, §5.3.1 | /resolve-gaps (D-01) |
+| Q-02 | 2026-10-06 | `comment` для UI — «Налог за размер портфеля» | §1.1, §4.1.1, §4.2.3, §4.2.4 | /resolve-gaps (D-02) |
+| Q-03 | 2026-10-06 | Целевой `operation_type` — `tax` (id=2) | §1.1, §2, §4.1.1, §4.2.3, §4.2.4 | /resolve-gaps (D-03) |
+| Q-04 | 2026-10-06 | `operation.bc_id` = `NULL` (BPH-only паттерн `TAX_REFUND_BROK_ACCOUNT`) | §2, §4.2.3, §5.3.1, §5.3.2 | /resolve-gaps (D-04) |
+| Q-05 | 2026-10-06 | BPH-статус `COMPLETE` (id=19) + связка `status_to_operation(operation↔19)` | §2, §4.1.1, §4.2.3 | /resolve-gaps (D-05) |
+| Q-06 | 2026-10-06 | `info.additional_type` = `NULL` (одна info-строка) | §2, §4.1.1, §4.2.3 | /resolve-gaps (D-06) |
+| Q-07 | 2026-10-06 | Порог «от 5 000 000 ₽» — BPH-side правило начисления, HO не фильтрует (CN-04) | §1.1, §2 | /resolve-gaps (D-07) |
+| Q-08 | 2026-10-06 | Non-SMART: SIHIST-тикет/инициатор не критичны для data-only фичи; полнота через `history_ops_integration_total` + SQL-сверка + интеграционный тест | §1.1, §5.3.2 | /resolve-gaps (D-09) |
+| Q-09 | 2026-10-06 | `operation.name` = «Налог за размер портфеля», `info.displayed_name` = NULL | §2, §4.2.3, §4.2.4 | /resolve-gaps (D-08) |

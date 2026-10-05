@@ -1,7 +1,8 @@
 """Phase 13: declarative edge_conditions interpreter (choice A).
 
 Formulas live in pipelines/<id>/routing_conditions.yaml. Runtime dispatch
-stays deterministic — no LLM. Domain predicates.py is a thin wrapper.
+stays deterministic — no LLM. Domain predicates.py is an optional custom
+escape hatch.
 """
 
 from __future__ import annotations

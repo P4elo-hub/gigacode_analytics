@@ -5871,7 +5871,7 @@ function openApplyModal() {
   if (summary) {
     summary.textContent = [
       `Пак ${state.packId}: ${preview.nodes ?? "?"} клеток, ${preview.edges ?? "?"} стрелок, ${preview.rules ?? "?"} правил.`,
-      "Запишем YAML + collectors/predicates при необходимости + orchestrator md (если нет).",
+      "Запишем YAML + collectors при необходимости + orchestrator md (если нет).",
     ].join(" ");
   }
   if (warn) {

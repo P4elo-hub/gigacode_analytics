@@ -1,8 +1,8 @@
 """Phase 6+ HTTP helpers: assemble overlay pack, validate without disk, apply, init.
 
 Thin wrappers around pipeline_compile / pack_authoring / routing codegen.
-Apply materializes runnable YAML + generic overlay collectors.py and thin
-predicates.py for routing-state packs, plus orchestrator agent md from the
+Apply materializes runnable YAML + generic overlay collectors.py for
+routing-state packs, plus orchestrator agent md from the
 pack_authoring template (no silent overwrite). Does not rewrite the
 step-selection engine or domain GAP collectors.
 """
@@ -142,64 +142,12 @@ def collectors_is_generic_overlay(text: str) -> bool:
     return True
 
 
-def render_thin_predicates_py(payload: dict) -> str:
-    """Reasons from edge_conditions label/reason/instruction. No if open_gaps branches."""
-    conditions = _as_dict(_as_dict(payload.get("routing_conditions")).get("edge_conditions"))
-    reasons: dict[str, str] = {}
-    for name, spec in conditions.items():
-        if not isinstance(spec, dict) or str(name).startswith("_"):
-            continue
-        if spec.get("core"):
-            continue
-        text = (
-            str(spec.get("reason") or "").strip()
-            or str(spec.get("label") or "").strip()
-            or str(spec.get("instruction") or "").strip()
-            or str(name)
-        )
-        reasons[str(name)] = text
-    lines = [
-        '"""Thin reasons for authored when: ids (codegen). Predicates evaluate via YAML expr."""',
-        "",
-        "from __future__ import annotations",
-        "",
-        "_REASONS = {",
-    ]
-    for key in sorted(reasons):
-        lines.append(f"    {key!r}: {reasons[key]!r},")
-    lines.extend(
-        [
-            "}",
-            "",
-            "",
-            "def reason_for_predicate(when: str, status) -> str:",
-            "    return _REASONS.get(when, \"\")",
-            "",
-        ]
-    )
-    return "\n".join(lines)
-
-
-def predicates_is_thin(text: str) -> bool:
-    """True if predicates.py is the thin codegen reasons map (safe to regenerate)."""
-    if "reason_for_predicate" not in text or "_REASONS" not in text:
-        return False
-    if "spec_overlay" in text or "open_gaps" in text:
-        return False
-    # Any extra top-level def beyond reason_for_predicate → hand-written.
-    extras = [
-        name
-        for name in re.findall(r"^def\s+(\w+)\s*\(", text, flags=re.M)
-        if name != "reason_for_predicate"
-    ]
-    return not extras
-
-
 def ensure_runtime_python(payload: dict, root: Path) -> list[str]:
-    """Write generic collectors.py + thin predicates.py for routing-state packs.
+    """Write generic collectors.py for routing-state packs.
 
-    Never touches pipelines/spec. Regenerates thin predicates when still codegen-shaped.
-    Leaves custom / domain predicates untouched.
+    Reasons and predicate expressions are sourced from routing_conditions.yaml.
+    Custom predicates.py files remain an optional manual escape hatch; Apply does
+    not create or rewrite them.
     """
     pack_id = str(payload.get("id") or "").strip()
     if not pack_id or pack_id in PROTECTED_RUNTIME_PACKS:
@@ -227,21 +175,6 @@ def ensure_runtime_python(payload: dict, root: Path) -> list[str]:
         else:
             notes.append("collectors.py: left untouched (custom)")
 
-    predicates_path = folder / "predicates.py"
-    rendered = render_thin_predicates_py(payload)
-    if not predicates_path.is_file():
-        predicates_path.write_text(rendered, encoding="utf-8")
-        notes.append("predicates.py: thin reasons from edge_conditions")
-    else:
-        existing = predicates_path.read_text(encoding="utf-8")
-        if predicates_is_thin(existing):
-            if existing != rendered:
-                predicates_path.write_text(rendered, encoding="utf-8")
-                notes.append("predicates.py: regenerated thin reasons")
-            else:
-                notes.append("predicates.py: thin reasons ok")
-        else:
-            notes.append("predicates.py: left untouched (custom)")
     return notes
 
 

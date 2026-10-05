@@ -2,8 +2,8 @@
 report_type: code-alignment
 slug: bph-portfolio-size-tax
 source_document: Feature-writing/bph-portfolio-size-tax/bph-portfolio-size-tax.md
-generated_at: 2026-08-30
-alignment_iteration: 2
+generated_at: 2026-10-06
+alignment_iteration: 1
 scope: repositories/ only
 language: ru
 verdict: PASS WITH GAPS
@@ -13,114 +13,132 @@ verdict: PASS WITH GAPS
 
 **Документ:** `Feature-writing/bph-portfolio-size-tax/bph-portfolio-size-tax.md`
 **Отчёт:** `Feature-writing/bph-portfolio-size-tax/bph-portfolio-size-tax-code-alignment.md`
-**Область проверки:** только код в `repositories/` (главный приоритет), сверка с `db-export/` как справочником.
-
-> Итерация 2 — закрытие петли после правки A-03 (Major PARTIAL → CONFIRMED). SPEC перепроверен целиком; остальные CONFIRMED-утверждения не затронуты правкой.
+**Область проверки:** только код в `repositories/` (вспомогательно `db-export/`)
 
 ## Сводка
+- CONFIRMED: 32 · MISMATCH: 0 · PARTIAL: 0 · NOT FOUND: 4 · UNVERIFIABLE: 0
+- **Вердикт:** PASS WITH GAPS
 
-- CONFIRMED: 34 · MISMATCH: 0 · PARTIAL: 0 · NOT FOUND: 0 · UNVERIFIABLE: 3
-- **Вердикт:** PASS WITH GAPS (0 Critical/Major MISMATCH; 3 UNVERIFIABLE для TO BE)
+Расхождений (MISMATCH/PARTIAL) с кодом не выявлено. Все заявленные механизмы
+(контракт, таблицы маппинга, data-driven конвертация/фильтр, конфиги, метрики)
+подтверждены фактическим кодом `history-ops` и данными `db-export`. Единственные
+неподтверждённые элементы — **TO BE-данные** нового подтипа (`PORTFOLIO_SIZE_TAX`,
+новые строки `bph`/`operation`/`info`/`status_to_operation`, новый `comment`),
+которых в коде и выгрузках ожидаемо нет (0 совпадений) — фича data-only, ещё не
+пролита.
 
 ## Приоритетные находки
 
-**Фокус перепроверки — A-03 (был Major PARTIAL, статус-фильтр):** правка корректна и теперь соответствует коду.
-
-- **A-03 → CONFIRMED.** SPEC точно описывает: внутри `isActualBphOperation()` для `bc_id=NULL` ранний `return true` пропускает **только** watershed (`formationDate` vs `historyStart`), `additionalType` и лог+метрику; статус-членство при этом проверяется **отдельно и всегда** — `isBphCommonOperation()` → `statusMap.containsKey(status)`, причём `isBphCommonOperation` в цепочке фильтров предшествует `isActualBphOperation`.
-
-Якоря:
-- `BphCommonListBuilder.java:65-73` — `.filter(this::isBphCommonOperation)` (строка 68) **предшествует** `.filter(... isActualBphOperation ...)` (строки 69-71).
-- `BphBcFilterService.java:69-86` — публичный `isBphCommonOperation()` (69-73) → `isCommonOperationByBphContext` (75-86), проверка `statusMap.containsKey(status)` на строке 85; выполняется всегда, включая `bc_id=NULL`.
-- `BphBcFilterService.java:181-191` — ранний `return true` при отсутствии BC-контекста: `hasBcContext = bcType() != null && bcSubtype() != null` (187), `if (!hasBphContext || !hasBcContext) return true;` (189-191); watershed/additionalType/лог+метрика (201-250) не выполняются.
-
-Для нового налога `status=COMPLETE` настроен через `status_to_operation` (status_id=19), поэтому `statusMap.containsKey("COMPLETE")` проходит; без строки `status_to_operation` операция была бы отфильтрована — SPEC это теперь явно фиксирует (§1.3, §2, §4.2.2.2). Правка не внесла новых противоречий и не задела остальные CONFIRMED-утверждения.
+Указания пользователя: контракт `GET_OPERATIONS_WITH_DETAILS`, таблицы маппинга БД
+HO, data-driven механизм (`BphCommonClientConverter`, `BphBcFilterService`,
+`BphOperationConverter`, `isActualBphOperation`, `statusMap.containsKey`), конфиги
+(`app-config.bph.*`, `app-config.operation-cache.*`), метрики
+(`unexpected_additional_type_for_common_operation`, `history_ops_integration_total`),
+feature toggles. Все проверены первыми и глубже — результаты в таблицах ниже.
+Критических расхождений нет.
 
 ## Находки по категориям
 
 ### Контракты
 
 | ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
-|----|------------------|-------------|----------------------|--------|-------------|
-| C-01 | §4.1.1 | Endpoint `POST /api/v1/incoming-gateway/operations-with-details` (`bph.yml:216`) | `repositories/ИО/history-ops/src/main/swagger/bph/bph.yml:216-217` — `post:` под `/api/v1/incoming-gateway/operations-with-details` | CONFIRMED | Info |
-| C-02 | §4.1.1 | Обязательные заголовки `rqUID`, `systemName`; аутентификация на уровне yml не задана | `bph.yml:222-234` — оба `required: true`; `security`-секции нет | CONFIRMED | Info |
-| C-03 | §4.1.1 | `RequestParamsData` (`bph.yml:1254-1350`), top-level `required` нет; перечень 15 полей | `bph.yml:1254-1350` — `agreements, startSearchDate, endSearchDate, page, pageSize, types, subtypes, statuses, subtypesAndStatuses, dateForFilter, tradingSections, isin, instrumentCurrency, tickers, selfIdTs`; `required:` на уровне объекта отсутствует | CONFIRMED | Info |
-| C-04 | §4.1.1 | `BphGateway.createRequest()` всегда заполняет `agreements`, `endSearchDate`, `subtypesAndStatuses`, `dateForFilter`, `pageSize`; условно `startSearchDate`, `tickers` (`BphGateway.java:79-124`) | `BphGateway.java:93-122` — `startSearchDate` при `startTime != null`; `endSearchDate`/`agreements`/`dateForFilter`/`pageSize` всегда; `tickers` при непустом списке | CONFIRMED | Info |
-| C-05 | §4.1.1 | `subtypesAndStatuses[]` = `{type, subtype, additionalTypes[], statuses[]}`, `maxItems: 1000`, `required: type, subtype, statuses` (`bph.yml:1292-1326`) | `bph.yml:1292-1326` — `maxItems: 1000` (1295), `required: [type, subtype, statuses]` (1323-1326) | CONFIRMED | Info |
-| C-06 | §4.1.1 | Кратность `additionalTypes[0-1]`, `statuses[1]` | `bph.yml:1309-1322` — у `additionalTypes`/`statuses` нет `minItems`/`maxItems`; кратность `[0-1]`/`[1]` описывает фактическое использование фичи, но в схеме не закреплена | CONFIRMED | Minor |
-| C-07 | §4.1.1 | `OperationData` (`lead`) с полями `subtype`/`subType` (оба валидны), `additionalType`, `totalPrice`, `formationDate`, `eventDate`, `status`, `agreement` | `bph.yml:1093` (`subType`), `1095` (`subtype`), `1097` (`additionalType`), `1105` (`formationDate`), `1109` (`eventDate`), `1113` (`externalSystemId`), `1119` (`totalPrice`), `1137` (`status`), `1166` (`agreement`) | CONFIRMED | Info |
-| C-08 | §4.1.1 | Коды ответов 200 / 400 / 500 | `bph.yml:242` (`200`), `254` (`400`), `260` (`500`) | CONFIRMED | Info |
-| C-09 | §4.1.1 | Маппинг `externalSystemId → id = bph_tax_<externalSystemId>`, `formationDate → time_happened`, `eventDate → time_closed`, `totalPrice → total_sum/currency`, `agreement → agreementNumber` | `BphCommonClientConverter.java:168-189` `getId()` → `"bph_%s_%s".formatted(operationType.getValue(), externalSystemId)` (187); `:70-87` `timeHappened/timeClosed/totalSum/currency` | CONFIRMED | Info |
-| C-10 | CN-03, §2 | Фронтовый enum `PortfolioOperationType` содержит `tax` и `tax_input` (`history.yml:60-93`) | `history.yml:71` (`tax`), `:93` (`tax_input`) | CONFIRMED | Info |
+|---|---|---|---|---|---|
+| K-01 | §4.1.1 | Endpoint `POST /api/v1/incoming-gateway/operations-with-details` | `src/main/swagger/bph/bph.yml:216` (`/api/v1/incoming-gateway/operations-with-details:` → `post:`); вызов `adapter/bph/BphClient.java:17` (`OPERATIONS_URL`) | CONFIRMED | Info |
+| K-02 | §4.1.1 | Headers `rqUID` (обязат.) + `systemName=history_ops` | `bph.yml:222-234` (параметры `rqUID`/`systemName`, `required: true`); `BphClient.java:19-21` (`SYSTEM_NAME="systemName"`, `REQUEST_ID="rqUID"`, `HISTORY_OPS="history_ops"`), `.header(SYSTEM_NAME, HISTORY_OPS)` | CONFIRMED | Info |
+| K-03 | §4.1.1 | Body `RequestParamsData` с `subtypesAndStatuses[]` (`type`/`subtype`/`statuses` required; `additionalTypes` опц.; maxItems 1000, maxLength 225) | `bph.yml:1252-1326` — `subtypesAndStatuses` (`maxItems: 1000`), поля `type`/`subtype`/`additionalTypes`/`statuses` (`maxLength: 225`), `required: [type, subtype, statuses]` | CONFIRMED | Info |
+| K-04 | §4.1.1 | Ответ 200 `{status: ResponseStatusData, data: [DetailsData]}`; 400/500 → `ErrorData` | `bph.yml:245-265` (`status` → `ResponseStatusData`, `data` → array of `DetailsData`, `400`/`500` → `ErrorData`) | CONFIRMED | Info |
+| K-05 | §4.1.1 | `OperationData` имеет оба поля `subType` и `subtype` | `bph.yml:1090-1095` (`subType: type: string`, `subtype: type: string`) | CONFIRMED | Info |
+| K-06 | §4.1.1 | `ResponseStatusData`: `code` (integer), `message` (string) | `bph.yml:1436-1441` | CONFIRMED | Info |
+| K-07 | §4.1.1 | `ErrorData`: `timestamp`, `status` (enum `400`/`500`), `error` (enum `Bad Request`/`Internal Server Error`), `path` | `bph.yml:1443-1473` (`required: timestamp/status/error/path`, `enum` совпадает) | CONFIRMED | Info |
+| K-08 | §4.1.1 | `dateForFilter` enum `FORMATION_DATE \| EVENT_DATE` | `bph.yml:1420-1425` (`FilterDateEnum`, `enum: [EVENT_DATE, FORMATION_DATE]`) | CONFIRMED | Info |
+| K-09 | §4.1.1 | `BphConverter.SUPPORTED_DETAILS_KEY` включает `comment`, `accComment`, `errorCode`, `statusErrorCode` | `adapter/bph/BphConverter.java:199-229` (множество ключей, в т.ч. `"comment"`, `"accComment"`); `errorCode`/`statusErrorCode` читаются в `BphOperationConverter.resolveErrorCode()` (строки 238-247) | CONFIRMED | Info |
 
 ### БД и миграции
 
 | ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
-|----|------------------|-------------|----------------------|--------|-------------|
-| D-01 | §4.2.3 | Таблицы `bph`, `operation`, `info`, `status_to_operation`, `type`, `operation_type`, `status`, `general_status` существуют (schema `history_ops`) | `create_schema.sql` — `operation_type` (4), `type` (585/628), `bph` (592-596), `general_status` (120), `status` (607-608), `operation` (603-604), `status_to_operation` (611-613), `info` (620-624) | CONFIRMED | Info |
-| D-02 | AS-01, §4.2.3 | Семейство `TAXES` = `type_id=7` | `create_schema.sql:628` `update history_ops.type set name = 'TAXES' where id = 7;` | CONFIRMED | Info |
-| D-03 | §4.2.3 | `operation_type_id=2` = `tax` | `create_schema.sql:170` `(2, 'tax')` | CONFIRMED | Info |
-| D-04 | AS-02, §4.2.3 | Статус `COMPLETE` (id=19) → `general_status=executed` | `create_schema.sql:607-608` `(19, 'COMPLETE', 1)`; `:120` `(1, 'executed')` | CONFIRMED | Info |
-| D-05 | §4.2.3 | INSERT колонки/типы совпадают со схемой: `bph(id,subtype,type_id,is_active)`, `operation(id,operation_type_id,bc_id,bph_id,name)`, `info(id,operation_id,additional_type,comment,logo_url,logo_url_small,displayed_name)`, `status_to_operation(id,operation_id,status_id)` | `create_schema.sql` — `bph` (592-596), `operation` (603-604), `info` (620-624), `status_to_operation` (611-613) | CONFIRMED | Info |
-| D-06 | §4.2.3 Pre-checks | Черновые test-id 23/25/53/38 свободны (max: bph=21, operation=23, info=51, status_to_operation=36) | `create_schema.sql`: bph max=21 (`647-648`), operation max=23 (`603-604`), info max=51 (`654-655`), status_to_operation max=36 (`662-667`) | CONFIRMED | Info |
-| D-07 | §4.2.3 Prod | Prod max: bph=24, operation=26, info=78, status_to_operation=56; sibling `bph-moex-tax` прод-черновик 25/27/79/57 | `db-export/БД ИО.md` (bph max=24, operation max=26, info max=78, status_to_operation max=56); sibling `Feature-writing/bph-moex-tax/bph-moex-tax.md` (след. прод-id 25/27/79/57) | CONFIRMED | Info |
-| D-08 | AS-03, §4.2.2.2 | `bc_id=NULL` → в кэше `bc_type`/`bc_subtype` NULL, `bc_active=false` | `find_all_operations_v2.sql:4-5,13` — `CASE WHEN o.bc_id IS NOT NULL THEN ... ELSE NULL/false END` | CONFIRMED | Info |
-| D-09 | §4.2.3 | Rollback DELETE по id (38/53/25/23) корректен | Колонки/порядок соответствуют схеме (`create_schema.sql:611-613,620-624,603-604,592-596`) | CONFIRMED | Info |
-
-### Интеграции
-
-| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
-|----|------------------|-------------|----------------------|--------|-------------|
-| I-01 | §5.4 | `historyStart` из ответа BPH `GET_OPERATION_TYPES` → `BphDynamicConfigService` | `BphDynamicConfigService.java:72-74` `requestService.execute(..., "BPH", "GET_OPERATION_TYPES", ...)`; `BphDynamicConfig.java:18-19` `getStartDateWithDB` → `watershed.get(concatTypeAndSubtype())` | CONFIRMED | Info |
-| I-02 | §5.3.1 | `eventType=GET_OPERATIONS_WITH_DETAILS`, `exSystem=BPH` (`BphGateway.eventType()`, `exSystem()`) | `BphGateway.java:143-150` — `exSystem()` → `"BPH"`, `eventType()` → `"GET_OPERATIONS_WITH_DETAILS"` | CONFIRMED | Info |
-
-### Конфигурация
-
-| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
-|----|------------------|-------------|----------------------|--------|-------------|
-| CF-01 | §5.4 | `app-config.operation-cache` — кэш маппинга; для `bc_id=NULL` → `bc_active=false`; поля `operation_type`, `bph_subtype`, `type`, `bph_active`, `status_and_general_status`, `info[]` | `application-test.yml:122-125` (`operation-cache.default-value` — массив `Operation`, образец `TAX_RETAIN`); `OperationCacheLoaderProperties.java` (`prefix="app-config.operation-cache"`, поле `defaultValue`); `find_all_operations_v2.sql:13` (`bc_active=false` при `bc_id IS NULL`) | CONFIRMED | Info |
-| CF-02 | §5.4 | «ключ `TAXES/PORTFOLIO_SIZE_TAX`» в operation-cache | Кэш — это **список** `Operation`, сгруппированный по `operation_type` (`CacheConfiguration.java:70-72` `groupingBy(Operation::operationType)`), а не map по `type|subtype`; ключ `type|subtype` используется только в watershed (`BphDynamicConfig`) | CONFIRMED | Minor |
-| CF-03 | §5.4 | Ключ водораздела `concatTypeAndSubtype()` = `type|subtype` (`Operation.java:34-38`) | `Operation.java:34-38` `type + "|" + bphSubtype` | CONFIRMED | Info |
-
-### Feature toggles
-
-Новых toggle под фичу не заявлено (scope = Liquibase + тесты + пролив). Существующий `FeatureToggleName.ENABLE_BPH` (`BphGateway.java:55-57`) фичей не затрагивается — проверка не требуется.
+|---|---|---|---|---|---|
+| DB-01 | §4.2.3 | Таблицы `type`, `operation_type`, `bph`, `bph_bc`, `operation`, `info`, `status`, `status_to_operation`, `general_status` существуют | `liquibase/changesets/20241029_SIHIST-2774_*_create_*.xml` (1..9: bc, bph, info, status_to_operation, status, type, operation, general_status, operation_type); `20250813_SIHIST-3426_create_bph_bc_tables.sql` | CONFIRMED | Info |
+| DB-02 | §2, §4.2.3 | `type` id=7 = `TAXES` | `db-export/БД ИО.md:319,1525,2791` (`(7, 'TAXES')`) | CONFIRMED | Info |
+| DB-03 | §1.1, §4.2.3 | `operation_type` id=2 = `tax`, id=20 = `tax_input` | `db-export/БД ИО.md:326,344,2816` (`| 2 | tax |`, `(20, 'tax_input')`) | CONFIRMED | Info |
+| DB-04 | §1.2, §4.2.3 | `bph` id=19 = `TAX_RETAIN` (type_id 7, active), id=20 = `TAX_REFUND_BROK_ACCOUNT` (type_id 7, active) | `db-export/БД ИО.md:425,428,2896-2897` (`(19,'TAX_RETAIN',7,true)`, `(20,'TAX_REFUND_BROK_ACCOUNT',7,true)`) | CONFIRMED | Info |
+| DB-05 | §4.2.3 | `operation` id=2 = `tax` (bc_id 110 `TAX_WITHHOLDING`, bph_id 19), id=23 = `tax_input` (bc_id NULL, bph_id 20) | `db-export/БД ИО.md:1692,1713`; `bph_bc` id=110 = `TAX_WITHHOLDING` (`:1675,2911`) | CONFIRMED | Info |
+| DB-06 | §4.2.3 | `info`: operation 2 → 4 строки `OUT_MONEY`/`OUT_SECURITIES`/`TAX_PERIOD_END`/`INCENTIVE_PAYMENT`; operation 23 → 1 строка `additional_type=NULL`, `comment='Возврат излишне удержанного налога'` | `LikeBCBphIntegrationTest.java:29` (default-value JSON: `TAX_RETAIN` → 4 `info[].additional_type`; `TAX_REFUND_BROK_ACCOUNT` → `info[{"comment":"Возвратизлишнеудержанногоналога"}]` без `additional_type`); `db-export/БД ИО.md:3985-3994` | CONFIRMED | Info |
+| DB-07 | §2, §4.2.3 | `status` id=19 = `COMPLETE` → `general_status_id=1` (`executed`) | `db-export/БД ИО.md:375,1594,2845` (`(19, 1, 'COMPLETE')`); `general_status` id=1 = `executed` (`:347`) | CONFIRMED | Info |
+| DB-08 | §4.2.3 | `status_to_operation`: operation 2 ↔ status 19; operation 23 ↔ status 19 | `db-export/БД ИО.md:1827-1828` (`| 28 | 2 … | 19 (COMPLETE) |`, `| 29 | 23 … | 19 (COMPLETE) |`) | CONFIRMED | Info |
+| DB-09 | CN-10, §4.2.3 | Прецедент data-driven пролива — Liquibase changeset `20250606_SIHIST-3321_added_tax_data.sql` | В `repositories/` файл отсутствует (в `liquibase/changesets/` только до `SIHIST-3426`); запись changeset есть в `db-export/БД ИО.md:778,2046` (databasechangelog, EXECUTED). Спека корректно цитирует db-export, а не код | NOT FOUND | Minor |
 
 ### Поведение и алгоритмы
 
 | ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
-|----|------------------|-------------|----------------------|--------|-------------|
-| A-01 | §4.2.2.1 | `buildBphRequestEntityByBphParams()` добавляет `additionalTypes` только из non-null `info[].additional_type` | `BphBcFilterService.java:102-122` — `additionalInfos.stream().map(AdditionalInfo::getAdditionalType).filter(Objects::nonNull)` (114-120) | CONFIRMED | Info |
-| A-02 | §4.2.2.2, §2 | Для `bc_id=NULL` `isActualBphOperation()` возвращает `true` досрочно: watershed/additionalType и лог+метрика НЕ выполняются | `BphBcFilterService.java:181-191` — `if (!hasBphContext || !hasBcContext) return true;` (189-191) до watershed/additionalType (201-250) и лог/метрики (236-248) | CONFIRMED | Info |
-| A-03 | §1.3, §2, §4.2.2.2 | Для `bc_id=NULL` внутри `isActualBphOperation()` пропускаются только watershed и additionalType (ранний `return true`); статус-членство проверяется отдельно `isBphCommonOperation()` → `statusMap.containsKey(status)` (всегда, включая `bc_id=NULL`) | `BphCommonListBuilder.java:65-73` — `.filter(this::isBphCommonOperation)` (68) **до** `.filter(... isActualBphOperation ...)` (69-71); `BphBcFilterService.java:69-86` — `statusMap.containsKey(status)` (85); `BphBcFilterService.java:181-191` — ранний `return true` при `!hasBcContext` | CONFIRMED | Info |
-| A-04 | §4.2.2.3 | `id = bph_tax_<externalSystemId>` (`BphCommonClientConverter.java:168-189`) | `BphCommonClientConverter.java:187` `"bph_%s_%s".formatted(operationType.getValue(), externalSystemId)` | CONFIRMED | Info |
-| A-05 | BR-05, §4.2.2.3 | `comment` из `info` по `additional_type`; при пустом — fallback `details.accComment` (`:130-136`) | `BphCommonClientConverter.java:122-128` (`getAdditionalInfoFromCache`/`enrichComment`), `:130-136` (`TAXES.equals(bphType) && commentFromTable.isBlank()` → `lead.setComment(accComment)`), `:220-239` (`getAdditionalInfoFromCache`/`isCorrectAdditionalType`) | CONFIRMED | Info |
-| A-06 | §5.3.1 | Системный лог: шаблон `"Unexpected additional type for common BPH operation id=%s type=%s subType=%s additionalType=%s"` (`BphBcFilterService.java:242-245`) | `BphBcFilterService.java:242-245` — `logTemplate` и `systemLogService.log(... log.info(...))` | CONFIRMED | Info |
-| A-07 | §5.3.2 | Метрики `history_ops_general` (labels `status`, `comment`), `history_ops_integration` (`ex_system`, `event_type`, `comment`, `status`), `history_ops_time` (`ex_system`, `event_type`); `unexpected_additional_type_for_common_operation` — значение label `comment`, не имя метрики | `MeterService.java:73-78` `counter("history_ops_general", "status", ..., "comment", comment)`; `:22-30` `Timer.builder("history_ops_time")`; `:32-38` `input.name("history_ops_integration")`; `BphBcFilterService.java:246-247` `meterTemplate = "unexpected_additional_type_for_common_operation"` → `countGeneralError(meterTemplate, 1)` | CONFIRMED | Info |
-| A-08 | BR-03, §4.2.2 | HO не дедуплицирует типовые операции по `externalSystemId` в одном ответе; сверка с кэшем Ignite — по `id` (и `exchange_order_number` для торговых) | `OperationsIgniteProxyService.java:84-103` `deduplicateOperations` — сверка по `id` (85-88, 99) и `exchange_order_number` (90-93, 100) против кэша, а не внутри одного ответа | CONFIRMED | Info |
-| A-09 | §4.2.2 | Класс/метод `isBphCommonOperation` существует и проверяет статус-членство | `BphBcFilterService.java:69-86` (метод и приватный `isCommonOperationByBphContext` со `statusMap.containsKey(status)`) | CONFIRMED | Info |
+|---|---|---|---|---|---|
+| B-01 | §4.2.2, §4.2.4 | `BphCommonClientConverter`: константа `TAXES`, методы `convert()`, `getId()`, `enrichComment()`, `enrichOperationDisplayName()`, `getAdditionalInfoFromCache()`, `isCorrectAdditionalType()`, `getOperationFromCache()` (фильтр `bphActive`) | `service/conversion/BphCommonClientConverter.java` (`private static final String TAXES = "TAXES"`; `getOperationFromCache(...).filter(Operation::bphActive)`) | CONFIRMED | Info |
+| B-02 | BR-05, CN-09, §4.2.4 | `comment` подбирается из `info[]` по `additional_type == lead.additionalType` (NULL↔`""`); для `TAXES` при пустом `comment` — fallback `accComment` из `details[]` | `BphCommonClientConverter.java` — `isCorrectAdditionalType()` (`Optional.ofNullable(...).orElse("")` + `equals`); fallback `if (TAXES.equals(bphType) && commentFromTable.isBlank()) lead.setComment(accComment)`. `accComment` приходит из `details[]` → `BphOperationConverter.java` (`details.get("accComment")`) | CONFIRMED | Info |
+| B-03 | §4.2.4 | `id` = `bph_{operation_type}_{externalSystemId}` (для `TAXES` ветка `CASH_FLOW`/`NON_TRADE_ORDERS` не применяется) | `BphCommonClientConverter.java` — `getId()`: `return "bph_%s_%s".formatted(operationType.getValue(), externalSystemId)` (ветка default) | CONFIRMED | Info |
+| B-04 | §4.2.4 | `totalSum` = `abs(totalPrice)`; `instrumentCount` = `quantity.longValue()` | `BphCommonClientConverter.java` — `Optional.ofNullable(operation.totalPrice()).map(BigDecimal::abs)`; `Optional.ofNullable(quantity).map(BigDecimal::longValue)` | CONFIRMED | Info |
+| B-05 | §4.2.4 | `operationDisplayName` = прямое присваивание `info.displayed_name`, без fallback на `operation.name` | `BphCommonClientConverter.java` — `enrichOperationDisplayName()` → `lead.setOperationDisplayName(displayedName)` (без fallback) | CONFIRMED | Info |
+| B-06 | CN-08, BR-06 | `additionalTypes[]` в запросе формируется только из non-null `info.additional_type` (`filter(Objects::nonNull)`) | `service/filter/BphBcFilterService.java` — `buildBphRequestEntityByBphParams()`: `.map(AdditionalInfo::getAdditionalType).filter(Objects::nonNull).toList()`; `if (!additionalTypes.isEmpty()) setAdditionalTypes(...)` | CONFIRMED | Info |
+| B-07 | CN-07, BR-07 | При `bc_id=NULL` ранний `return true` в `isActualBphOperation()` — watershed/additionalType не блокируют | `BphBcFilterService.java` — `isActualBphOperation()`: `hasBcContext = operationInternal.bcType() != null && operationInternal.bcSubtype() != null`; `if (!hasBphContext || !hasBcContext) return true;` | CONFIRMED | Info |
+| B-08 | CN-03, BR-10 | Статус-членство — жёсткий фильтр `statusMap.containsKey(status)` | `BphBcFilterService.java` — `isCommonOperationByBphContext()`: `statusMap = cacheOperation.getStatusAndGeneralStatus(); ... statusMap.containsKey(status)` | CONFIRMED | Info |
+| B-09 | §5.3.1, §5.3.2 | INFO-лог `"Unexpected additional type for common BPH operation id=%s type=%s subType=%s additionalType=%s"` + метрика `unexpected_additional_type_for_common_operation` (`countGeneralError`); при `bc_id=NULL` не срабатывают | `BphBcFilterService.java:243-247` (`log.info(logTemplate.formatted(...))`; `meterService.countGeneralError(meterTemplate, 1)`); срабатывает только после раннего `return true` | CONFIRMED | Info |
+| B-10 | §4.2.2 | `BphOperationConverter`: `validateSimpleAttributes()` требует `type`, `subType`, `formationDate`, `eventDate`, `externalSystemId`, `status`, `agreement`; `getSubType()` читает `subtype` затем `subType` | `adapter/bph/BphOperationConverter.java` — `validateSimpleAttributes()` (`Preconditions.checkNotNull(...)`); `getSubType()` (`subtype` → else `subType`) | CONFIRMED | Info |
+| B-11 | §4.1.1 | HO не ветвится по `status.code`: из 200-ответа извлекается `data`, элементы конвертируются по отдельности | `BphOperationConverter.convert()` читает `operationWithDetails.getLead()`/`getDetails()` без обращения к `status.code`; `BphClient.getOperations()` → `bodyToMono(...Post200Response)` | CONFIRMED | Info |
 
-### Тесты и фикстуры
+### Конфигурация
 
 | ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
-|----|------------------|-------------|----------------------|--------|-------------|
-| T-01 | §1.3, §2 | Scope включает тестовые фикстуры; operation-cache test-объект обновляется | `application-test.yml:122,125` — `operation-cache.default-value` (массив `Operation`, образец `TAX_RETAIN`); детального §4.2.4 (перечень фикстур, как в sibling) в SPEC нет | CONFIRMED | Minor |
+|---|---|---|---|---|---|
+| C-01 | §5.4, CN-15 | `app-config.bph.deadline`, `app-config.bph.url`, `app-config.bph.page-size-for-linked-events`, `app-config.bph.page-size-for-trades` | `configuration/properties/BphProperties.java` (`@ConfigurationProperties(prefix = "app-config.bph")`: `deadline`, `url`, `pageSizeForLinkedEvents`, `pageSizeForTrades`) | CONFIRMED | Info |
+| C-02 | CN-02, §5.4 | `app-config.operation-cache.update-delay-ms`, `.default-value`, `.including-name-types` | `configuration/properties/OperationCacheLoaderProperties.java` (`prefix = "app-config.operation-cache"`: `updateDelayMs`, `defaultValue`, `includingNameTypes`) | CONFIRMED | Info |
+| C-03 | CN-15, §5.4 | `app-config-dynamic.bph-dynamic.max-records-from-bph`, `.linked-commission-start-date` (`@RefreshScope`) | `configuration/properties/BphDynamicProperties.java` (`prefix = "app-config-dynamic.bph-dynamic"`: `maxRecordsFromBph`, `linkedCommissionStartDate`); `BphGateway.java:117` (`request.setPageSize(bphDynamicProperties.getMaxRecordsFromBph())`) | CONFIRMED | Info |
+| C-04 | §4.1.1 | Таймауты задаются `WebClientBphConfiguration` (WebClient HO) | `configuration/WebClientBphConfiguration.java` (существует; `@Qualifier("BPH")` WebClient в `BphClient`) | CONFIRMED | Info |
+| C-05 | §5.4 | Кэш перезагружается по `update-delay-ms` (`OperationCacheLoader.loadDataTask`), данные из `OperationDAO.findAll()` | `cache/OperationCacheLoader.java:40` (`loadDataTask(properties.updateDelayMs())`); `dao/OperationDAO.java:37-39` (`findAll()` → `db/find_all_operations_v2.sql`) | CONFIRMED | Info |
 
-## UNVERIFIABLE (TO BE, не блокеры)
+### Feature toggles
 
-| ID | Раздел документа | Утверждение | Пояснение |
-|----|------------------|-------------|-----------|
-| U-01 | AS-05, §4.1.1, §4.2.3 | BPH subtype = `PORTFOLIO_SIZE_TAX` | Значение из брифа; в `repositories/`, `analytics/`, `db-export/` 0 совпадений (не пролито, BPH-контракт ещё не содержит subtype). SPEC фиксирует как чекпойнт приёмки (§2) |
-| U-02 | AS-04, §4.1.1, §4.2.3 | `additionalType` = `PORTFOLIO_AMOUNT_TAX` | Аналогично U-01 — значение из брифа, не подтверждается кодом до пролива |
-| U-03 | AS-06, §4.2.3 | Текст `comment` = «Налог за размер портфеля» | Бизнес-значение из брифа; код читает его из `info.comment` (`find_all_operations_v2.sql:31`), сам текст в коде не захардкожен |
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| T-01 | §5.5, CN-17 | Отдельный runtime-тогл для нового подтипа не вводится; активация data-driven через `bph.is_active` (`bphActive`) + перезагрузка кэша | `BphCommonClientConverter.getOperationFromCache().filter(Operation::bphActive)`; `BphBcFilterService` (`operation.bphActive()`). Нового toggle-имени под фичу в `FeatureToggleName` нет | CONFIRMED | Info |
+| T-02 | §5.5 | (не заявлено) Существующий тогл `ENABLE_BPH` гейтит всю интеграцию BPH | `adapter/auth/FeatureToggleName.java:10` (`ENABLE_BPH("enableServiceBPH")`); `BphGateway.java:56` (`executionProcess.getFeatureToggles().get(FeatureToggleName.ENABLE_BPH)`). Не противоречит спеку (спека говорит «новый тогл не вводится», что верно) — стоит упомянуть для полноты | CONFIRMED | Info |
+
+### Метрики
+
+| ID | Раздел документа | Утверждение | Доказательство в коде | Статус | Критичность |
+|---|---|---|---|---|---|
+| M-01 | §5.3.2 | `history_ops_integration_total` (Counter, labels `ex_system`/`event_type`/`comment`/`status`) | `service/meter/service/MeterService.java:52-66` (`meterRegistry.counter("history_ops_integration", ...)`); test fixtures `prometheus_metrics/*.txt` (`history_ops_integration_total{...}`) | CONFIRMED | Info |
+| M-02 | §5.3.2 | `history_ops_integration_flow_duration_seconds` (Timer) | `MeterService.java:32-38` (`addIntegrationMetric` → `input.name("history_ops_integration").tap(Micrometer.metrics(...))`); fixtures (`history_ops_integration_flow_duration_seconds_count{...}`) | CONFIRMED | Info |
+| M-03 | §5.3.2 | `history_ops_time` (Timer, перцентили 0.5/0.75/0.85/0.95/0.99) | `MeterService.java:20-30` (`Timer.builder("history_ops_time").publishPercentiles(METRIC_PERCENTILES)`), `METRIC_PERCENTILES={0.5,0.75,0.85,0.95,0.99}`; dashboards `history_ops_time_seconds_bucket` | CONFIRMED | Info |
+| M-04 | §5.3.2 | `history_ops_general_total{comment="unexpected_additional_type_for_common_operation", status="error"}` | `MeterService.java:69-76` (`countGeneralError` → `meterRegistry.counter("history_ops_general", "status","error","comment",comment)`); вызов `BphBcFilterService.java:247` (`countGeneralError("unexpected_additional_type_for_common_operation", 1)`) | CONFIRMED | Info |
+| M-05 | §5.3.2 | `history_ops_integration_total{comment="parse_error"}` и `{comment="dataCompleteFalse"}` | `adapter/ListRequestService.java:76,98` (`countIntegrationError(..., "parse_error", ...)`); `MeterService.java:48-50` (`countIntegrationDataCompleteFalse` → `"dataCompleteFalse"`); вызов `AbstractOperationGateway.java:100` | CONFIRMED | Info |
+
+### TO BE (data-only, ожидаемо отсутствует до пролива)
+
+| ID | Раздел документа | Утверждение | Доказательство | Статус | Критичность |
+|---|---|---|---|---|---|
+| TB-01 | §1.1, §4.2.3 | Новый BPH-подтип `PORTFOLIO_SIZE_TAX` (семейство `TAXES`) | 0 совпадений в `repositories/` и `db-export/` (grep по `PORTFOLIO_SIZE_TAX`, `MOEX_TAX`). Ожидаемо: подтип появится только после INSERT | NOT FOUND | Major (ожидаемо) |
+| TB-02 | §4.2.3 | Новые строки `bph`(+1), `operation`(+1, `operation_type_id=2`, `bc_id=NULL`), `info`(+1, `additional_type=NULL`), `status_to_operation`(+1, `status_id=19`) | Отсутствуют в БД (`db-export` содержит только `TAX_RETAIN`/`TAX_REFUND_BROK_ACCOUNT`). Ожидаемо до пролива | NOT FOUND | Major (ожидаемо) |
+| TB-03 | §4.2.3, §4.2.4 | `info.comment` = «Налог за размер портфеля» | Отсутствует в коде/данных. Ожидаемо: новое значение данных | NOT FOUND | Major (ожидаемо) |
+| TB-04 | CN-10 | SQL-changeset для нового подтипа (по шаблону SIHIST-3321) | Файла changeset под фичу нет (ещё не создан). Шаблон SIHIST-3321 также отсутствует в `repositories/` (см. DB-09) | NOT FOUND | Major (ожидаемо) |
 
 ## Рекомендуемые действия
 
-1. [Minor, опционально] §4.2.2.2 п.3: ссылка `BphBcFilterService.java:185-191` на ранний `return true` — условие досрочного возврата находится на строках 189-191 (блок 185-191 включает объявления `hasBphContext`/`hasBcContext`). Не противоречит коду, но для единообразия можно указать `181-191` (как в §2 и карте правок).
-2. [Minor, опционально] §5.4: «ключ `TAXES/PORTFOLIO_SIZE_TAX`» для operation-cache → кэш это список `Operation` по `operation_type`; ключ `type|subtype` относится только к watershed.
-3. [Minor, опционально] §4.1.1: кратность `additionalTypes[0-1]`/`statuses[1]` не закреплена в `bph.yml` (нет `minItems`/`maxItems`) — пометить как фактическое использование фичи.
-4. [Не блокер, чекпойнт] Подтвердить точное написание `PORTFOLIO_SIZE_TAX`/`PORTFOLIO_AMOUNT_TAX` с контрактом BPH до пролива (уже зафиксировано в §2 SPEC).
+1. **TB-01…TB-04 — не блокеры.** Это ожидаемые `NOT FOUND` для data-only фичи до реализации.
+   До пролива держать pre-check «0 строк по subtype» и сверку точного написания
+   `PORTFOLIO_SIZE_TAX` с командой BPH (CN-11, CN-13) — механизм маппинга это подтверждает:
+   несовпадение написания «молча» исключит операцию (`getOperationFromCache` по
+   `originalType + bphType` не найдёт строку).
+2. **DB-09 (Minor)** — прецедент-шаблон `SIHIST-3321_added_tax_data.sql` отсутствует в
+   `repositories/` (только в `db-export` databasechangelog). При написании собственного
+   changeset не полагаться на наличие этого файла в клоне — взять шаблон из
+   `db-export/БД ИО.md` или из реального репозитория миграций.
+3. **T-02 (Info)** — в §5.5 «Тогглы» можно добавить упоминание, что вся интеграция BPH
+   уже гейтится существующим `FeatureToggleName.ENABLE_BPH` (не новым тоглом) — для
+   полноты картины раскатки; на вердикт не влияет.
 
 ## Пропущено
 
-- Проверка точного текста ответа BPH на стенде (нет runtime/стенда) — см. UNVERIFIABLE U-01…U-03.
-- Сверка с Confluence/`analytics/` как источника истины — не выполнялась (код — источник истины).
+- Числовые значения timeout/retry/deadline/page-size (внешний Spring Cloud Config, в
+  репозитории только имена) — в spec сознательно не фиксируются (CN-15), не проверялись.
+- Точные числовые «max id» таблиц (`bph` max 24, `operation` max 26, `info` max 78,
+  `status_to_operation` max 56) — вспомогательные данные db-export; сверены частично
+  (имена и id ключевых строк подтверждены), полный построчный листинг не сверялся как
+  не влияющий на механику.

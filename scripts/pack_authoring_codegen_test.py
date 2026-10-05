@@ -172,11 +172,7 @@ class CodegenSmokeUniversalityTest(unittest.TestCase):
             self.assertNotIn("open_gaps", collectors)
 
             predicates = root / "pipelines" / PACK_ID / "predicates.py"
-            self.assertTrue(predicates.is_file())
-            pred_text = predicates.read_text(encoding="utf-8")
-            self.assertIn("reason_for_predicate", pred_text)
-            self.assertNotIn("if open_gaps", pred_text)
-            self.assertNotIn("def _open_gaps", pred_text)
+            self.assertFalse(predicates.exists())
 
             rc = load_yaml(root / "pipelines" / PACK_ID / "routing_conditions.yaml")
             fields = rc.get("status_fields") or {}

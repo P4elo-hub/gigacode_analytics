@@ -4,34 +4,42 @@ slug: bph-portfolio-size-tax
 source_document: Feature-writing/bph-portfolio-size-tax/bph-portfolio-size-tax.md
 challenges_document: Feature-writing/bph-portfolio-size-tax/bph-portfolio-size-tax-challenges.md
 context_document: Feature-context/bph-portfolio-size-tax.md
-generated_at: 2026-08-29
-session: 1
+generated_at: 2026-10-06
+session: 2
 language: ru
 ---
 
 # Карта закрытых вопросов: bph-portfolio-size-tax
 
 ## Сводка
-- Resolved: 9 · Covered: 2 · Deferred: 0
+- Resolved: 12 · Covered: 4 · Deferred: 0
 
-## Сессия 1 (2026-08-29)
+## Сессия 1 (2026-10-06) — COVERED по факту (spec поправлен)
 
 | ID | Verdict | Выбор | Решение | Затронутые § | Источник | Связанный Q |
 |----|---------|-------|---------|--------------|----------|-------------|
-| CH-01 | MISSING → resolved | a | При bc_id=NULL `isActualBphOperation()` возвращает true досрочно: watershed/additionalType/статус и лог+метрика НЕ выполняются — операция включается безусловно; фильтр по additionalType только на стороне запроса BPH | §4.2.2.2, §1.3 alt 2a/4a, §5.3.1, §5.3.2, §5.4, §2 Watershed | код `BphBcFilterService.java:181–196`; SIHIST-3476 | Q-08 (уточн.) |
-| CH-02 | MISSING → resolved | a | AS-01/AS-04 помечены «из брифа, без контрактного пруфа»; добавлен чекпойнт приёмки: сверка subtype/additionalType с контрактом BPH до пролива | §2 Допущения, §2 Зависимости | выбор пользователя | Q-01, Q-04 |
-| CH-03 | MISSING → resolved | a | id переназначены: test bph=25, operation=26, info=53, status_to_operation=38 (22/24/52/37 владеет bph-moex-tax); прод — SELECT max(id)+1 | §4.2.3 (таблица, SQL, прод) | выбор пользователя | — |
-| CH-04 | MISSING → resolved | b | Watershed для bc_id=NULL не используется (следствие CH-01); молчаливый сценарий принят, алерт не требуется | §1.3 alt 2a, §2 Watershed, §5.4 | выбор пользователя + код | Q-08 (уточн.) |
-| CH-05 | MISSING → resolved | a | Негатив только для запроса: assert `additionalTypes:["PORTFOLIO_AMOUNT_TAX"]`; негатив «неожиданный additionalType → не в ответе» на стороне HO неприменим (bc_id=NULL) | §4.2.4 (строка Negative) | выбор пользователя | — |
-| CH-06 | MISSING → resolved | a | Фикстура operation-cache — BC-free шаблон (bc_active=false, bc_type/bc_subtype=null, без bc_code; info[0] с additional_type+comment) | §4.2.4 (таблица полей) | выбор пользователя + `application-test.yml`/SIHIST-3476 | — |
-| CH-07 | MISSING → resolved | custom | HO не дедуплицирует типовые по externalSystemId в одном ответе; дедупликация = торговые + типовые по окну start/end + сверка с кэшем Ignite (по id) против повторной отправки; уникальность externalSystemId — BPH | §1.1 BR-03, §4.2.2 (Дедупликация) | пользователь + SIHIST-3367 + `OperationsIgniteProxyService` | Q-10 |
-| CH-08 | MISSING → resolved | a | Контроль порога на стороне BPH; HO не фильтрует, алерт/метрика не требуется | §1.1 BR-02 | выбор пользователя | Q-09 |
-| CH-09 | COVERED | — | comment ленты = `info.comment`; `operation.name` (operation_name) — служебное имя маппинга, не выводится в ленту; совпадение текстов допустимо | §4.2.3 (примечание) | код `BphCommonClientConverter` | — |
-| CH-10 | COVERED | — | BR-05 соответствует коду (comment из info по additional_type, fallback accComment); уточнена формулировка со ссылкой на водораздел SIHIST-3476 | §1.1 BR-05 | код `BphCommonClientConverter.java:122–136`; SIHIST-3476 | — |
-| CH-11 | MISSING → resolved | a | Зафиксирована допустимая деградация «налог не показывается» до включения BPH + проверка готовности BPH до пролива | §2 Зависимости | выбор пользователя | — |
+| CH-05 | COVERED (факт) | — | `accComment` берётся из `details[]` (ключ `accComment` из `BphConverter.SUPPORTED_DETAILS_KEY`), а не из `lead` (в `OperationData` поля `accComment` нет). Spec поправлен: «`lead.accComment`» → «`accComment` из `details[]`», пример JSON перенёс `accComment` в `details[]` | §1.1 BR-05, §1.3, §2 CN-09, §4.1.1, §4.2.2, §4.2.4 | код `BphOperationConverter.convert()` (`details.get("accComment")`) + `BphConverter.SUPPORTED_DETAILS_KEY` + `BphCommonClientConverter.convert()` (`operation.accComment()`) | — |
+| CH-06 | COVERED (факт) | — | `validateSimpleAttributes()` (`checkNotNull`) кидает NPE внутри `converter.convert()`; `ListRequestService.convertEntry()` ловит `RuntimeException` **по записи** и инкрементит `parse_error`, не роняя пачку. Одна «недооформленная» операция `PORTFOLIO_SIZE_TAX` не роняет существующие налоги | §4.1.1, §5.3.2 | код `BphGateway.getOperationsInternal()` → `ListRequestService.convertEntry()` (try/catch RuntimeException) + `BphOperationConverter.validateSimpleAttributes()` | — |
+| CH-09 | COVERED (факт) | — | `eventDate` обязателен на входе (`checkNotNull`), а `timeClosed` не бывает null после валидации: `parseLocalDateTime()` (`LocalDateTime.parse`) кидает `DateTimeParseException` при неверном формате → `parse_error`, запись отбрасывается. §4.2.4 `timeClosed` помечен как Required (non-null) | §4.1.1, §4.2.4 | код `BphOperationConverter.validateSimpleAttributes()` + `BphConverter.parseLocalDateTime()` | — |
+| CH-10 | COVERED (факт) | — | Authoritative ключ lookup `operation` — `originalType` + `bphType` (`originalType` = `lead.type`, `bphType` = `lead.subtype`). §4.2.4 `type`-строка приведена к этому написанию (было «`bphType`+`bphSubtype`») | §4.1.1, §4.2.2, §4.2.4 | код `BphCommonClientConverter.getOperationFromCache()` / `isSameOperationFromCacheByTypeAndSubtype()` | — |
+
+## Сессия 2 (2026-10-06) — applied (решения пользователя D-15…D-26)
+
+| ID | Verdict | Выбор | Решение | Затронутые § | Источник | Связанный Q |
+|----|---------|-------|---------|--------------|----------|-------------|
+| CH-12 | MISSING → resolved | B (D-15) | Non-SMART: подтверждение «фича заработала» = SQL-сверка строк маппинга + позитивный интеграционный тест + существующая `history_ops_integration_total`; отдельная per-subtype метрика не вводится | §5.3.2 | выбор пользователя | — |
+| CH-01 | MISSING → resolved | A (D-16) | Налог — разовая неторговая операция на каждое удержание BPH; «отдельно по каждой операции» = одна исходящая операция МП на одну операцию BPH без агрегации; BR-02 проверяется data-level | §1.1 BR-02, §1.3 BR-02 | выбор пользователя | — |
+| CH-02 | MISSING → resolved | A (D-17) | `info.comment` всегда задан («Налог за размер портфеля», D-02) — сценарий «без текста» не возникает; при одновременно пустых `info.comment` и `accComment` деградация допустима | §4.2.4 | выбор пользователя | — |
+| CH-03 | MISSING → resolved | A (D-18) | Вне scope: маппим только `status=COMPLETE`; сторно/корректировки приходят отдельными операциями иного subtype/источника и не затрагиваются (CN-18) | §2 CN-18 | выбор пользователя | — |
+| CH-04 | MISSING → resolved | A (D-19) | Pre-check = подтверждённый командой BPH факт «BPH игнорирует неизвестный subtype, ответ 200 с пустым data» + включение subtype на стороне BPH до пролива HO | §2 CN-11, §4.1.1 | выбор пользователя | — |
+| CH-07 | MISSING → resolved | A (D-20) | Глобальная уникальность `externalSystemId` (сквозной счётчик BPH) + pre-check с BPH; коллизий нет | §4.2.4 | выбор пользователя | — |
+| CH-08 | MISSING → resolved | A (D-21) | `operation.name` используется consumer'ом (МП/деталка) как заголовок при пустом `displayed_name` → заголовок = «Налог за размер портфеля» | §4.2.4 | выбор пользователя | — |
+| CH-13 | MISSING → resolved | B (D-22) | Существующий INFO-лог успешного обновления кэша + операционная процедура; отдельная метрика/алерт не вводится, рассинхрон допустим | §7.1.7, §5.3.1 | выбор пользователя | — |
+| CH-15 | MISSING → resolved | B (D-23) | Негативные тест-фикстуры вне scope — приёмка = позитивный интеграционный тест + SQL-валидация | §5.3.2 | выбор пользователя | — |
+| CH-11 | MISSING → resolved | A (D-24) | SERIAL/sequence авто (INSERT без явного id) — общая sequence гарантирует непересечение с sibling `bph-moex-tax`; координация с DBA не требуется | §2 CN-06 | выбор пользователя | — |
+| CH-14 | MISSING → resolved | A (D-25) | Откат = `bph.is_active=false` (строка остаётся); pre-check «0 строк по subtype» перед каждым проливом не создаёт вторую активную строку | §2 CN-13, §Тогглы | выбор пользователя | — |
+| CH-16 | MISSING → resolved | B (D-26) | Data-level приёмка (SQL + shape кэша); end-to-end assert не требуется (согласуется с non-SMART D-09) | §5.3.2 | выбор пользователя | — |
 
 ## Отложено
 
-| ID | Причина |
-|----|---------|
-| — | — |
+Нет — все открытые `CH-*` закрыты.

@@ -969,7 +969,9 @@ def tag_timeline_divergences(timeline: list[dict], items: list[dict]) -> None:
 
 
 MERGE_SPAWN_WINDOW_SEC = 600
-DUPLICATE_STAMP_WINDOW_SEC = 2.0
+# Hook stamp, session-sync, and the orchestrator fallback append_run_log
+# land several seconds apart for the same agent call.
+DUPLICATE_STAMP_WINDOW_SEC = 15.0
 
 
 def _match_spawn_run_log(
@@ -1069,17 +1071,24 @@ def merge_history(run_log: list[dict], spawn_rows: list[dict]) -> list[dict]:
 
 def _is_bare_run_log_stamp(row: dict) -> bool:
     """Hook stamp without synced agent metadata; richer row nearby represents the same pass."""
-    if (row.get("source") or "run-log") not in {"run-log", "merged"}:
+    if (row.get("source") or "run-log") not in {"run-log", "merged", "events"}:
         return False
     metadata_keys = ("call_id", "started_at", "ended_at", "duration_sec")
     return not any(row.get(key) for key in metadata_keys)
 
 
+def _pass_work_text(row: dict) -> str:
+    note = (row.get("note") or "").strip()
+    if note.startswith("sync:") and " · " in note:
+        note = note.split(" · ", 1)[1].strip()
+    return note
+
+
 def _is_richer_pass_row(row: dict) -> bool:
-    if (row.get("source") or "") not in {"merged", "session-sync"}:
+    """Synced subagent pass. merge_history may rewrite source to run-log."""
+    if (row.get("source") or "") == "current":
         return False
-    metadata_keys = ("call_id", "started_at", "ended_at", "duration_sec", "note")
-    return any(row.get(key) for key in metadata_keys)
+    return bool(row.get("call_id"))
 
 
 def _rows_are_duplicate_stamps(left: dict, right: dict) -> bool:
@@ -1095,11 +1104,50 @@ def _rows_are_duplicate_stamps(left: dict, right: dict) -> bool:
     return delta <= DUPLICATE_STAMP_WINDOW_SEC
 
 
+def _bare_stamp_of_anchor(bare: dict, anchor: dict) -> bool:
+    """True when a hook/fallback stamp is the same call as a synced pass.
+
+    A nearby row with a different work note is the next spawn of that step,
+    not a third copy of this call.
+    """
+    if not _rows_are_duplicate_stamps(bare, anchor):
+        return False
+    bare_work = _pass_work_text(bare)
+    if not bare_work:
+        return True
+    anchor_work = _pass_work_text(anchor)
+    if not anchor_work:
+        return True
+    return bare_work == anchor_work or bare_work in anchor_work or anchor_work in bare_work
+
+
+def _same_call_work(bare: dict, anchor: dict) -> bool:
+    """Spawn row and the later synced completion of one call share a work note."""
+    if bare.get("step") != anchor.get("step"):
+        return False
+    bare_work = _pass_work_text(bare)
+    anchor_work = _pass_work_text(anchor)
+    return bool(bare_work) and bare_work == anchor_work
+
+
+def _delayed_empty_stamp(bare: dict, anchor: dict) -> bool:
+    """Hook stamp a couple of minutes after sync, sometimes with result fail."""
+    if bare.get("step") != anchor.get("step") or _pass_work_text(bare):
+        return False
+    bare_ts = parse_iso_ts(bare.get("ts"))
+    anchor_ts = parse_iso_ts(anchor.get("ts"))
+    if not bare_ts or not anchor_ts:
+        return False
+    return abs((bare_ts - anchor_ts).total_seconds()) <= 180
+
+
 def dedupe_run_log_stamps(history: list[dict]) -> list[dict]:
     """Drop duplicate bare run-log stamps next to synced subagent rows.
 
-    SubagentStop can write a minimal run-log row, and the session sync can append
-    the same pass with call_id/duration. Counting both inflates viewer ×N.
+    One agent call is recorded up to three times: SubagentStop, session-sync
+    (call_id), and the orchestrator append_run_log a few seconds later.
+    A spawn can also sit minutes away from that same call's completion.
+    Counting each copy inflates the viewer.
     """
     drop_indexes: set[int] = set()
     for index, row in enumerate(history):
@@ -1108,7 +1156,11 @@ def dedupe_run_log_stamps(history: list[dict]) -> list[dict]:
         for other_index, other in enumerate(history):
             if index == other_index or not _is_richer_pass_row(other):
                 continue
-            if _rows_are_duplicate_stamps(row, other):
+            if (
+                _bare_stamp_of_anchor(row, other)
+                or _same_call_work(row, other)
+                or _delayed_empty_stamp(row, other)
+            ):
                 drop_indexes.add(index)
                 break
     if not drop_indexes:
