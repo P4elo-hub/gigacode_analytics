@@ -58,4 +58,5 @@ python3 scripts/build_cli_settings.py
 python3 scripts/build_cli_settings.py --check
 ```
 
-`pipeline_smoke_test.py` validates that `permissions.allow` and hooks are present.
+`python3 -m unittest discover scripts -p '*_test.py'` validates that
+`permissions.allow` and hooks are present.

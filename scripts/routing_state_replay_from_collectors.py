@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Serialize spec artifact parsing into a routing-state replay / golden fixture.
+"""Serialize spec-v2 artifact parsing into a routing-state replay / golden fixture.
 
   PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py <slug>
   PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py --all
   PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py --golden
 
 `--all` writes scripts/fixtures/routing_state_replay/<slug>.json (baseline parser, no LLM).
-`--golden` snapshots each spec dispatch golden case into case['routing_state'] (option B).
+`--golden` snapshots each spec-v2 dispatch golden case into case['routing_state'] (option B).
 """
 
 from __future__ import annotations
@@ -44,9 +44,9 @@ GOLDEN_SLUG = "dispatch-golden"
 
 def snapshot(root: Path, slug: str) -> dict:
     """Etalon fields: engine exists/stale + baseline domain parse (overlay off)."""
-    status = FeatureStatus(slug=slug, pipeline_id="spec")
+    status = FeatureStatus(slug=slug, pipeline_id="spec-v2")
     with overlay_context(mode="off"):
-        populate_status(status, root, slug, "spec")
+        populate_status(status, root, slug, "spec-v2")
     apply_baseline_domain(status, root, slug)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -66,7 +66,7 @@ def write_fixture(root: Path, slug: str) -> Path:
 def write_golden(root: Path) -> Path:
     from pipeline_dispatch_golden_test import _materialize_case
 
-    path = root / "scripts" / "fixtures" / "dispatch_golden" / "spec" / "cases.json"
+    path = root / "scripts" / "fixtures" / "dispatch_golden" / "spec-v2" / "cases.json"
     cases = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(cases, list):
         raise SystemExit(f"expected list in {path}")
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--golden",
         action="store_true",
-        help="write routing_state into fixtures/dispatch_golden/spec/cases.json",
+        help="write routing_state into fixtures/dispatch_golden/spec-v2/cases.json",
     )
     parser.add_argument("--root", default=".", type=Path)
     args = parser.parse_args(argv)

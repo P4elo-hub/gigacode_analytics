@@ -128,14 +128,11 @@ Predicate catalog has its **own** suite. It is **not** in smoke (smoke is 31/31
 including a thin registry check).
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
-python3 scripts/feature_status_test.py
 ```
 
-`pipeline_predicates_test.py`: catalog vs dispatch `when:` vs `edge_conditions` ids,
-domain callable + reason, constants from yaml, compile typo, stub golden
-(`fixtures/predicate_golden/spec/`). `pipeline_smoke_test.py` does not import it.
+Engine tests cover catalog vs dispatch `when:` vs `edge_conditions` ids,
+domain callable + reason, constants from yaml, compile typo, and routing-codegen
+contracts.
 

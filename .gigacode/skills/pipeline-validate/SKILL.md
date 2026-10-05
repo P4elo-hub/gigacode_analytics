@@ -11,7 +11,7 @@ Read-only. SubagentStop hook (`.gigacode/hooks/pipeline-after-subagent.sh`) вы
 `additionalContext`; ручной fallback — после `append_run_log` + `ingest`.
 
 ```bash
-python3 scripts/pipeline_validate.py <slug> --json --pipeline spec
+python3 scripts/pipeline_validate.py <slug> --json --pipeline spec-v2
 ```
 
 ## Интерпретация

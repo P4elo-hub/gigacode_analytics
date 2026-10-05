@@ -2,7 +2,7 @@
 
 Isolated minimal pipeline pack for compile validation (not installed under `pipelines/`).
 
-Used by `pipeline_smoke_test.py` → `pack-smoke:minimal`.
+Used by pack authoring and compile tests as an isolated minimal pack.
 
 Copy layout matches `pipelines/<id>/` (graph, dispatch, status, registry).
 

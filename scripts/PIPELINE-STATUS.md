@@ -142,8 +142,6 @@ domain parse is `routing_state_baseline.py` (CI) + skill `analyze-routing`.
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
-python3 scripts/feature_status_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```

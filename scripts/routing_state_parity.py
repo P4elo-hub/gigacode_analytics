@@ -76,9 +76,9 @@ def _resolve_replay(root: Path, slug: str, replay: Path | None) -> Path | None:
 
 
 def _baseline_status(root: Path, slug: str):
-    status = FeatureStatus(slug=slug, pipeline_id="spec")
+    status = FeatureStatus(slug=slug, pipeline_id="spec-v2")
     with overlay_context(mode="off"):
-        populate_status(status, root, slug, "spec")
+        populate_status(status, root, slug, "spec-v2")
     apply_baseline_domain(status, root, slug)
     return status
 
@@ -89,7 +89,7 @@ def _dispatch_from_payload(root: Path, slug: str, payload: dict) -> dict:
     path.write_text(json.dumps(payload), encoding="utf-8")
     try:
         with overlay_context(mode="on", replay=path):
-            return build_dispatch(root, slug, "spec")
+            return build_dispatch(root, slug, "spec-v2")
     finally:
         path.unlink(missing_ok=True)
         tmp.rmdir()
@@ -107,9 +107,9 @@ def compare(root: Path, slug: str, *, replay: Path | None = None) -> dict:
 
     if analyzer_path is not None and analyzer_path.is_file():
         with overlay_context(mode="on", replay=analyzer_path):
-            status_b = FeatureStatus(slug=slug, pipeline_id="spec")
-            populate_status(status_b, root, slug, "spec")
-            dispatch_b = build_dispatch(root, slug, "spec")
+            status_b = FeatureStatus(slug=slug, pipeline_id="spec-v2")
+            populate_status(status_b, root, slug, "spec-v2")
+            dispatch_b = build_dispatch(root, slug, "spec-v2")
         load_error = None
     else:
         status_b = status_a

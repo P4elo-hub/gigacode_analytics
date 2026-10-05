@@ -69,5 +69,5 @@ PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py --all
 PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py --golden
 PYTHONPATH=scripts python3 scripts/routing_state_parity.py pipeline-viewer-smoke --strict
 PYTHONPATH=scripts python3 scripts/routing_state_parity.py bph-moex-tax --strict
-PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 ```

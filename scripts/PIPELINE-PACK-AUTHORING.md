@@ -18,16 +18,16 @@ Runtime loop: [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).
 2. **Schema runtime — subset, не `jsonschema`.** Файл [pipeline_pack_schema.json](pipeline_pack_schema.json) (`$schema` Draft 2020-12) — контракт для UI. Python ходит по нему через `_validate_schema()` (type / required / properties / items / pattern). Для текущих pack достаточно. Если фронт начнёт слать сложные payload — подключить `jsonschema` поверх того же файла, без смены schema.
 3. **Orchestrator agent.** Шаблон: [fixtures/pack_authoring/orchestrator-agent.md](fixtures/pack_authoring/orchestrator-agent.md). `--init-pack` **не** пишет `.qwen/` / `.gigacode/` / `.opencode/`. Viewer **Apply** создаёт `<id>-orchestrator.md` во всех трёх CLI из шаблона; повторный Apply **не** затирает ручные правки без `overwrite_orchestrator: true` (чекбокс в модалке).
 4. **`--init-pack` без `--apply`.** Generated JSON обновляется только `--apply` (или `--from-json`, который apply делает). До apply: `--check` = drift, delegate = `unknown pipeline_id`.
-5. **Golden (Phase 9 done).** Каждый pack: `fixtures/dispatch_golden/<id>/cases.json` или `WAIVER.md` (только no-dispatch). Spec — эталон 24+, не сокращать. `full-dispatch` template компилируется; после init добавь golden. Policy + parity test: [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
+5. **Golden (Phase 9 done).** Каждый pack: `fixtures/dispatch_golden/<id>/cases.json` или `WAIVER.md` (только no-dispatch). `spec-v2` — активный эталон, не сокращать cases. `full-dispatch` template компилируется; после init добавь golden. Policy + parity test: [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
 
 ## Who writes what
 
-| Concern | Spec today | Calibration today | Authoring target |
+| Concern | Spec-v2 today | Calibration today | Authoring target |
 |---------|------------|-------------------|------------------|
 | graph / dispatch / status / registry | Full 4 YAML; dispatch 24+ rules | 4 YAML; dispatch empty (`dispatch_supported: false`) | Same 4 files. `dispatch` optional in JSON |
 | optional `.py` | `collectors.py`, `predicates.py`, `validate.py` | `validate.py` only | Optional. Add when you parse files / domain `when:` / extra validate |
 | orchestrator agent | `spec-orchestrator.md` + Runtime loop | `calibration-orchestrator.md` + Runtime loop | Copy [fixtures/pack_authoring/orchestrator-agent.md](fixtures/pack_authoring/orchestrator-agent.md) |
-| golden / smoke | `fixtures/dispatch_golden/spec/` (24+) | `fixtures/dispatch_golden/calibration/` (`01-orchestrator-only`) | `--init-pack` → `fixtures/dispatch_golden/<id>/cases.json` (или `WAIVER.md` для no-dispatch) |
+| golden / regression | `fixtures/dispatch_golden/spec-v2/` | `fixtures/dispatch_golden/calibration/` (`01-orchestrator-only`) | `--init-pack` → `fixtures/dispatch_golden/<id>/cases.json` (или `WAIVER.md` для no-dispatch) |
 
 ## New pipeline (checklist)
 
@@ -131,14 +131,9 @@ the UI; `--from-json` uses the subset walker. Compile still rejects unknown
 ## Tests
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
 ```
 
 ## Phase 13 Authoring (graph edge → routing_conditions + dispatch)
@@ -158,21 +153,21 @@ Frontend / PlantUML does not call the analyzer. Runtime dispatch stays determini
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py \
-  --pipeline spec --from-plantuml scripts/fixtures/routing_codegen/spec-sample.puml --dry-run
+  --pipeline spec-v2 --from-plantuml scripts/fixtures/routing_codegen/spec-sample.puml --dry-run
 PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py \
-  --pipeline spec --from-plantuml path.puml --apply
+  --pipeline spec-v2 --from-plantuml path.puml --apply
 # or bootstrap from graph.edges[].condition:
 PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py \
-  --pipeline spec --from-graph-conditions --dry-run
+  --pipeline spec-v2 --from-graph-conditions --dry-run
 # sync dispatch.rules from existing edge_conditions:
-PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec --apply
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec-v2 --apply
 ```
 
 3. Review `routing_conditions.yaml` (`status_fields` instructions, `expr`, `dispatch.priority` / `next`).
    Merge does **not** wipe hand-patched field instructions.
 4. `PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply` then `--check`.
 5. If you added a new `when:`, add a dispatch golden case (`scripts/PIPELINE-GOLDEN.md`).
-   Spec 24 expect values stay frozen.
+   `spec-v2` expect values stay frozen.
 
 `--apply` on compile does **not** run codegen. Codegen is a separate step first.
 
@@ -216,5 +211,5 @@ Session 3: `PYTHONPATH=scripts:pipeline-viewer python3 scripts/pack_authoring_se
 3. Set `dispatch.priority` / `next` (unique priority).
 4. Compile `--apply` / `--check`. Add golden.
 
-Coverage check: `PYTHONPATH=scripts python3 scripts/routing_conditions_extract.py --pipeline spec --check`.
+Coverage check: `PYTHONPATH=scripts python3 scripts/routing_conditions_extract.py --pipeline spec-v2 --check`.
 

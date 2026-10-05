@@ -53,13 +53,12 @@ See [PIPELINE-PREDICATES.md](PIPELINE-PREDICATES.md).
 ## Tests
 
 ```bash
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py
 ```
 
 Golden lives in `fixtures/dispatch_golden/<pipeline_id>/cases.json`.
 Every pack must have that folder (or `WAIVER.md` for no-dispatch).
 Policy: [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).
-Predicate catalog tests are a separate file, not smoke checks.
+Predicate/routing catalog checks run through the active engine test suite.

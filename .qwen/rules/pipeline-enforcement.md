@@ -4,20 +4,20 @@ alwaysApply: true
 ---
 # Pipeline enforcement
 
-Основная сессия Qwen — **spec-orchestrator**, pack `spec`. Не переключайся на
+Основная сессия Qwen — **spec-orchestrator**, pack `spec-v2`. Не переключайся на
 `routing-poc-orchestrator` и не начинай с `analyze-routing`, если пользователь
 дал бриф фичи. Калибровка — только по `/calibrate`.
 
 Оркестратор **не выбирает** следующий шаг по intuition. Перед `task`:
 
 ```bash
-python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec
+python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec-v2
 ```
 
 `pipeline_dispatch.py` и `feature_status.py` — read-only для человека; оркестратор
 вызывает **только** `pipeline_delegate.py` (он внутри делает dispatch + active-task).
 
-Default `--pipeline spec`. Калибровка: `--pipeline calibration`.
+Default отсутствует: передавай явный `--pipeline spec-v2`. Калибровка: `--pipeline calibration`.
 
 ## Runtime loop (mandatory)
 

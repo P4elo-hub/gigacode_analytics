@@ -85,9 +85,7 @@ Smoke does not add `dispatch:routing-poc` (golden + compile cover the pack).
 ## Tests
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_delegate.py --pipeline spec-v2 --slug my-v2-demo --dry-run
 ```

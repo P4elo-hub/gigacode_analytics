@@ -52,10 +52,10 @@ Do not hardcode `pipelines/spec/…` as the only source. A pack like `dev-agent`
 must read `pipelines/dev-agent/routing_conditions.yaml`, not copy GAP/DECISIONS
 algorithms from spec.
 
-### Pack `spec` inventory (example)
+### Pack `spec-v2` inventory (example)
 
-Inventory from `pipelines/spec/status.yaml` + routing predicates (dispatch `when:`).
-Analyzer for `--pipeline spec` populates the same names so overlay is 1:1.
+Inventory from `pipelines/spec-v2/status.yaml` + routing predicates (dispatch `when:`).
+Analyzer for `--pipeline spec-v2` populates the same names so overlay is 1:1.
 
 | Field | Source | Predicates / invariant |
 |-------|--------|------------------------|
@@ -87,7 +87,7 @@ Artifact `exists_as` (`has_spec`, `has_context`, …) is also re-applied from di
 after overlay so a stale JSON snapshot cannot hide a file (e.g. `has_spec: false`
 must not re-queue write-feature when SPEC exists).
 
-Full mapping for pack `spec`: `pipelines/spec/routing_conditions.yaml`
+Full mapping for pack `spec-v2`: `pipelines/spec-v2/routing_conditions.yaml`
 (`status_fields` + `edge_conditions`). For any pack: same file under
 `pipelines/<pipeline_id>/` (`status_fields` SSOT for the skill;
 `edge_conditions` SSOT for `when:` bodies — Phase 13).
@@ -140,7 +140,7 @@ which completed gate step clears the flag (default `check-feature`). Dispatch
 reads the overlay bool as `when: needs_check_feature` (P75).
 
 Golden `25-check-feature-stamped-json`. See
-[fixtures/dispatch_golden/spec/COVERAGE.md](fixtures/dispatch_golden/spec/COVERAGE.md).
+[fixtures/dispatch_golden/spec-v2/COVERAGE.md](fixtures/dispatch_golden/spec-v2/COVERAGE.md).
 
 ## Packs
 
@@ -166,13 +166,9 @@ Golden `25-check-feature-stamped-json`. See
 PYTHONPATH=scripts python3 scripts/routing_state_replay_from_collectors.py --golden
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
-PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
-PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 PYTHONPATH=scripts python3 scripts/routing_state_parity.py pipeline-viewer-smoke --strict
-python3 scripts/feature_status_test.py
 ```
 
 Replay fixtures are collector-equivalent snapshots (no LLM):
@@ -194,19 +190,15 @@ See [PIPELINE-PACK-AUTHORING.md](PIPELINE-PACK-AUTHORING.md) Phase 13.
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
-PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
-PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
 ```
 
 | Gate | Что закрывает |
 |------|----------------|
-| `pipeline_routing_state_test` | schema, overlay always-on, validate block ids |
-| `routing_state_parity_test` | replay identity / mismatch / fixture slugs |
-| `dispatch_golden` `routing-poc` | missing / stale / open_gaps → next_step |
-| `dispatch_golden` `spec` | 24 cases; expect unchanged; JSON injected |
-| `golden-coverage:packs` | `routing-poc` не orphan |
-| smoke | aggregate golden + compile + `dispatch:spec-with-routing-state` |
+| `pipeline_routing_state_engine_test.py` | schema, baseline, routing-state contracts |
+| `routing_state_baseline_test.py` | replay identity / mismatch / fixture slugs |
+| `dispatch_golden` `spec-v2` | active routing cases; expect unchanged |
+| `coverage:packs` | active packs не orphan |
+| engine tests | aggregate runtime/hooks/registry/routing-codegen checks |
 | `routing_state_parity.py --strict` | baseline vs overlay on `--replay` |

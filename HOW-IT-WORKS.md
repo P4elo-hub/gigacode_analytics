@@ -371,9 +371,9 @@ pipeline_dispatch / pipeline_delegate / pipeline_validate
 | **Registry** | `pipelines/<id>/registry.yaml` | step → subagent активного `pipeline_id`; `registry_for(id)` |
 | **Predicates** | `pipeline_predicates.py` + `routing_conditions.yaml` `edge_conditions` (interpreter) + pack `predicates.py` (reasons) | `when:` names: core from status.yaml + YAML expr |
 
-`--pipeline spec` — полный declarative dispatch (эталон, 24+ golden).
+`--pipeline spec-v2` — полный declarative dispatch (активный эталон).
 Live overlay: `routing-state.json` (Phase 12). Node `analyze-routing` в
-spec graph. Контракт:
+spec-v2 graph. Контракт:
 [scripts/PIPELINE-ROUTING-STATE.md](scripts/PIPELINE-ROUTING-STATE.md),
 [scripts/PIPELINE-PARITY.md](scripts/PIPELINE-PARITY.md).
 `--pipeline calibration` — граф и проверка рёбер; правил dispatch нет
@@ -417,7 +417,7 @@ no-dispatch) — [scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md).
 [scripts/PIPELINE-GOLDEN.md](scripts/PIPELINE-GOLDEN.md),
 [scripts/PIPELINE-ROUTING-STATE.md](scripts/PIPELINE-ROUTING-STATE.md),
 [scripts/PIPELINE-PARITY.md](scripts/PIPELINE-PARITY.md).
-Spec matrix: [scripts/fixtures/dispatch_golden/spec/COVERAGE.md](scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
+Spec-v2 matrix: [scripts/fixtures/dispatch_golden/spec-v2/COVERAGE.md](scripts/fixtures/dispatch_golden/spec-v2/COVERAGE.md).
 
 Флаг `PIPELINE_COMPILED_ROUTER` удалён — router всегда включён.
 
@@ -476,16 +476,16 @@ python3 scripts/write_feature.py "<бриф>" --mode assemble --name <slug> \
   --part-dir Feature-writing/<slug> --out Feature-writing/<slug>/<slug>.md
 
 python3 scripts/feature_status.py <slug>
-python3 scripts/pipeline_dispatch.py <slug> --json   # next step (default --pipeline spec)
+python3 scripts/pipeline_dispatch.py <slug> --pipeline spec-v2 --json   # next step
 python3 scripts/pipeline_dispatch.py <slug> --pipeline calibration --json
 python3 scripts/pipeline_restart.py <slug> --from-step capture-review --pipeline calibration
 python3 scripts/quality_gates.py <slug>
 
 # pipeline infra (после правок pipelines/<id>/)
 python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_delegate.py --pipeline spec-v2 --slug my-v2-demo --dry-run
 ```
 
 Код проверки маркеров UML: `scripts/part_checks.py`.

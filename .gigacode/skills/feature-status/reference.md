@@ -54,7 +54,7 @@
 Канон routing — `pipelines/spec/dispatch.yaml` → `pipeline_router.py`.
 
 Полная таблица правил, приоритетов и golden-fixtures:
-[scripts/fixtures/dispatch_golden/spec/COVERAGE.md](../../../scripts/fixtures/dispatch_golden/spec/COVERAGE.md).
+[scripts/fixtures/dispatch_golden/spec-v2/COVERAGE.md](../../../scripts/fixtures/dispatch_golden/spec-v2/COVERAGE.md).
 
 ## Матрица next step
 

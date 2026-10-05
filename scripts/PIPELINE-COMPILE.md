@@ -52,21 +52,18 @@ reference.
 
 **Phase 12 contract**
 
-1. **Smoke не добавляет `dispatch:routing-poc` / `pipeline-delegate:routing-poc`.**
-   Pack покрыт `dispatch-golden` + `pipeline-compile` + `golden-coverage:packs`.
-   Optional smoke: `dispatch:spec-with-routing-state`.
+1. **Regression не добавляет отдельный `dispatch:routing-poc` / `pipeline-delegate:routing-poc`.**
+   Pack покрыт `dispatch-golden` + `pipeline-compile`; pack coverage проверяется
+   строкой `coverage:packs` внутри `pipeline_dispatch_golden_test.py`.
+   `routing-poc` заархивирован, активные cases остаются у `calibration` и `spec-v2`.
 2. **Compile чеклист после правок overlay / pack YAML** (после `--apply`):
    ```bash
    PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
-   PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
-   PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
+   PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
    PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-   PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
-   PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
    PYTHONPATH=scripts python3 scripts/routing_state_parity.py pipeline-viewer-smoke --strict
    ```
-   Spec golden ids не сокращать. `routing-poc` ≥ 3 cases. `expect` 24 spec cases
-   без изменений.
+   `spec-v2` golden ids не сокращать. `expect` cases держать без изменений.
 3. **Skill** заполняет `fields` по `pipelines/spec/routing_conditions.yaml`.
    Hot-path collectors не парсят домен.
 4. **Stale spec** — JSON vs spec / context / decisions / challenges / alignment /
@@ -83,11 +80,10 @@ reference.
 5. `--catalog` `catalog_version` 2 includes `routing_conditions.<id>`.
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec --apply
+PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen.py --pipeline spec-v2 --apply
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --apply
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
-PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 ```
 
@@ -98,7 +94,7 @@ New pipeline = pack + agents/skills. Not a fork of the engine.
 1. `--init-pack <id>` (templates: `minimal`, `orchestrator-only`, `full-dispatch`, `routing-state`) or `--from-json`.
 2. Copy `scripts/fixtures/pack_authoring/orchestrator-agent.md` → `*/agents/<id>-orchestrator.md`.
 3. `--apply` → `--check` (новый pack: apply первым, иначе `--check` = drift).
-4. Smoke after apply: schema contains `<id>`; `pipeline_delegate.py … --pipeline <id>`.
+4. Regression after apply: schema contains `<id>`; `pipeline_delegate.py … --pipeline <id>`.
 5. Dispatch optional: empty rules = calibration-style (`orchestrator_only`).
    Full dispatch = spec-style; `edge_conditions` (Phase 13) for domain `when:`;
    golden under `fixtures/dispatch_golden/<id>/` (required — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md)).
@@ -113,48 +109,29 @@ dispatch golden for a new pack are manual. Coverage gate is Phase 9 done. See
 
 ## Tests
 
-Registry has a **thin** smoke check (`pipeline-registry:scoped`). Full suite
-is `pipeline_registry_test.py`. Predicates stay out of smoke.
+Registry, runtime, hooks, routing-state and routing-codegen checks live in the
+active unittest suite.
 
 After `--apply`:
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py  # pack ↔ golden / waiver
-PYTHONPATH=scripts python3 scripts/pipeline_smoke_test.py
-python3 scripts/feature_status_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_predicates_test.py   # not part of smoke
-PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py     # full suite (smoke has scoped check only)
-PYTHONPATH=scripts python3 scripts/pipeline_runtime_test.py      # pack-first validate + orchestrator loop
-PYTHONPATH=scripts python3 scripts/pipeline_pack_test.py         # schema, catalog, --from-json, --init-pack
-PYTHONPATH=scripts python3 scripts/pipeline_routing_codegen_test.py
-PYTHONPATH=scripts python3 scripts/pipeline_routing_state_test.py
-PYTHONPATH=scripts python3 scripts/routing_state_parity_test.py
+PYTHONPATH=scripts python3 scripts/pipeline_delegate.py --pipeline spec-v2 --slug my-v2-demo --dry-run
 ```
 
-`pipeline_registry_test.py`: `registry_for("calibration")` ≠ spec, calibration
-steps do not resolve via spec, hook gated uses active-task + `--pipeline`,
-compile rejects a mapped step missing from the graph, calibration restart
-rolls back `Calibration/<slug>/` only. Smoke only has `pipeline-registry:scoped`.
-
-`pipeline_runtime_test.py`: pack-first validate (calibration extra_advice without
-engine duplicate), spec extra_advice severity matrix, orchestrator runtime loop
-block in agents/rules. Not part of smoke (smoke has `validate:calibration:<slug>`).
-
-`pipeline_routing_state_test.py`: overlay schema + spec always-on + validate
-block ids + fake JSON dispatch. `routing_state_parity_test.py`: baseline vs
-overlay replay. Not smoke rows — see **Routing-state (Phase 12)** checklist
-above. Smoke has `dispatch:spec-with-routing-state` and still does **not** call
-`pipeline_delegate --pipeline routing-poc`.
+`python3 -m unittest discover ...` подхватывает активные engine/authoring tests:
+registry, hooks, runtime, routing-state, routing-codegen, active-task и pack authoring.
+`pipeline_dispatch_golden_test.py` включает `coverage:packs`.
 
 ## Edit workflow
 
 1. Change the pack under `pipelines/<id>/` (not `scripts/pipeline.yaml`).
 2. `--check` → review validation + diff.
 3. `--apply` → commit YAML + generated JSON together.
-4. Golden (`fixtures/dispatch_golden/<id>/cases.json` or `WAIVER.md`) + smoke must stay green.
-   Smoke: `dispatch-golden N/N` and `golden-coverage:packs`.
+4. Golden (`fixtures/dispatch_golden/<id>/cases.json` or `WAIVER.md`) + engine tests must stay green.
+   Dispatch golden includes `dispatch-golden N/N` and `coverage:packs`.
 
 Spec pack is the reference (24+ dispatch cases). Every pack needs its own golden
 folder or a no-dispatch waiver — [PIPELINE-GOLDEN.md](PIPELINE-GOLDEN.md).

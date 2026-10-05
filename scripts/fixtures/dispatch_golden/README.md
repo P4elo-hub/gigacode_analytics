@@ -9,14 +9,14 @@ Policy: [PIPELINE-GOLDEN.md](../../PIPELINE-GOLDEN.md).
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py --case 05-open-gaps
 PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py --list
-PYTHONPATH=scripts python3 scripts/pipeline_golden_coverage_test.py
 ```
 
 Every pack in `pipelines/` must appear here. `dispatch_supported` packs need
-≥ 1 case; **spec** is the platform reference (24+ cases, additive only).
-A golden folder with no matching pack fails coverage.
+≥ 1 case; **spec-v2** is the active platform reference.
+A golden folder with no matching pack fails the `coverage:packs` case in
+`pipeline_dispatch_golden_test.py`.
 
-Spec pack (24+ cases): [spec/COVERAGE.md](./spec/COVERAGE.md).
+Spec-v2 pack: [spec-v2/COVERAGE.md](./spec-v2/COVERAGE.md).
 
 Calibration (Option A, no router): [calibration/COVERAGE.md](./calibration/COVERAGE.md)
 — 1 case `01-orchestrator-only` (a `WAIVER.md` would also satisfy the gate).

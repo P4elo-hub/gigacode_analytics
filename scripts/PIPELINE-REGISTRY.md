@@ -107,7 +107,7 @@ that pack.
 python3 scripts/pipeline_restart.py <slug> --from-step <step> [--pipeline spec|calibration] [--apply]
 ```
 
-Default `--pipeline spec`. Marker and rollback paths follow the pack:
+Default отсутствует: передавай явный `--pipeline spec-v2`. Marker and rollback paths follow the pack:
 
 | Pipeline | Marker | Rollback |
 |----------|--------|----------|
@@ -124,10 +124,10 @@ passes `pipeline` to `/api/restart-plan` and `POST /api/restart`.
 
 ## Tests
 
-Smoke has a thin check (`pipeline-registry:scoped`, 31/31). Full suite:
+Registry checks live in the active engine unittest suite:
 
 ```bash
-PYTHONPATH=scripts python3 scripts/pipeline_registry_test.py
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
 ```
 
 See [PIPELINE-COMPILE.md](PIPELINE-COMPILE.md) § Tests, [PIPELINE-RUNTIME.md](PIPELINE-RUNTIME.md).

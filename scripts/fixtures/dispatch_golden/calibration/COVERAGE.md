@@ -8,4 +8,4 @@ Phase 3 Option A: calibration has **no** compiled dispatch rules (`orchestrator_
 
 # Waiver would also satisfy the Phase 9 pack↔golden gate; this pack keeps a real case.
 
-Graph + delegate checks live in `pipeline_smoke_test.py` (`dispatch:calibration`, `pipeline-delegate:calibration`).
+Graph + delegate checks live in the active engine tests and delegate dry-runs.

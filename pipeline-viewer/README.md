@@ -70,7 +70,7 @@ python3 pipeline-viewer/server.py --slug composite-active-order-commission
 python3 pipeline-viewer/server.py \
   --slug my-feature \
   --workspace /path/to/gigacode_analytics \
-  --pipeline spec \
+  --pipeline spec-v2 \
   --port 8765
 ```
 

@@ -73,9 +73,9 @@
 rg -n "routing_conditions|pipeline_id|pipelines/spec" .qwen/skills/analyze-routing/SKILL.md
 
 # регрессия dispatch (ядро не ломали — кейсы должны быть зелёные)
-PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check spec
-# если в репо принят этот набор:
-PYTHONPATH=scripts python3 -m pytest scripts/pipeline_routing_state_test.py scripts/pipeline_relates_dispatch_test.py -q
+PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 ```
 
 Ручная проверка текста skill: для гипотетического пака `dev-agent` analyzer обязан брать поля из `pipelines/dev-agent/routing_conditions.yaml`, а не копировать GAP-инструкции из spec.
@@ -265,19 +265,18 @@ PYTHONPATH=scripts:pipeline-viewer python3 scripts/pack_authoring_session3_test.
 
 1. `pipeline_compile.py --check spec-v2` ок.
 2. Golden: «все domain bool false» → next `analyze-routing` (P5); «один bool true» → ожидаемый `next` из dispatch.
-3. `pipeline_compile.py --check spec` + существующие golden spec зелёные.
+3. `pipeline_compile.py --check spec-v2` + существующие golden spec-v2 зелёные.
 4. Ручной/скриптовый smoke: в `routing-state.json` выставлен один pack field → `pipeline_delegate` / dispatch выбирает соответствующий шаг.
 
 ### Как проверить
 
 ```bash
 PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check spec-v2
-PYTHONPATH=scripts python3 scripts/pipeline_compile.py --check spec
 
 # golden (путь уточнить по PIPELINE-GOLDEN.md, если обёртка другая)
 ls scripts/fixtures/dispatch_golden/spec-v2/
-PYTHONPATH=scripts python3 -m pytest scripts/pipeline_pack_test.py -q
-# или принятый в репо прогон dispatch_golden для spec-v2
+PYTHONPATH=scripts python3 -m unittest discover scripts -p '*_test.py'
+PYTHONPATH=scripts python3 scripts/pipeline_dispatch_golden_test.py
 
 # smoke dispatch: подставить fixture JSON fields с одним true
 PYTHONPATH=scripts python3 scripts/pipeline_delegate.py --pipeline spec-v2 --slug <test-slug> --dry-run

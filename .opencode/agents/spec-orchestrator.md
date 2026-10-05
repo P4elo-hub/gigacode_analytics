@@ -50,12 +50,12 @@ find-context → write-feature
 
 Канон: правило `pipeline-enforcement`. **Не выбирай шаг и субагента сам.**
 
-1. `python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec`
+1. `python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline spec-v2`
 2. `action` → `task` | `ask_user` | `write_feature_cycle` | `ready` | `stopped` | `error`
 3. После `task` hook пишет лог; fallback:
-   `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline spec`
-4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline spec` (если hook не сделал)
-5. `python3 scripts/pipeline_validate.py <task_id> --pipeline spec`
+   `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline spec-v2`
+4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline spec-v2` (если hook не сделал)
+5. `python3 scripts/pipeline_validate.py <task_id> --pipeline spec-v2`
 
 Читай JSON: поле `action` и `instruction`. **Не** вызывай `pipeline_dispatch.py`
 и **не** вызывай `pipeline_set_active_task.py` отдельно — delegate делает это сам.
@@ -72,13 +72,13 @@ find-context → write-feature
 Preflight (если уже выбрал subagent в голове — проверь):
 
 ```bash
-python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipeline spec
+python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipeline spec-v2
 ```
 
 Код ≠ 0 → **не** `task`.
 
 **Запрещено завершать ход**, пока `must_continue: true`. Не спрашивай «продолжить?».
-После каждого `task` — hook SubagentStop → снова **`pipeline_delegate.py --pipeline spec`** → `task`.
+После каждого `task` — hook SubagentStop → снова **`pipeline_delegate.py --pipeline spec-v2`** → `task`.
 
 **Не отлаживай движок.** Не читай `pipelines/`, `scripts/pipeline_*`,
 `routing_conditions.yaml`, `predicates.py`. Повтор `next_step` из delegate —
@@ -95,7 +95,7 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
 Если `task` вернул fail, обрезанный ответ или шаг не выполнен:
 
 1. `append_run_log.py … --result fail --note "…"` (если hook не успел).
-2. **`pipeline_delegate.py <slug>`** — единственный источник следующего subagent (`--pipeline spec`).
+2. **`pipeline_delegate.py <slug>`** — единственный источник следующего subagent (`--pipeline spec-v2`).
 3. Если `action: task` — **только** этот `subagent_type`. **Не** re-run другого resolver
    «потому что кажется логичным».
 4. В prompt retry: причина fail + `instruction` из delegate.
@@ -111,12 +111,12 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
    из брифа или существующей папки и **сразу используй**. `ask_user_question` только если
    кандидатов несколько и выбрать нельзя. Запрещены имена `update`, `changes`,
    `wip`.
-2. `pipeline_delegate.py <slug> --cli qwen --pipeline spec` — **единственный** источник next step/subagent.
+2. `pipeline_delegate.py <slug> --cli qwen --pipeline spec-v2` — **единственный** источник next step/subagent.
    Не считай GAP/CH/Q и порядок шагов вручную. Не вызывай `task` без delegate в этом ходе
    (кроме apply после `ask_user` — `task` из того JSON).
 3. При `action: task` — **сразу** `task` на `task.subagent_type` из JSON.
    Не спрашивай «запускать X?». Шаг **write-feature** — цикл ниже.
-4. После каждого `task` — снова **`pipeline_delegate.py --pipeline spec`** и следующий шаг. Не запускай два
+4. После каждого `task` — снова **`pipeline_delegate.py --pipeline spec-v2`** и следующий шаг. Не запускай два
    содержательных шага параллельно.
 5. **Телеметрия + валидатор (SubagentStop hook)** — после возврата `task` hook
    `.qwen/hooks/pipeline-after-subagent.sh` **автоматически** выполняет:
@@ -127,9 +127,9 @@ python3 scripts/pipeline_delegate.py <slug> --assert-subagent <имя> --pipelin
    Ручной fallback (если hook не сработал — нет injected context):
 
    ```bash
-   python3 scripts/append_run_log.py --slug <slug> --step <шаг> --subagent <имя> --result ok --pipeline spec
-   python3 scripts/ingest_session_telemetry.py <slug> --cli qwen --pipeline spec
-   python3 scripts/pipeline_validate.py <slug> --json --pipeline spec
+   python3 scripts/append_run_log.py --slug <slug> --step <шаг> --subagent <имя> --result ok --pipeline spec-v2
+   python3 scripts/ingest_session_telemetry.py <slug> --cli qwen --pipeline spec-v2
+   python3 scripts/pipeline_validate.py <slug> --json --pipeline spec-v2
    ```
 
    Первый ingest для новой цепочки (нет `agent-logs/<slug>/manifest.json`) — hook
@@ -207,7 +207,7 @@ PreToolUse hook блокирует `task` с неверным subagent.
 
    Не вызывай `spec-writer` на сборку. Успешный assemble удаляет `*.part-*.md`
    и `*.context.md`.
-6. `cycle.action == done` — **`pipeline_delegate.py --pipeline spec`**. Не жди «да».
+6. `cycle.action == done` — **`pipeline_delegate.py --pipeline spec-v2`**. Не жди «да».
 
 # resolve-gaps (task `gap-resolver`)
 
