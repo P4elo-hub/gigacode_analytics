@@ -328,14 +328,14 @@
           "next": "code-auditor"
         },
         {
-          "when": "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa",
+          "when": "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
           "priority": 250,
-          "next": "code-auditor"
+          "next": "alignment-resolver"
         },
         {
-          "when": "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
+          "when": "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa",
           "priority": 260,
-          "next": "alignment-resolver"
+          "next": "code-auditor"
         },
         {
           "when": "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
@@ -376,6 +376,10 @@
           "path": "Feature-writing/{task_id}/{task_id}-routing-state.json",
           "exists_as": "has_routing_state",
           "missing_reason": "нет routing-state.json — нужен analyze-routing"
+        },
+        "routing_reports": {
+          "path": "Feature-writing/{task_id}/.pipeline/routing-reports/index.json",
+          "exists_as": "has_routing_reports"
         }
       },
       "collectors": [
@@ -384,7 +388,14 @@
           "source": "routing_state"
         }
       ],
-      "stale": [],
+      "stale": [
+        {
+          "id": "routing_state",
+          "when": "artifact_older_than",
+          "left": "routing_state",
+          "right": "routing_reports"
+        }
+      ],
       "orchestrator": {},
       "messages": {
         "ready": "spec-v2 ready",
@@ -499,6 +510,7 @@
     "calibration": [],
     "spec-v2": [
       "file_missing_main",
+      "file_missing_routing_reports",
       "file_missing_routing_state",
       "find_context",
       "has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp",
@@ -512,11 +524,13 @@
       "has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa",
       "has_resheniya_po_ch_uzhe_est_nuzhno_primenit_v_spec",
       "has_resheniya_po_gap_uzhe_est_nuzhno_primenit_v_spec",
+      "has_routing_reports",
       "has_routing_state",
       "has_v_alignment_est_critical_major_raskhozhdeniya_otchet",
       "has_v_decisions_est_needs_answer_s_relates_na_ch",
       "has_v_decisions_est_needs_answer_s_relates_na_gap_open_g",
       "not_has_main",
+      "not_has_routing_reports",
       "not_has_routing_state",
       "routing_state_needs_refresh"
     ]

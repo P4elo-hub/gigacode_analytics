@@ -34,6 +34,7 @@ from pipeline_pack import (
 )
 from pipeline_pack_authoring import (
     PACK_ID_RE,
+    ROUTING_REPORTS_ARTIFACT_PATH,
     ROUTING_STATE_ARTIFACT_PATH,
     ROUTING_STATE_COLLECTORS,
     init_pack,
@@ -121,9 +122,34 @@ def merge_routing_state_status(payload: dict) -> list[str]:
             "exists_as": "has_routing_state",
             "missing_reason": "нет routing-state.json — нужен analyze-routing",
         }
-        status["artifacts"] = artifacts
         notes.append("status.artifacts.routing_state")
+    if "routing_reports" not in artifacts:
+        artifacts["routing_reports"] = {
+            "path": ROUTING_REPORTS_ARTIFACT_PATH,
+            "exists_as": "has_routing_reports",
+        }
+        notes.append("status.artifacts.routing_reports")
+    status["artifacts"] = artifacts
+    stale = [item for item in _as_list(status.get("stale")) if isinstance(item, dict)]
+    report_rule = {
+        "id": "routing_state",
+        "when": "artifact_older_than",
+        "left": "routing_state",
+        "right": "routing_reports",
+    }
+    if report_rule not in stale:
+        stale.append(report_rule)
+        status["stale"] = stale
+        notes.append("status.stale+=routing_reports")
     payload["status"] = status
+    routing_conditions = _as_dict(payload.get("routing_conditions"))
+    if routing_conditions:
+        stale_vs = [str(item) for item in _as_list(routing_conditions.get("stale_vs"))]
+        if "routing_reports" not in stale_vs:
+            stale_vs.append("routing_reports")
+            routing_conditions["stale_vs"] = stale_vs
+            payload["routing_conditions"] = routing_conditions
+            notes.append("routing_conditions.stale_vs+=routing_reports")
     return notes
 
 

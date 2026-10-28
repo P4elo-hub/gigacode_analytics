@@ -233,9 +233,9 @@ def compare_scenario(scenario_id: str, *, workspace: Path | None = None) -> dict
             )
     if scenario_id == "lab-01-retry-same-step":
         steps = [row["step"] for row in actual if row.get("action") == "task"]
-        if len(steps) < 3 or steps[-1] != "analyze-routing":
+        if len(steps) < 3 or steps[-1] != "challenge-feature":
             raise AssertionError(
-                f"lab-01: after ASK_PARENT text expected analyze-routing, got {steps}"
+                f"lab-01: ASK_PARENT continuation must resume same step, got {steps}"
             )
         if steps[-2] != "challenge-feature":
             raise AssertionError(f"lab-01: expected challenge-feature before refresh: {steps}")

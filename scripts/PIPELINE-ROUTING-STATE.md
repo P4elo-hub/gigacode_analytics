@@ -42,6 +42,38 @@ Helper: `scripts/pipeline_routing_state.py` (`load_routing_state`,
 `apply_routing_state_fields`, `overlay_collector`, `spec_overlay_collector`).
 Pack collector id: `routing_state`. Spec `status.yaml`: `collector_mode: routing_state`.
 
+## Incremental routing reports
+
+Every completed agent pass publishes a pack-neutral report under the task root:
+
+`<task-root>/.pipeline/routing-reports/<seq>-<step>.json`
+
+`index.json` is the configured `routing_reports` artifact and contains the
+monotonic sequence. The report schema is `summary`, changed `artifacts`,
+established `outcomes`, unresolved `remaining_work`, plus hook metadata.
+Qwen/GigaCode persist the final `<routing-report>…</routing-report>` block in
+`pipeline_after_subagent.py`; OpenCode uses `append_routing_report.py`.
+
+Routing-state may contain optional top-level metadata:
+
+```json
+{
+  "routing_reports": {
+    "schema_version": 1,
+    "last_seq": 12,
+    "index": ".pipeline/routing-reports/index.json",
+    "updated_at": "2026-10-27T09:00:00Z"
+  }
+}
+```
+
+The analyzer starts with previous `fields`, reads only reports newer than
+`last_seq`, and preserves fields not addressed by those reports. Missing or
+incomplete reports, contradictions, deletions and first-run bootstrap fall back
+to artifact reads. The journal is an acceleration layer; artifacts remain the
+final source of truth. Analyzer rewrites must preserve `position`,
+`step_completion`, and `routing_reports`.
+
 ## Status fields (pack-local SSOT)
 
 Analyzer field names and fill instructions come from the **current** pack:

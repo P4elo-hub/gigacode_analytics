@@ -77,11 +77,11 @@ class LiveTickCriterionTest(unittest.TestCase):
         self.assertEqual(path[-1]["step"], "resolve-challenges")
         self.assertNotIn("check-feature", [row["step"] for row in path])
 
-    def test_lab_01_ask_parent_text_goes_to_analyze_routing(self) -> None:
+    def test_lab_01_ask_parent_resumes_same_step(self) -> None:
         last = self._drive("lab-01-retry-same-step")
         steps = [row["step"] for row in last["path"]]
         self.assertEqual(steps[-2], "challenge-feature")
-        self.assertEqual(steps[-1], "analyze-routing")
+        self.assertEqual(steps[-1], "challenge-feature")
 
     def test_lab_08_leftover_gap_does_not_steal_to_resolve_gaps(self) -> None:
         last = self._drive("lab-08-ch-apply-leftover-gaps")

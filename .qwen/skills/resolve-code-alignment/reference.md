@@ -86,7 +86,7 @@ TO BE findings (нет теста, нет INSERT в коде) **не** прев�
 
 ## Журнал решений
 
-Append-only секция в `ALIGNMENT`. Не меняй `verdict` / счётчики — их обновит
+Append-only секция в `ALIGNMENT`. После применения правок ставь `verdict: AFTER_ALIGNMENT`; счётчики не меняй — их обновит
 следующий `/check-feature-code`.
 
 ---

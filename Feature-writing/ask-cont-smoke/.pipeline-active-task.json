@@ -1,0 +1,10 @@
+{
+  "slug": "ask-cont-smoke",
+  "step": "gap-resolver",
+  "subagent": "gap-resolver",
+  "cli": "qwen",
+  "pipeline": "spec-v2",
+  "started_at": "2026-10-05T15:24:07Z",
+  "persistent": true,
+  "continuation": "ask_user"
+}

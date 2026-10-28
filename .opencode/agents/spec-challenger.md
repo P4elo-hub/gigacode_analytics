@@ -100,3 +100,17 @@ permission:
 Число вопросов, путь к `CHALLENGES`, разбивка Critical / Major / Minor, топ-3
 кратко, next step — `resolve-challenges <slug>`. Повторный прогон — отдельно
 укажи, сколько вопросов новых и сколько открытых сохранено.
+
+## Обязательный routing-report
+
+Заверши финальный ответ ровно одним блоком ниже с реальными фактами результата.
+Он обязателен также при ASK_PARENT, ошибке и отсутствии изменений. Без него
+следующий routing-analyzer вынужден повторно читать артефакты.
+
+<routing-report>
+{"summary":"фактический итог", "artifacts":[], "outcomes":[], "remaining_work":[]}
+</routing-report>
+
+В artifacts укажи реальные пути и action created/updated/deleted; в outcomes —
+установленные статусы, verdict и счётчики; в remaining_work — незакрытые вопросы.
+Не выбирай следующий шаг. Не оставляй пример вместо фактического результата.

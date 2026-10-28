@@ -123,6 +123,18 @@ def populate_status(status, root: Path, task_id: str, pipeline_id: str = DEFAULT
     for rule in spec.get("stale") or []:
         if isinstance(rule, dict) and evaluate_stale_rule(rule, paths):
             stale.append(str(rule.get("id") or ""))
+    routing_state_path = paths.get("routing_state")
+    routing_reports_path = paths.get("routing_reports")
+    if (
+        routing_state_path is not None
+        and routing_reports_path is not None
+        and routing_state_path.is_file()
+        and routing_reports_path.is_file()
+    ):
+        from routing_reports import reports_pending
+
+        if reports_pending(routing_reports_path, routing_state_path):
+            stale.append("routing_state")
     status.stale = list(dict.fromkeys(item for item in stale if item))
 
     align_rule = spec.get("alignment_stale")

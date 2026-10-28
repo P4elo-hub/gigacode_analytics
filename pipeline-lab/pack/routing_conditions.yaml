@@ -284,6 +284,7 @@ engine_fields:
   - routing_state_invalid
   - routing_state_error
 stale_vs:
+  - routing_reports
   - spec
   - context
   - decisions

@@ -201,6 +201,63 @@ def noop_output(reason: str) -> dict:
     return hook_output(f"Pipeline hook skipped: {reason}")
 
 
+def capture_routing_report(
+    root: Path,
+    *,
+    slug: str,
+    pipeline_id: str,
+    step: str,
+    subagent: str,
+    result: str,
+    cli: str,
+    hook_input: dict,
+    active: dict | None,
+) -> tuple[dict, bool]:
+    """Persist one semantic post-step report; missing blocks remain explicit."""
+    from pipeline_status import resolve_artifact_paths
+    from routing_reports import (
+        append_report,
+        extract_report,
+        normalize_report,
+        reports_index_path,
+        set_state_cursor,
+    )
+
+    message = str(hook_input.get("last_assistant_message") or "")
+    payload, error = extract_report(message)
+    if payload is None and message.strip():
+        payload = {"summary": message.strip()[:2000]}
+    started_at = str((active or {}).get("started_at") or "")
+    event_key = "|".join(
+        (
+            pipeline_id,
+            slug,
+            step,
+            subagent,
+            started_at or str(hook_input.get("tool_use_id") or hook_input.get("call_id") or ""),
+        )
+    )
+    report = normalize_report(
+        payload,
+        slug=slug,
+        pipeline_id=pipeline_id,
+        step=step,
+        subagent=subagent,
+        result=result,
+        cli=cli,
+        event_key=event_key,
+        error=error,
+    )
+    paths = resolve_artifact_paths(root, slug, pipeline_id)
+    index_path = reports_index_path(root, slug, pipeline_id, paths=paths)
+    stored, appended = append_report(index_path, report)
+    if step == "analyze-routing" and result == "ok":
+        state_path = paths.get("routing_state")
+        if state_path is not None:
+            set_state_cursor(state_path, last_seq=int(stored.get("seq") or 0), index_path=index_path)
+    return stored, appended
+
+
 def after_subagent(
     root: Path,
     hook_input: dict,
@@ -274,6 +331,27 @@ def after_subagent(
         code, out = run_script(root, "append_run_log.py", *args)
         if code != 0:
             return hook_output(f"append_run_log failed ({code}): {out[:500]}")
+
+    routing_report_note = ""
+    try:
+        stored_report, report_appended = capture_routing_report(
+            root,
+            slug=slug,
+            pipeline_id=pipeline_id,
+            step=step,
+            subagent=subagent,
+            result=result,
+            cli=cli,
+            hook_input=hook_input,
+            active=active,
+        )
+        routing_report_note = (
+            f" routing-report seq={stored_report.get('seq')}"
+            f"{' incomplete' if stored_report.get('incomplete') else ''}"
+            f"{'' if report_appended else ' duplicate'}"
+        )
+    except Exception as exc:  # noqa: BLE001 — reporting must not crash the pipeline
+        routing_report_note = f" routing-report warn: {exc!s}"[:160]
 
     routing_sync_note = ""
     if slug:
@@ -354,6 +432,8 @@ def after_subagent(
         )
     if routing_sync_note:
         context += routing_sync_note
+    if routing_report_note:
+        context += routing_report_note
     if sync_note:
         context += sync_note
     return hook_output(context)

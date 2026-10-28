@@ -9,7 +9,7 @@ delegate, or a human CLI). Do not call dispatch separately.
 ```
 delegate (--pipeline <id>; внутри: dispatch)
   → action: task | ask_user | write_feature_cycle | orchestrator_only | ready | stopped
-  → append_run_log → ingest → validate
+  → capture routing-report → append_run_log → ingest → validate
 ```
 
 `ask_user` is a pause **inside** the current step. Graph nodes declare
@@ -21,6 +21,9 @@ Do **not** call delegate between answer and apply.
 ```bash
 python3 scripts/pipeline_delegate.py <task_id> --cli qwen --pipeline <id>
 # if action=task → task on task.subagent_type
+# Qwen/GigaCode: SubagentStop пишет routing-report + run-log.
+# OpenCode fallback:
+python3 scripts/append_routing_report.py --cli opencode --pipeline <id>
 python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline <id>
 python3 scripts/ingest_session_telemetry.py <task_id> --cli qwen --pipeline <id>
 python3 scripts/pipeline_validate.py <task_id> --pipeline <id>

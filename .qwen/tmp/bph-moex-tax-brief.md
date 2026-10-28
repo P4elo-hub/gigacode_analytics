@@ -1,0 +1,3 @@
+В интеграции `history-ops` ↔ BPH по `GET_OPERATIONS_WITH_DETAILS` нужно добавить обработку нового налога: BPH присылает `type = TAXES`, `subtype = MOEX_TAX` (новый подтип). В Java операция маппится в **тот же** исходящий объект, что и обычный налог (`operation_type = tax`), отличие — **другой `comment`**, который берётся из таблицы `info` по `additionalType`. Логика обработки идентична существующим налогам `TAX_RETAIN`; изменения **data-driven через БД**, без правок Java-кода.
+
+Трактовка: новый BPH subtype семейства `TAXES` маппится в существующий `operation_type = tax`, специфика (текст для UI) задаётся строкой в таблице `info`, `additional_type` — отсутствует. Механика — как у `TAX_RETAIN` (`db-export/БД ИО.md:425,1692`), добавление — INSERT в таблицы маппинга БД HO.

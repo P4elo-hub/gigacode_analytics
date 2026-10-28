@@ -27,7 +27,7 @@ user-invocable: false
 | **Вход** | `ALIGNMENT` = `Feature-writing/<slug>/<slug>-code-alignment.md` |
 | **Ответы** | `DECISIONS` = `Feature-writing/<slug>/<slug>-decisions.md` |
 | **Правим** | `SPEC` = `Feature-writing/<slug>/<slug>.md` + `CONTEXT_DOC` (§ закрытых Q) |
-| **Не трогаем** | `repositories/`, `ALIGNMENT` (кроме optional Resolution log append) |
+| **Не трогаем** | `repositories/`, `ALIGNMENT` (кроме verdict: AFTER_ALIGNMENT после правок и optional Resolution log append) |
 
 Детали: [reference.md](reference.md).
 
@@ -103,7 +103,7 @@ Options: 2–4 варианта, «отложить / Q открыт» если 
 | I-08 | a | §4.2.2.2 алгоритм |
 ```
 
-Не меняй frontmatter `verdict` — обновит следующий `/check-feature-code`.
+После фактического применения исправлений в SPEC запиши во frontmatter ALIGNMENT `verdict: AFTER_ALIGNMENT`. Не меняй findings и alignment_iteration. При needs-answer, ошибке или отсутствии применённых правок verdict не меняй. В routing-report outcomes укажи `verdict=AFTER_ALIGNMENT`. Следующий code-auditor заменит этот статус на PASS, PASS WITH GAPS или FAIL по результатам проверки.
 
 ### Обратная запись в `CONTEXT_DOC`
 

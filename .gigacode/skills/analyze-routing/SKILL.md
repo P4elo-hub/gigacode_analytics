@@ -29,7 +29,8 @@ user-invocable: false
 `collectors.py` больше не источник семантики.
 `next_step` / `ready` / `orchestrator_mode` **не писать**.
 Где сейчас стоим (`position`) пишет хук SubagentStop, не ты. При перезаписи
-JSON сохрани top-level `position` и `step_completion`, если они уже есть.
+JSON сохрани top-level `position`, `step_completion` и `routing_reports`, если
+они уже есть.
 
 Граф: node `analyze-routing` там, где pack его объявил (`graph.yaml` /
 `analyzer.step` в routing_conditions пака). После mutating step оркестратор
@@ -53,15 +54,32 @@ stale, снова этот шаг.
    нет SPEC → `has_spec: false`).
 2. Прочитай `pipelines/<pipeline_id>/routing_conditions.yaml`. Ключи
    `status_fields` — полный список того, что класть в `fields`.
-3. Прочитай (read-only) артефакты, на которые ссылаются `artifacts:` /
-   `instruction` полей (пути — правило `artifact-paths` и pack `status.yaml`).
-4. Для **каждого** ключа в `status_fields` заполни значение строго по полям
-   `instruction` и `type` этого ключа в YAML пака. Не выдумывай id.
+3. Если прежний `ROUTING_STATE` валиден, возьми его `fields` как начальное
+   состояние. Прочитай `status.yaml → artifacts.routing_reports` и только
+   отчёты с `seq > routing_reports.last_seq`. Отсутствие упоминания в новых
+   отчётах **не меняет** прежнее значение поля.
+4. Сначала обнови поля по явным фактам из `outcomes`, `remaining_work`,
+   `artifacts` и `summary` новых отчётов. Отчёт `incomplete: true`,
+   противоречие, удаление артефакта или недостаточность сведений означает
+   fallback: прочитай только необходимые артефакты по `status.yaml` /
+   `instruction`. Если прежнего валидного состояния нет — выполни полный
+   artifact fallback, как раньше.
+5. Для **каждого** ключа в `status_fields` итоговый `fields` должен содержать
+   значение правильного `type`: обновлённое либо сохранённое из прежнего
+   состояния. Не выдумывай id.
    Не заполняй ключи роутера. Не добавляй поля, которых нет в `status_fields`
    текущего пака. Engine после overlay может пересчитать Relates / mtime /
    `exists_as` — не подменяй это выдумкой.
-5. Запиши JSON: `schema_version: 1`, `slug`, `generated_at` (UTC ISO), `fields`.
-6. Краткий отчёт: путь, `pipeline_id`, ключевые счётчики из заполненных полей.
+   Если после обновления ни одно domain-условие не требует шага (кандидат
+   `ready`), сверь критичные presence-поля по диску (`status.yaml` artifacts).
+   Расхождение — artifact fallback для этих полей, не доверяй одному journal.
+6. Запиши JSON: `schema_version: 1`, `slug`, `generated_at` (UTC ISO), `fields`.
+   Если journal полностью обработан, запиши top-level:
+   `routing_reports: {schema_version: 1, last_seq: <index.last_seq>,
+   index: <путь>, updated_at: <UTC ISO>}`. Не двигай cursor через отчёт,
+   который не прочитан или не обработан fallback.
+7. Краткий отчёт: путь, `pipeline_id`, диапазон обработанных `seq`, был ли
+   artifact fallback, ключевые счётчики из заполненных полей.
    Не называй следующий шаг пайплайна.
 
 ## Запреты
@@ -70,3 +88,20 @@ stale, снова этот шаг.
 - Не патчить domain-артефакты (SPEC / DECISIONS / отчёты / maps и т.п.).
 - Не класть в `fields` ключи роутера (`next_step`, `ready`, `orchestrator_mode`, …).
 - Не подменять `status_fields` чужого пака инструкциями из `pipelines/spec/`.
+
+## Обязательный короткий проход
+
+При валидном ROUTING_STATE сначала читай status.yaml, прежний snapshot,
+index.json и только отчёты с seq > routing_reports.last_seq. Семантика полей —
+status_fields текущего пака. Не перечитывай старые отчёты для подтверждения
+неизменённых полей. Полный новый отчёт, достаточный для изменения полей,
+не требует чтения SPEC, DECISIONS, ALIGNMENT, CHALLENGES и maps.
+
+Если новый отчёт incomplete, проверь сначала его summary: incomplete означает
+отсутствие структурированного блока, а не отсутствие всех полезных фактов.
+Fallback выполняй только для конкретного поля, которому не хватает факта;
+остальные значения сохрани. Не превращай один неполный отчёт в полный обход.
+Если snapshot отсутствует, полный fallback допустим только по артефактам
+текущего slug. Не читай чужие фичи, graph.yaml, dispatch.yaml, registry JSON,
+исходники Python, память других сессий; не исследуй устройство роутера.
+Пути бери из status.yaml текущего пака, не ищи их glob по workspace.

@@ -26,6 +26,9 @@ def _matcher_names(path: Path) -> set[str]:
     names: set[str] = set()
     for block in (data.get("hooks") or {}).get("SubagentStop") or []:
         matcher = str(block.get("matcher") or "")
+        if matcher in {".*", "^.*$"}:
+            names.add("*")
+            continue
         match = re.fullmatch(r"\^\((.*)\)\$", matcher)
         body = match.group(1) if match else matcher
         names.update(part for part in body.split("|") if part)
@@ -40,7 +43,8 @@ class SubagentStopMatcherTest(unittest.TestCase):
                 gated.update(str(name) for name in (pipe.get("gated_subagents") or []) if name)
         self.assertIn("routing-analyzer", gated)
         for path in CLI_HOOKS:
-            missing = sorted(gated - _matcher_names(path))
+            names = _matcher_names(path)
+            missing = [] if "*" in names else sorted(gated - names)
             self.assertFalse(missing, msg=f"{path.name} SubagentStop missing {missing}")
 
 

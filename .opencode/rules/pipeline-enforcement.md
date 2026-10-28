@@ -25,18 +25,18 @@ Default отсутствует: передавай явный `--pipeline spec-v
 
 1. `python3 scripts/pipeline_delegate.py <task_id> --cli opencode --pipeline <id>`
 2. `action` → `task` | `ask_user` | `write_feature_cycle` | `orchestrator_only` | `ready` | `stopped` | `error`
-3. После `task` hook SubagentStop пишет лог; fallback:
-   `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline <id>`
-4. `python3 scripts/ingest_session_telemetry.py <task_id> --cli opencode --pipeline <id>` (если hook не сделал)
-5. `python3 scripts/pipeline_validate.py <task_id> --pipeline <id>`
+3. После `task` субагент сохраняет обязательный routing report через
+   `python3 scripts/append_routing_report.py --cli opencode --pipeline <id>`.
+4. Запиши проход:
+   `python3 scripts/append_run_log.py --slug <task_id> --step <step> --subagent <agent> --result ok --pipeline <id>`.
+5. `python3 scripts/ingest_session_telemetry.py <task_id> --cli opencode --pipeline <id>`.
+6. `python3 scripts/pipeline_validate.py <task_id> --pipeline <id>`.
 
 Не вызывай `pipeline_dispatch.py` и `pipeline_set_active_task.py` отдельно.
-Прочитай injected context от hook и выполни `workflow_fix` для `severity: block`
-**до** следующего delegate.
+Выполни `workflow_fix` для `severity: block` **до** следующего delegate.
 
-**Hard gate:** PreToolUse hook `pipeline-before-subagent.sh` **блокирует**
-`task`, если `subagent_type` ≠ active-task из delegate. Обойти нельзя — только
-снова `pipeline_delegate.py`.
+OpenCode не имеет SubagentStop/PreToolUse hooks в этом workspace, поэтому
+post-task цепочка выше обязательна и не заменяется injected context.
 
 Preflight (опционально):
 

@@ -8,10 +8,17 @@ artifacts:
     path: "Feature-writing/{task_id}/{task_id}-routing-state.json"
     exists_as: has_routing_state
     missing_reason: нет routing-state.json — нужен analyze-routing
+  routing_reports:
+    path: "Feature-writing/{task_id}/.pipeline/routing-reports/index.json"
+    exists_as: has_routing_reports
 collectors:
   - id: routing_state
     source: routing_state
 stale:
+  - id: routing_state
+    when: artifact_older_than
+    left: routing_state
+    right: routing_reports
 orchestrator:
 messages:
   ready: spec-v2 ready

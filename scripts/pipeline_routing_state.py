@@ -34,8 +34,8 @@ POC_STALE_VS = ("spec",)
 ENGINE_RECOMPUTED_FIELDS = frozenset({"stale", "alignment_stale"})
 # Artifact exists_as (has_spec, has_context, …) is re-applied from disk after
 # overlay in populate_status — JSON cannot hide a file that is on disk.
-# Top-level JSON metadata (hook); router ignores — see step_completion / position.
-SYNC_METADATA_KEYS = frozenset({"step_completion", "position"})
+# Top-level JSON metadata (hook/analyzer); router ignores.
+SYNC_METADATA_KEYS = frozenset({"step_completion", "position", "routing_reports"})
 ROUTER_OWNED = frozenset(
     {
         "next_step",
@@ -175,6 +175,18 @@ def validate_payload(payload: Any, *, slug: str | None = None) -> list[str]:
     if position is not None:
         if not isinstance(position, dict) or not str(position.get("step") or "").strip():
             errors.append("position must be a mapping with step")
+    reports = payload.get("routing_reports")
+    if reports is not None:
+        if not isinstance(reports, dict):
+            errors.append("routing_reports must be a mapping")
+        else:
+            try:
+                last_seq = int(reports.get("last_seq") or 0)
+            except (TypeError, ValueError):
+                errors.append("routing_reports.last_seq must be an integer")
+            else:
+                if last_seq < 0:
+                    errors.append("routing_reports.last_seq must be non-negative")
     fields = payload.get("fields")
     if not isinstance(fields, dict):
         errors.append("fields must be a mapping")

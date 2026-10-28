@@ -1,4 +1,5 @@
 [
   {"step": "analyze-routing", "variant": "ok"},
-  {"step": "challenge-feature", "variant": "dirty"}
+  {"step": "challenge-feature", "variant": "dirty"},
+  {"step": "analyze-routing", "variant": "dirty"}
 ]

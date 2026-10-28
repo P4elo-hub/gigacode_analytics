@@ -20,6 +20,7 @@ Feature-writing/<slug>/
   <slug>-challenges.md             ← CHALLENGES
   <slug>-challenges-resolved.md    ← CHALLENGES_MAP
   <slug>-routing-state.json        ← ROUTING_STATE (Phase 12 live overlay)
+  .pipeline/routing-reports/       ← ROUTING_REPORTS (agent result journal)
   <slug>.part-<block_id>.md        ← рабочий фрагмент write-feature
   <slug>.context.md                ← рабочий накопленный контекст блоков
 Feature-context/
@@ -54,6 +55,7 @@ agent-logs/
 | `CHALLENGES` | `FEATURE_DIR<slug>-challenges.md` | `/challenge-feature` | resolve-challenges (статусы) |
 | `CHALLENGES_MAP` | `FEATURE_DIR<slug>-challenges-resolved.md` | `/resolve-challenges` | `/resolve-challenges` |
 | `ROUTING_STATE` | `FEATURE_DIR<slug>-routing-state.json` | `/analyze-routing` (spec graph) | `routing-analyzer` |
+| `ROUTING_REPORTS` | `FEATURE_DIR/.pipeline/routing-reports/` | SubagentStop hook | hook / OpenCode fallback |
 | `AGENT_LOGS` | `agent-logs/<slug>/` | `/archive-session`, ingest | ingest, analyze-telemetry |
 | `AGENT_MANIFEST` | `AGENT_LOGS/manifest.json` | ingest | ingest |
 | `AGENT_EVENTS` | `AGENT_LOGS/runs/<run-id>/events.jsonl` | ingest | ingest |

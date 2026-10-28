@@ -39,6 +39,15 @@ class RoutingStatePayloadTest(unittest.TestCase):
         errors = validate_payload(payload, slug="demo")
         self.assertTrue(any("next_step" in item for item in errors), errors)
 
+    def test_optional_routing_report_cursor_is_validated(self) -> None:
+        payload = example_payload("demo")
+        payload["routing_reports"] = {"schema_version": 1, "last_seq": 3}
+        self.assertEqual(validate_payload(payload, slug="demo"), [])
+        payload["routing_reports"]["last_seq"] = "bad"
+        self.assertTrue(
+            any("last_seq" in item for item in validate_payload(payload, slug="demo"))
+        )
+
     def test_overlay_sets_domain_fields_but_not_router_fields(self) -> None:
         status = SimpleNamespace(open_gaps=[], next_step="keep")
         apply_routing_state_fields(status, {"open_gaps": ["GAP-1"], "next_step": "hack"})

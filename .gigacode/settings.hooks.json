@@ -28,13 +28,13 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^(context-researcher|routing-analyzer|spec-writer|spec-reviewer|gap-resolver|spec-challenger|challenge-resolver|code-auditor|alignment-resolver|review-capturer|regression-analyst|calibration-proposer|calibration-applier|benchmark-runner)$",
+        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
             "command": ".gigacode/hooks/pipeline-after-subagent.sh",
             "name": "pipeline-after-subagent",
-            "description": "append_run_log + ingest + validate after pipeline subagent",
+            "description": "capture routing report + append_run_log + validate for active pipeline task",
             "timeout": 120000
           }
         ]

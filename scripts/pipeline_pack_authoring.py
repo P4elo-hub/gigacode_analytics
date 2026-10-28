@@ -13,6 +13,7 @@ SCHEMA_PATH = Path(__file__).resolve().parent / "pipeline_pack_schema.json"
 PACK_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 TEMPLATES = ("minimal", "orchestrator-only", "full-dispatch", "routing-state")
 ROUTING_STATE_ARTIFACT_PATH = "{task_id}/routing-state.json"
+ROUTING_REPORTS_ARTIFACT_PATH = "{task_id}/.pipeline/routing-reports/index.json"
 
 
 def load_pack_schema() -> dict:
@@ -265,9 +266,14 @@ _ROUTING_STATE_COLLECTORS = ROUTING_STATE_COLLECTORS
 def _routing_state_stale_vs(status: dict) -> list[str]:
     artifacts = status.get("artifacts") if isinstance(status.get("artifacts"), dict) else {}
     artifact_ids = [str(key) for key in artifacts if str(key) != "routing_state"]
+    selected: list[str] = []
     if "main" in artifact_ids:
-        return ["main"]
-    return artifact_ids[:1]
+        selected.append("main")
+    elif artifact_ids:
+        selected.append(artifact_ids[0])
+    if "routing_reports" in artifact_ids and "routing_reports" not in selected:
+        selected.append("routing_reports")
+    return selected
 
 
 def _routing_conditions_stub(
@@ -352,8 +358,23 @@ def ensure_routing_state_authoring(payload: dict) -> dict:
             "exists_as": "has_routing_state",
             "missing_reason": "нет routing-state.json — нужен analyze-routing",
         }
-        status["artifacts"] = artifacts
-        data["status"] = status
+    if "routing_reports" not in artifacts:
+        artifacts["routing_reports"] = {
+            "path": ROUTING_REPORTS_ARTIFACT_PATH,
+            "exists_as": "has_routing_reports",
+        }
+    status["artifacts"] = artifacts
+    stale = list(status.get("stale") or [])
+    report_rule = {
+        "id": "routing_state",
+        "when": "artifact_older_than",
+        "left": "routing_state",
+        "right": "routing_reports",
+    }
+    if report_rule not in stale:
+        stale.append(report_rule)
+    status["stale"] = stale
+    data["status"] = status
     if not data.get("routing_conditions"):
         first = "first-step"
         for node in nodes:
@@ -367,6 +388,13 @@ def ensure_routing_state_authoring(payload: dict) -> dict:
             first,
             _routing_state_stale_vs(status),
         )
+    else:
+        routing_conditions = dict(data.get("routing_conditions") or {})
+        stale_vs = list(routing_conditions.get("stale_vs") or [])
+        if "routing_reports" not in stale_vs:
+            stale_vs.append("routing_reports")
+        routing_conditions["stale_vs"] = stale_vs
+        data["routing_conditions"] = routing_conditions
     return data
 
 
@@ -379,6 +407,18 @@ def _template_routing_state(pipeline_id: str) -> dict:
         "exists_as": "has_routing_state",
         "missing_reason": "нет routing-state.json — нужен analyze-routing",
     }
+    payload["status"]["artifacts"]["routing_reports"] = {
+        "path": ROUTING_REPORTS_ARTIFACT_PATH,
+        "exists_as": "has_routing_reports",
+    }
+    payload["status"]["stale"] = [
+        {
+            "id": "routing_state",
+            "when": "artifact_older_than",
+            "left": "routing_state",
+            "right": "routing_reports",
+        }
+    ]
     orch = payload["graph"]["orchestrator"]
     payload["graph"]["nodes"].insert(
         1,

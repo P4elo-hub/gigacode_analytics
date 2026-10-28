@@ -21,6 +21,7 @@ from pack_authoring_api import (  # noqa: E402
     apply_assembled,
     collectors_is_generic_overlay,
     invent_condition_id,
+    merge_routing_state_status,
     overlay_collectors_text,
     stub_graph_whens,
     validate_assembled,
@@ -145,7 +146,11 @@ class CodegenSmokeUniversalityTest(unittest.TestCase):
                 "{task_id}/routing-state.json",
             )
             rc_stub = load_yaml(root / "pipelines" / PACK_ID / "routing_conditions.yaml")
-            self.assertEqual(rc_stub.get("stale_vs"), ["main"])
+            self.assertEqual(
+                ((status.get("artifacts") or {}).get("routing_reports") or {}).get("path"),
+                "{task_id}/.pipeline/routing-reports/index.json",
+            )
+            self.assertEqual(rc_stub.get("stale_vs"), ["main", "routing_reports"])
             self.assertNotIn("spec", rc_stub.get("stale_vs") or [])
             _stub_agents(root, "routing-analyzer")
             orch = f"{PACK_ID}-orchestrator"
@@ -298,6 +303,40 @@ class CodegenSmokeUniversalityTest(unittest.TestCase):
         self.assertEqual(spec["dispatch"], {"priority": 180, "next": "step-alpha"})
         self.assertEqual(payload["routing_conditions"]["status_fields"][cond]["instruction"], new)
         self.assertEqual(payload["dispatch"]["rules"][0]["priority"], 180)
+
+    def test_validate_injects_routing_reports_like_apply(self) -> None:
+        payload = {
+            "status": {
+                "collector_mode": "routing_state",
+                "collectors": [{"id": "routing_state", "source": "routing_state"}],
+                "artifacts": {
+                    "main": {"path": "{task_id}/main.md", "exists_as": "has_main"},
+                    "routing_state": {
+                        "path": "{task_id}/routing-state.json",
+                        "exists_as": "has_routing_state",
+                    },
+                },
+            },
+            "routing_conditions": {"stale_vs": ["main"]},
+            "graph": {"nodes": [{"id": "analyze-routing"}]},
+        }
+        notes = merge_routing_state_status(payload)
+        artifacts = (payload["status"].get("artifacts") or {})
+        self.assertEqual(
+            (artifacts.get("routing_reports") or {}).get("path"),
+            "{task_id}/.pipeline/routing-reports/index.json",
+        )
+        self.assertIn(
+            {
+                "id": "routing_state",
+                "when": "artifact_older_than",
+                "left": "routing_state",
+                "right": "routing_reports",
+            },
+            payload["status"].get("stale") or [],
+        )
+        self.assertEqual(payload["routing_conditions"]["stale_vs"], ["main", "routing_reports"])
+        self.assertTrue(any("routing_reports" in item for item in notes), notes)
 
 
 if __name__ == "__main__":

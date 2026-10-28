@@ -71,11 +71,31 @@ def build_dispatch(root: Path, slug: str, pipeline_id: str = DEFAULT_PIPELINE_ID
         "allowed_subagents": sorted(set(step_map.values())),
         "step_to_subagent": step_map,
     }
-    if status.orchestrator_mode == "delegate" and status.next_subagent:
+    if pipe_id == "spec-v2":
+        from pipeline_restart import load_restart_marker
+        from pipeline_common import step_to_command
+        import json
+        marker = load_restart_marker(root, slug, pipe_id)
+        if marker:
+            index = root / "Feature-writing" / slug / ".pipeline/routing-reports/index.json"
+            events = json.loads(index.read_text()).get("events", []) if index.is_file() else []
+            completed = any(
+                e.get("step") == marker.get("from_step")
+                and str(e.get("ts", "")) > str(marker.get("created_at", ""))
+                for e in events
+            )
+            if not completed:
+                step = marker["from_step"]
+                payload.update(ready=False, next_step=step,
+                    next_command=step_to_command(step, slug),
+                    next_subagent=subagent_for_step(step, pipe_id),
+                    next_reason="Перезапуск с выбранного шага", must_continue=True,
+                    orchestrator_mode="delegate")
+    if payload["orchestrator_mode"] == "delegate" and payload["next_subagent"]:
         payload["task"] = {
-            "subagent_type": status.next_subagent,
+            "subagent_type": payload["next_subagent"],
             "run_in_background": False,
-            "step": status.next_step,
+            "step": payload["next_step"],
         }
     return payload
 

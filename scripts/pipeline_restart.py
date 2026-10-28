@@ -113,7 +113,7 @@ def _discovery_path(root: Path, slug: str) -> Path:
 
 
 def _marker_path(root: Path, slug: str, pipeline_id: str = DEFAULT_PIPELINE_ID) -> Path:
-    if pipeline_id == DEFAULT_PIPELINE_ID:
+    if pipeline_id in {DEFAULT_PIPELINE_ID, "spec-v2"}:
         return feature_dir(root, slug) / ".pipeline-restart.json"
     from calibration_paths import calibration_slug_dir
 
@@ -376,6 +376,61 @@ def _paths_from_calibration(
     return remove, keep
 
 
+SPEC_V2_PHASES = (
+    "context-researcher", "spec-writer", "spec-reviewer", "gap-resolver",
+    "spec-challenger", "challenge-resolver", "code-auditor", "alignment-resolver",
+)
+
+
+def _spec_v2_paths(root: Path, slug: str, step: str, from_seq: int | None):
+    fd = feature_dir(root, slug)
+    index = fd / ".pipeline/routing-reports/index.json"
+    events = json.loads(index.read_text()).get("events", []) if index.is_file() else []
+    if from_seq is not None:
+        selected = next((e for e in events if e.get("seq") == from_seq), None)
+        if not selected or selected.get("step") != step:
+            raise ValueError("Выбранный проход не соответствует шагу")
+    phase = SPEC_V2_PHASES.index(step) if step in SPEC_V2_PHASES else None
+    outputs = {
+        "context-researcher": [context_doc_path(root, slug), _discovery_path(root, slug)],
+        "spec-writer": [spec_path(root, slug), fd / ".write-feature-cycle.json"],
+        "gap-resolver": [gaps_map_path(root, slug)],
+        "spec-challenger": [challenges_path(root, slug)],
+        "challenge-resolver": [challenges_map_path(root, slug)],
+        "code-auditor": [alignment_path(root, slug)],
+    }
+    remove = []
+    if phase is not None:
+        for name in SPEC_V2_PHASES[phase:]:
+            remove.extend(p for p in outputs.get(name, []) if p.exists())
+    # Preserve the incremental baseline for alignment-only restarts.
+    state = fd / f"{slug}-routing-state.json"
+    baseline = {}
+    if state.is_file():
+        try:
+            baseline = json.loads(state.read_text())
+        except (ValueError, OSError):
+            pass
+    preserve = (step in {"code-auditor", "alignment-resolver"}
+                and baseline.get("schema_version") == 1
+                and baseline.get("slug") == slug
+                and isinstance(baseline.get("fields"), dict))
+    remove.extend(p for p in (fd / ".pipeline-active-task.json",) if p.exists())
+    if state.exists() and not preserve:
+        remove.append(state)
+    cutoff = from_seq
+    if cutoff is None and phase is not None:
+        cutoff = next((e["seq"] for e in events if e.get("step") in SPEC_V2_PHASES[phase:]), None)
+    if cutoff is not None:
+        for event in events:
+            if event.get("seq", 0) >= cutoff:
+                path = fd / ".pipeline/routing-reports" / event["file"]
+                if path.exists():
+                    remove.append(path)
+    keep = [p for p in (context_doc_path(root, slug), spec_path(root, slug), decisions_path(root, slug), alignment_path(root, slug)) if p.exists() and p not in remove]
+    return remove, keep
+
+
 def build_restart_plan(
     root: Path,
     slug: str,
@@ -384,13 +439,15 @@ def build_restart_plan(
     from_seq: int | None = None,
     pipeline_id: str = DEFAULT_PIPELINE_ID,
 ) -> RestartPlan:
+    if not slug or Path(slug).name != slug or slug in {".", ".."}:
+        raise ValueError("Некорректный slug")
     restartable = pipeline_restartable_steps(pipeline_id)
     order = pipeline_step_order(pipeline_id)
     if from_step not in restartable:
         raise ValueError(f"Шаг «{from_step}» нельзя использовать для перезапуска")
 
     from_index = order[from_step]
-    if pipeline_id == DEFAULT_PIPELINE_ID:
+    if pipeline_id == DEFAULT_PIPELINE_ID and pipeline_id != "spec-v2":
         remove, keep = _paths_from_step_index(root, slug, from_index, order)
         warnings = [
             "SPEC и CONTEXT_DOC не откатываются по snapshot — остаются как есть. "
@@ -399,6 +456,13 @@ def build_restart_plan(
         ]
         if from_step == "find-context":
             warnings.append("Будет очищена папка Feature-writing/<slug>/ и context-doc.")
+    elif pipeline_id == "spec-v2":
+        remove, keep = _spec_v2_paths(root, slug, from_step, from_seq)
+        warnings = [
+            "Результаты выбранного и последующих шагов удаляются. Входные файлы выбранного шага сохраняются.",
+            "Правки внутри SPEC, CONTEXT и общих DECISIONS не откатываются: снимки прежнего содержимого отсутствуют.",
+            "История agent-logs сохраняется. Остановите текущий CLI-прогон перед перезапуском, чтобы он не записал удалённые результаты заново.",
+        ]
     elif pipeline_id == "calibration":
         remove, keep = _paths_from_calibration(root, slug, from_index, order)
         warnings = [
@@ -457,7 +521,39 @@ def apply_restart_plan(root: Path, plan: RestartPlan) -> dict:
         except OSError as exc:
             errors.append(f"{rel}: {exc}")
 
-    cli_commands = refresh_plan_from_dispatch(root, plan, pipeline_id=plan.pipeline_id)
+    if errors:
+        return {"ok": False, "removed": removed, "errors": errors}
+    if plan.pipeline_id == "spec-v2":
+        index = feature_dir(root, plan.slug) / ".pipeline/routing-reports/index.json"
+        if index.is_file():
+            journal = json.loads(index.read_text())
+            journal["events"] = [e for e in journal.get("events", []) if (index.parent / e["file"]).is_file()]
+            # Keep sequence monotonic, so ingest cannot collide with old ids.
+            index.write_text(json.dumps(journal, ensure_ascii=False, indent=2) + "\n")
+        active = root / ".pipeline-active-task.json"
+        if active.is_file():
+            task = json.loads(active.read_text())
+            if task.get("slug") == plan.slug and task.get("pipeline") == plan.pipeline_id:
+                active.unlink()
+        state = feature_dir(root, plan.slug) / f"{plan.slug}-routing-state.json"
+        if state.is_file() and plan.from_step in {"code-auditor", "alignment-resolver"}:
+            baseline = json.loads(state.read_text())
+            fields = baseline["fields"]
+            fields["has_alignment_svezhii_verdict_pass_ili_pass_with_gaps_sp"] = False
+            if plan.from_step == "code-auditor":
+                fields["has_net_otcheta_ili_on_ustarel_korotko_alignment_net_ili"] = True
+                fields["has_otchet_est_no_bez_pass_korotko_alignment_bez_pass_pa"] = False
+                fields["has_v_alignment_est_critical_major_raskhozhdeniya_otchet"] = False
+            baseline["routing_reports"] = {
+                "schema_version": 1,
+                "last_seq": json.loads(index.read_text()).get("last_seq", 0) if index.is_file() else 0,
+                "index": ".pipeline/routing-reports/index.json",
+                "updated_at": _iso_now(),
+            }
+            state.write_text(json.dumps(baseline, ensure_ascii=False, indent=2) + "\n")
+        cli_commands = build_cli_commands(plan.slug, plan.from_step, pipeline_id=plan.pipeline_id)
+    else:
+        cli_commands = refresh_plan_from_dispatch(root, plan, pipeline_id=plan.pipeline_id)
     cli_block = format_cli_block(cli_commands)
 
     marker = root / plan.marker_path
@@ -491,7 +587,7 @@ def apply_restart_plan(root: Path, plan: RestartPlan) -> dict:
 def _assert_safe_path(root: Path, path: Path) -> None:
     root = root.resolve()
     path = path.resolve()
-    if not str(path).startswith(str(root)):
+    if not path.is_relative_to(root):
         raise ValueError(f"Path outside workspace: {path}")
     rel = path.relative_to(root)
     parts = rel.parts
